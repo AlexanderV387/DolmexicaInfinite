@@ -1,0 +1,56 @@
+# Nintendo 3DS (New 3DS) build of Dolmexica Infinite, with devkitARM,
+# libctru and citro3d, on prism's 3DS backend (prism's Makefile.3ds).
+#
+# Usage (devkitPro environment): make -f Makefile.3ds -j$(nproc)
+# Makes dolmexica.3dsx (and dolmexica.elf, for the .cia).
+
+include Makefile.common
+
+PRISM_PATH ?= ../prism
+
+OBJDIR = build_3ds
+ALL_OBJS = $(addprefix $(OBJDIR)/,$(OBJS))
+
+DEVKITPRO ?= /opt/devkitpro
+PREFIX = $(DEVKITPRO)/devkitARM/bin/arm-none-eabi-
+CXX = $(PREFIX)g++
+
+ARCH = -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
+CXXFLAGS = $(ARCH) -std=gnu++17 -fpermissive -O2 -g -mword-relocations -ffunction-sections \
+	-Wno-write-strings -D__3DS__ -I$(PRISM_PATH)/include -I$(PRISM_PATH)/linux/shim -I. \
+	-I$(DEVKITPRO)/libctru/include -I$(DEVKITPRO)/portlibs/3ds/include
+LDFLAGS = $(ARCH) -specs=3dsx.specs -g -Wl,--gc-sections \
+	-L$(PRISM_PATH)/bin_3ds -L$(DEVKITPRO)/portlibs/3ds/lib -L$(DEVKITPRO)/libctru/lib
+LIBS = -lprism -lpng -lzstd -lz -lcitro3d -lctru -lm
+
+APP_TITLE = Dolmexica Infinite
+APP_DESCRIPTION = MUGEN-compatible fighting game engine
+APP_AUTHOR = CaptainDreamcast, AlexanderV387
+ICON = 3ds/icon.png
+ROMFS = $(OBJDIR)/romfs
+
+all: dolmexica.3dsx
+
+$(OBJDIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+dolmexica.elf: $(ALL_OBJS) $(PRISM_PATH)/bin_3ds/libprism.a
+	$(CXX) $(LDFLAGS) $(ALL_OBJS) $(LIBS) -o $@
+
+# prism's own files (the fonts) in the romfs, as "$/rd/".
+$(ROMFS): $(PRISM_PATH)/assets/fonts/segoe.hdr $(PRISM_PATH)/assets/fonts/segoe.png
+	@mkdir -p $(ROMFS)/fonts
+	cp $^ $(ROMFS)/fonts/
+	@touch $(ROMFS)
+
+dolmexica.smdh: $(ICON)
+	$(DEVKITPRO)/tools/bin/smdhtool --create "$(APP_TITLE)" "$(APP_DESCRIPTION)" "$(APP_AUTHOR)" $(ICON) $@
+
+dolmexica.3dsx: dolmexica.elf dolmexica.smdh $(ROMFS)
+	$(DEVKITPRO)/tools/bin/3dsxtool $< $@ --smdh=dolmexica.smdh --romfs=$(ROMFS)
+
+clean:
+	rm -rf $(OBJDIR) dolmexica.elf dolmexica.3dsx dolmexica.smdh
+
+.PHONY: all clean

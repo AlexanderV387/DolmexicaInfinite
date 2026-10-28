@@ -63,6 +63,9 @@ int main(int argc, char** argv) {
 #ifdef DEVELOP
 	setDevelopMode();
 	setMinimumLogType((isOnDreamcast() || isOnVita()) ? LOG_TYPE_NORMAL : LOG_TYPE_NORMAL);
+#elif defined(__3DS__)
+	// [3DS] The log (bottom screen and the SD card) while the port is young.
+	setMinimumLogType(LOG_TYPE_NORMAL);
 #else
 	setMinimumLogType(LOG_TYPE_NONE);
 #endif

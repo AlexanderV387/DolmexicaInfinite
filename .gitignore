@@ -76,3 +76,7 @@ tools/MakeYourOwnGameKitGui/.vs/*
 *.vspx
 *.testdurations
 *.md
+build_3ds/
+dolmexica.elf
+dolmexica.3dsx
+dolmexica.smdh

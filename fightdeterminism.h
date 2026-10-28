@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#if defined(DREAMCAST) || defined(VITA) || defined(__EMSCRIPTEN__)
+#if defined(DREAMCAST) || defined(VITA) || defined(__EMSCRIPTEN__) || defined(__3DS__)
 #define FIGHT_DETERMINISM_DISABLED 1
 #endif
 
