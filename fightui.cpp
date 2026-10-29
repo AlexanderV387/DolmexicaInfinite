@@ -549,6 +549,22 @@ static void loadFightDefScript(MugenDefScript* tScript, char* tDefPath) {
 	}
 
 	loadMugenDefScript(tScript, tDefPath);
+
+	// A screenpack made for another resolution (MUGEN 1.1's is 1280x720)
+	// gives its coordinates' width in localcoord: in fight.def, or else in
+	// its system.def. Without it, 320 (the HUD was four times too big).
+	if (gFightUIData.mFightFX.mCoordinateP == 320) {
+		if (isMugenDefVectorIVariable(tScript, "info", "localcoord")) {
+			gFightUIData.mFightFX.mCoordinateP = getMugenDefVectorIVariable(tScript, "info", "localcoord").x;
+		}
+		else {
+			MugenDefScript motif;
+			loadMugenDefScript(&motif, getDolmexicaAssetFolder() + getMotifPath());
+			gFightUIData.mFightFX.mCoordinateP = getMugenDefVectorIOrDefault(&motif, "info", "localcoord", Vector3DI(320, 240, 0)).x;
+			unloadMugenDefScript(&motif);
+		}
+		if (gFightUIData.mFightFX.mCoordinateP <= 0) gFightUIData.mFightFX.mCoordinateP = 320;
+	}
 }
 
 static void loadFightDefFilesFromScript(MugenDefScript* tScript, char* tDefPath) {

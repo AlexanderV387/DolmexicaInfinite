@@ -41,6 +41,15 @@ extern "C" {
 }
 #endif
 
+#ifdef __3DS__
+// [3DS] libctru gives the textures' (linear) memory at most 32 MB by default
+// and the rest to the heap, of which the game uses some 5: two MUGEN 1.1
+// characters did not fit. The heap gets 32 MB, the textures the rest.
+extern "C" {
+	u32 __ctru_heap_size = 32 * 1024 * 1024;
+}
+#endif
+
 void exitGame() {
 	shutdownPrismWrapper();
 
