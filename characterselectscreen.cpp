@@ -774,16 +774,31 @@ static void loadSingleMenuCell(const Vector2DI& tCellPosition) {
 	stl_list_at(gCharacterSelectScreenData.mSelectCharacters, tCellPosition.y).push_back(e);
 }
 
-// [3DS] Rows enough for every character (the found ones too): a select.def
-// longer than the grid went past its last cell.
+// [3DS] Cells enough for every character (the found ones too): a select.def
+// longer than the grid went past its last cell. The grid grows to the sides
+// first, around its middle (the screen is wider than the motif's), then
+// down.
 static void ensureMenuCellsForCharacters() {
 #ifdef DOLMEXICA_CHARACTER_AUTODETECT
 	if (gCharacterSelectScreenData.mSelectScreenType == CHARACTER_SELECT_SCREEN_TYPE_STORY) return;
 	if (!stl_string_map_contains_array(gCharacterSelectScreenData.mCharacterScript.mGroups, "characters")) return;
+	auto& header = gCharacterSelectScreenData.mHeader;
 	const int amount = list_size(&gCharacterSelectScreenData.mCharacterScript.mGroups["characters"].mOrderedElementList);
-	const int columns = std::max(1, gCharacterSelectScreenData.mHeader.mColumns);
-	const int rows = (amount + columns - 1) / columns;
-	if (rows > gCharacterSelectScreenData.mHeader.mRows) gCharacterSelectScreenData.mHeader.mRows = rows;
+	const int rows = std::max(1, header.mRows), columns = std::max(1, header.mColumns);
+	if (amount <= rows * columns) return;
+
+	const float step = header.mCellSize.x + header.mCellSpacing;
+	const float screenWidth = float(getScreenSize().x);
+	const float margin = getDreamScreenSideMargin(getScreenSize().x);
+	const int maximumColumns = std::max(columns, int((screenWidth + 2 * margin - 8 + header.mCellSpacing) / step));
+	const int newColumns = std::min(maximumColumns, (amount + rows - 1) / rows);
+	const float middle = header.mPosition.x + (columns * step - header.mCellSpacing) / 2;
+	float left = middle - (newColumns * step - header.mCellSpacing) / 2;
+	left = std::max(left, -margin + 4);
+	left = std::min(left, screenWidth + margin - 4 - (newColumns * step - header.mCellSpacing));
+	header.mPosition.x = left;
+	header.mColumns = newColumns;
+	header.mRows = std::max(rows, (amount + newColumns - 1) / newColumns);
 #endif
 }
 
