@@ -315,6 +315,35 @@ GeoRectangle2D getDreamMugenStageHandlerCameraRange()
 	return gMugenStageHandlerData.mCameraRange;
 }
 
+int getDreamMugenStageHandlerCoveredCameraRangeX(float tMargin, float* oMinimum, float* oMaximum)
+{
+	int hasRange = 0;
+	*oMinimum = -INF;
+	*oMaximum = INF;
+	for (auto& e : gMugenStageHandlerData.mStaticElements) {
+		// Plain backgrounds only: not tiled, moving with the camera, at their own size.
+		if (!e.mIsEnabled || !e.mAnimation || !e.mSprites || e.mTile.x || e.mDelta.x <= 0 || e.mPositionLinkElement || e.mIsParallax) continue;
+		if (e.mVelocity.x != 0 || e.mSinX.x != 0 || e.mDrawScale.x != 1 || e.mParallaxScale.x != 1 || e.mScaleStart.x != 1 || e.mScaleDelta.x != 0) continue;
+
+		const float width = float(e.mCoordinates.x);
+		const auto size = getAnimationFirstElementSpriteSize(e.mAnimation, e.mSprites);
+		const auto offset = getAnimationFirstElementSpriteOffset(e.mAnimation, e.mSprites);
+		// Its left and right on the screen, with the camera at 0.
+		const float left = e.mStart.x + width / 2 - offset.x;
+		const float right = left + size.x;
+		// What it has to cover: the screen, inside its window.
+		const float windowLeft = e.mConstraintRectangle.mTopLeft.x, windowRight = e.mConstraintRectangle.mBottomRight.x;
+		if (std::max(0.0f, windowLeft) >= std::min(width, windowRight)) continue;
+		if (left > std::max(0.0f, windowLeft) + 0.5f || right < std::min(width, windowRight) - 0.5f) continue;
+
+		const float coverLeft = std::max(-tMargin, windowLeft), coverRight = std::min(width + tMargin, windowRight);
+		*oMinimum = std::max(*oMinimum, (left - coverLeft) / e.mDelta.x);
+		*oMaximum = std::min(*oMaximum, (right - coverRight) / e.mDelta.x);
+		hasRange = 1;
+	}
+	return hasRange && *oMinimum <= *oMaximum;
+}
+
 void setDreamMugenStageHandlerCameraPosition(const Position2D& p)
 {
 	gMugenStageHandlerData.mCameraTargetPosition = p;

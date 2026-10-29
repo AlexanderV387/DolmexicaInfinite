@@ -507,6 +507,16 @@ static void setStageCamera() {
 		boundLeft += sizeX / 2;
 		sizeX = 0;
 	}
+	// And sooner where a background stops covering the wider screen (Kung Fu
+	// Man's stage: the landscape behind the windows).
+	float coveredLeft, coveredRight;
+	if (margin > 0 && getDreamMugenStageHandlerCoveredCameraRangeX(margin, &coveredLeft, &coveredRight)) {
+		const float left = std::max(boundLeft, coveredLeft), right = std::min(boundLeft + sizeX, coveredRight);
+		if (left <= right) {
+			boundLeft = left;
+			sizeX = right - left;
+		}
+	}
 	setDreamMugenStageHandlerCameraRange(transformDreamCoordinatesGeoRectangle2D(GeoRectangle2D(boundLeft, gStageData.mCamera.mBoundHigh, sizeX, sizeY), gStageData.mStageInfo.mLocalCoordinates.x, getDreamMugenStageHandlerCameraCoordinateP()));
 }
 
@@ -535,6 +545,7 @@ static void loadStage(void* tData)
 
 	setStageCamera();
 	loadStageBackgroundDefinitionAndElements(gStageData.mDefinitionPath, &s);
+	setStageCamera();   // [3DS] again, with the backgrounds (full width)
 	gStageData.mIsCameraManual = 0;
 
 	setBackgroundStatesFromScript(&s);
@@ -851,6 +862,9 @@ float getDreamScreenSideMargin(int tCoordinateP)
 {
 #ifdef __3DS__
 	return transformDreamCoordinates(getN3DSScreenSideMargin(), getScreenSize().x, tCoordinateP);
+#elif defined(DOLMEXICA_TEST_SIDE_MARGIN)
+	// (For trying the 3DS's full width on a PC.)
+	return transformDreamCoordinates(DOLMEXICA_TEST_SIDE_MARGIN, getScreenSize().x, tCoordinateP);
 #else
 	(void)tCoordinateP;
 	return 0;

@@ -411,12 +411,17 @@ DreamMugenCommands loadDreamMugenCommandFile(char * tPath)
 {
 	MugenDefScript script; 
 	loadMugenDefScript(&script, tPath);
-	DreamMugenCommands ret = makeEmptyMugenCommands();
-
-    loadMugenCommandsFromDefScript(&ret, &script);
+	DreamMugenCommands ret = loadDreamMugenCommandsFromScript(&script);
 
 	unloadMugenDefScript(&script);
 
+	return ret;
+}
+
+DreamMugenCommands loadDreamMugenCommandsFromScript(MugenDefScript* tScript)
+{
+	DreamMugenCommands ret = makeEmptyMugenCommands();
+	loadMugenCommandsFromDefScript(&ret, tScript);
 	return ret;
 }
 

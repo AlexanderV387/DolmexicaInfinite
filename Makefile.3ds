@@ -9,7 +9,7 @@ include Makefile.common
 PRISM_PATH ?= ../prism
 
 OBJDIR = build_3ds
-ALL_OBJS = $(addprefix $(OBJDIR)/,$(OBJS))
+ALL_OBJS = $(addprefix $(OBJDIR)/,$(OBJS) pausemenu3ds.o)
 
 DEVKITPRO ?= /opt/devkitpro
 PREFIX = $(DEVKITPRO)/devkitARM/bin/arm-none-eabi-

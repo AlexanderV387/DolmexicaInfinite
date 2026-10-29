@@ -161,8 +161,12 @@ static void loadPlayerFiles(char* tPath, DreamPlayer* tPlayer, MugenDefScript* t
 	getMugenDefStringOrDefault(file, tScript, "files", "cmd", "");
 	assert(strcmp("", file));
 	sprintf(scriptPath, "%s%s", path, file);
+	// The .cmd and the .cns are read once each, for their commands or
+	// constants and for their states (st is usually the .cns).
 	LoadProfileStep cmdStep("cmd");
-	tPlayer->mHeader->mFiles.mCommands = loadDreamMugenCommandFile(scriptPath);
+	MugenDefScript cmdScript;
+	loadMugenDefScript(&cmdScript, scriptPath);
+	tPlayer->mHeader->mFiles.mCommands = loadDreamMugenCommandsFromScript(&cmdScript);
 	cmdStep.end();
 	logMemoryState();
 	tPlayer->mCommandID = registerDreamMugenCommands(tPlayer->mControllerID, &tPlayer->mHeader->mFiles.mCommands);
@@ -173,7 +177,11 @@ static void loadPlayerFiles(char* tPath, DreamPlayer* tPlayer, MugenDefScript* t
 	assert(strcmp("", file));
 	sprintf(scriptPath, "%s%s", path, file);
 	LoadProfileStep cnsStep("cns");
-	tPlayer->mHeader->mFiles.mConstants = loadDreamMugenConstantsFile(scriptPath);
+	char cnsPath[1024];
+	strcpy(cnsPath, scriptPath);
+	MugenDefScript cnsScript;
+	loadMugenDefScript(&cnsScript, cnsPath);
+	tPlayer->mHeader->mFiles.mConstants = loadDreamMugenConstantsFromScript(&cnsScript);
 	cnsStep.end();
 	tPlayer->mCustomSizeData = tPlayer->mHeader->mFiles.mConstants.mSizeData;
 	logMemoryState();
@@ -196,9 +204,16 @@ static void loadPlayerFiles(char* tPath, DreamPlayer* tPlayer, MugenDefScript* t
 	LoadProfileStep stStep("st");
 	getMugenDefStringOrDefault(file, tScript, "files", "st", "");
 	sprintf(scriptPath, "%s%s", path, file);
-	if (isFile(scriptPath)) {
+	std::string stPathLowercase = scriptPath, cnsPathLowercase = cnsPath;
+	turnStringLowercase(stPathLowercase);
+	turnStringLowercase(cnsPathLowercase);
+	if (stPathLowercase == cnsPathLowercase) {
+		loadDreamMugenStateDefinitionsFromScript(&tPlayer->mHeader->mFiles.mConstants.mStates, &cnsScript, scriptPath);
+	}
+	else if (isFile(scriptPath)) {
 		loadDreamMugenStateDefinitionsFromFile(&tPlayer->mHeader->mFiles.mConstants.mStates, scriptPath);
 	}
+	unloadMugenDefScript(&cnsScript);
 	stStep.end();
 	logMemoryState();
 
@@ -210,7 +225,8 @@ static void loadPlayerFiles(char* tPath, DreamPlayer* tPlayer, MugenDefScript* t
 	assert(strcmp("", file));
 	sprintf(scriptPath, "%s%s", path, file);
 	LoadProfileStep cmdStatesStep("cmd states");
-	loadDreamMugenStateDefinitionsFromFile(&tPlayer->mHeader->mFiles.mConstants.mStates, scriptPath);
+	loadDreamMugenStateDefinitionsFromScript(&tPlayer->mHeader->mFiles.mConstants.mStates, &cmdScript, scriptPath);
+	unloadMugenDefScript(&cmdScript);
 	cmdStatesStep.end();
 
 	resetDreamAssignmentCommandLookupID();
@@ -474,6 +490,10 @@ static void loadPlayerDebug(DreamPlayer* p) {
 
 static void loadSinglePlayerFromMugenDefinition(DreamPlayer* p)
 {
+	beginCompatSection(p->mHeader->mFiles.mDefinitionPath);
+	const uint64_t compatStart = getLoadProfileTicks();
+	const int compatHeapStart = getCompatHeapUsedKB();
+
 	MugenDefScript script; 
 	loadMugenDefScript(&script, p->mHeader->mFiles.mDefinitionPath);
 
@@ -484,7 +504,12 @@ static void loadSinglePlayerFromMugenDefinition(DreamPlayer* p)
 	loadPlayerReflection(p);
 	loadPlayerStateWithConstantsLoaded(p);
 	loadPlayerDebug(p);
+
+	addCompatLine("P%d %s: mugenversion %s, localcoord %dx%d, files %.0f ms, heap +%d KB, %d states",
+		p->mRootID + 1, p->mHeader->mConstants.mName, p->mHeader->mConstants.mMugenVersion, p->mHeader->mConstants.mLocalCoordinates.x, p->mHeader->mConstants.mLocalCoordinates.y,
+		getLoadProfileMilliseconds(getLoadProfileTicks() - compatStart), getCompatHeapUsedKB() - compatHeapStart, (int)p->mHeader->mFiles.mConstants.mStates.mStates.size());
 	unloadMugenDefScript(&script);
+	endCompatSection();
 }
 
 void loadPlayers(MemoryStack* tMemoryStack) {
@@ -514,9 +539,16 @@ void loadPlayers(MemoryStack* tMemoryStack) {
 }
 
 static void loadSinglePlayerSprites(DreamPlayer* tPlayer) {
+	beginCompatSection(tPlayer->mHeader->mFiles.mDefinitionPath);
+	const uint64_t compatStart = getLoadProfileTicks();
+	const int compatTextureStart = getCompatTextureFreeKB();
 	setMugenSpriteFileReaderToUsePalette(tPlayer->mRootID);
 	tPlayer->mHeader->mFiles.mSprites = loadMugenSpriteFile(tPlayer->mHeader->mFiles.mSpritePath, tPlayer->mHeader->mFiles.mHasPalettePath, tPlayer->mHeader->mFiles.mPalettePath);
 	setMugenSpriteFileReaderToNotUsePalette();
+	addCompatLine("P%d sprites %s: %d, %.0f ms, textures %d KB",
+		tPlayer->mRootID + 1, tPlayer->mHeader->mFiles.mSpritePath, (int)tPlayer->mHeader->mFiles.mSprites.mAllSprites.size(),
+		getLoadProfileMilliseconds(getLoadProfileTicks() - compatStart), compatTextureStart - getCompatTextureFreeKB());
+	endCompatSection();
 	logMemoryState();
 
 	setMugenAnimationSprites(tPlayer->mAnimationElement, &tPlayer->mHeader->mFiles.mSprites);

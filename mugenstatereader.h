@@ -3,6 +3,7 @@
 #include <map>
 
 #include <prism/animation.h>
+#include <prism/mugendefreader.h>
 
 #include "mugenassignment.h"
 
@@ -379,6 +380,10 @@ typedef struct {
 DreamMugenConstants loadDreamMugenConstantsFile(const char* tPath);
 void unloadDreamMugenConstantsFile(DreamMugenConstants* tConstants);
 void loadDreamMugenStateDefinitionsFromFile(DreamMugenStates* tStates, const char* tPath, int tIsOverwritable = 0);
+// The same from a file already read (a character's .cns or .cmd, read once
+// for its constants or commands and its states).
+DreamMugenConstants loadDreamMugenConstantsFromScript(MugenDefScript* tScript);
+void loadDreamMugenStateDefinitionsFromScript(DreamMugenStates* tStates, MugenDefScript* tScript, const char* tPath, int tIsOverwritable = 0);
 DreamMugenStates createEmptyMugenStates();
 
 DreamMugenStateTypeFlags convertDreamMugenStateTypeToFlag(DreamMugenStateType tType);

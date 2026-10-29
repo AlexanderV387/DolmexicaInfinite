@@ -44,6 +44,10 @@
 #include "storyhelper.h"
 #include "dolmexicastoryscreen.h"
 #include "fightnetplay.h"
+#include "loadprofile.h"
+#ifdef __3DS__
+#include "pausemenu3ds.h"
+#endif
 
 static struct {
 	void(*mWinCB)();
@@ -153,6 +157,9 @@ static void loadFightScreen() {
 
 	logg("[Fightscreen] Init post-load actors");
 	instantiateActor(getPauseControllerHandler());
+#ifdef __3DS__
+	setActorUnpausable(instantiateActor(getPauseMenu3DS()));
+#endif
 	instantiateActor(getPostStateMachinePlayersBlueprint());
 	instantiateActor(getDreamExplodHandler());
 
@@ -183,9 +190,16 @@ static void loadFightScreen() {
 	logFormat("maps: %d", gDebugStringMapAmount);
 	logFormat("memory blocks: %d", getAllocatedMemoryBlockAmount());
 	logFormat("memory stack used: %d", (int)gFightScreenData.mMemoryStack.mOffset);
+
+	// [3DS] The fight's warnings in the compatibility log, under the fight.
+	char compatName[400];
+	snprintf(compatName, sizeof(compatName), "fight: %s vs %s, stage %s", getPlayerName(getRootPlayer(0)), getPlayerName(getRootPlayer(1)), getDreamStageName());
+	beginCompatSection(compatName);
+	addCompatLine("loaded: heap %d KB used, textures %d KB free", getCompatHeapUsedKB(), getCompatTextureFreeKB());
 }
 
 static void unloadFightScreen() {
+	endCompatSection();
 	unloadPlayers();
 	resetGameMode();
 	shutdownDreamMugenStateControllerHandler();
@@ -244,6 +258,11 @@ void stopFightScreenLose()
 	}
 
 	gFightScreenData.mLoseCB();
+}
+
+void stopFightScreenToFunction(void(*tFunc)()) {
+	setWrapperBetweenScreensCB(exitFightScreenCB, NULL);
+	tFunc();
 }
 
 void stopFightScreenToFixedScreen(Screen* tNextScreen) {

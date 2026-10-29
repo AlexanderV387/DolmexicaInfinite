@@ -365,18 +365,22 @@ void loadDreamMugenStateDefinitionsFromFile(DreamMugenStates* tStates, const cha
 	LoadProfileStep parseStep("  def parse", tPath);
 	loadMugenDefScript(&script, tPath);
 	parseStep.end();
+	loadDreamMugenStateDefinitionsFromScript(tStates, &script, tPath, tIsOverwritable);
+	LoadProfileStep unloadStep("  def unload", tPath);
+	unloadMugenDefScript(&script);
+	unloadStep.end();
+}
+
+void loadDreamMugenStateDefinitionsFromScript(DreamMugenStates* tStates, MugenDefScript* tScript, const char* tPath, int tIsOverwritable) {
 #ifdef _WIN32
 	gMugenStateControllerProvenanceData.mCurrentScriptPath = tPath;
 #endif
 	LoadProfileStep statesStep("  states", tPath);
-	loadMugenStateDefinitionsFromScript(tStates, &script, tIsOverwritable);
+	loadMugenStateDefinitionsFromScript(tStates, tScript, tIsOverwritable);
 	statesStep.end();
 #ifdef _WIN32
 	gMugenStateControllerProvenanceData.mCurrentScriptPath.clear();
 #endif
-	LoadProfileStep unloadStep("  def unload", tPath);
-	unloadMugenDefScript(&script);
-	unloadStep.end();
 }
 
 DreamMugenStates createEmptyMugenStates() {
@@ -527,9 +531,15 @@ DreamMugenConstants loadDreamMugenConstantsFile(const char * tPath)
 {
 	MugenDefScript script; 
 	loadMugenDefScript(&script, tPath);
-	DreamMugenConstants ret = makeEmptyMugenConstants();
-	loadMugenConstantsFromScript(&ret, &script);
+	DreamMugenConstants ret = loadDreamMugenConstantsFromScript(&script);
 	unloadMugenDefScript(&script);
+	return ret;
+}
+
+DreamMugenConstants loadDreamMugenConstantsFromScript(MugenDefScript* tScript)
+{
+	DreamMugenConstants ret = makeEmptyMugenConstants();
+	loadMugenConstantsFromScript(&ret, tScript);
 	return ret;
 }
 

@@ -5,6 +5,7 @@
 
 #include <prism/datastructures.h>
 #include <prism/animation.h>
+#include <prism/mugendefreader.h>
 
 using namespace prism;
 
@@ -75,4 +76,5 @@ typedef struct {
 } DreamMugenCommands;
 
 DreamMugenCommands loadDreamMugenCommandFile(char* tPath);
+DreamMugenCommands loadDreamMugenCommandsFromScript(MugenDefScript* tScript);
 void unloadDreamMugenCommandFile(DreamMugenCommands* tCommands);

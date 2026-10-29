@@ -624,7 +624,13 @@ static void updateInputMaskGeneral(int i, int tButtonPrecondition) {
 	updateSingleInputMaskEntry(i, MASK_Y, tButtonPrecondition && hasPressedYSingle(gMugenCommandHandler.mControllerUsed[i]));
 	updateSingleInputMaskEntry(i, MASK_Z, tButtonPrecondition && hasPressedLSingle(gMugenCommandHandler.mControllerUsed[i]));
 
+#ifdef __3DS__
+	// [3DS] START pauses the fight (pausemenu3ds.cpp): the characters' "s"
+	// (taunts) is SELECT.
+	updateSingleInputMaskEntry(i, MASK_START, tButtonPrecondition && hasPressedN3DSSelectSingle(gMugenCommandHandler.mControllerUsed[i]));
+#else
 	updateSingleInputMaskEntry(i, MASK_START, tButtonPrecondition && hasPressedStartSingle(gMugenCommandHandler.mControllerUsed[i]));
+#endif
 
 	updateSingleInputMaskEntry(i, MASK_LEFT, hasPressedLeftSingle(gMugenCommandHandler.mControllerUsed[i]));
 	updateSingleInputMaskEntry(i, MASK_RIGHT, hasPressedRightSingle(gMugenCommandHandler.mControllerUsed[i]));

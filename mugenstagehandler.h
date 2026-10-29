@@ -77,6 +77,10 @@ int getDreamMugenStageHandlerCameraCoordinateP();
 void setDreamMugenStageHandlerCameraCoordinates(const Vector2DI& tCoordinates);
 void setDreamMugenStageHandlerCameraRange(const GeoRectangle2D& tRect);
 GeoRectangle2D getDreamMugenStageHandlerCameraRange();
+// [3DS] The camera positions (x, in the elements' coordinates) in which the
+// backgrounds covering the game's screen at the start also cover tMargin
+// past its sides; 0 if no background says so.
+int getDreamMugenStageHandlerCoveredCameraRangeX(float tMargin, float* oMinimum, float* oMaximum);
 void setDreamMugenStageHandlerCameraPosition(const Position2D& p);
 void addDreamMugenStageHandlerCameraPositionX(float tX);
 void setDreamMugenStageHandlerCameraPositionX(float tX);
