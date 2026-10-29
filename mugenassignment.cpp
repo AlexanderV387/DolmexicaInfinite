@@ -637,16 +637,18 @@ static int isInequalityCharacter(const char* tText, int n, int tPos) {
 }
 
 static int isComparisonGroup(const char* tText) {
-	std::vector<std::tuple<int(*)(const char*, int, int), DreamMugenAssignmentType, std::string>> patterns;
-	patterns.push_back(std::make_tuple(isEqualityCharacter, MUGEN_ASSIGNMENT_TYPE_COMPARISON, "="));
-	patterns.push_back(std::make_tuple(isInequalityCharacter, MUGEN_ASSIGNMENT_TYPE_INEQUALITY, "!="));
+	static const std::vector<std::tuple<int(*)(const char*, int, int), DreamMugenAssignmentType, std::string>> patterns = {
+		std::make_tuple(isEqualityCharacter, MUGEN_ASSIGNMENT_TYPE_COMPARISON, "="),
+		std::make_tuple(isInequalityCharacter, MUGEN_ASSIGNMENT_TYPE_INEQUALITY, "!="),
+	};
 	return isOnHighestLevelBinaryMultipleRightToLeft(tText, patterns, 1, NULL, NULL);
 }
 
 static DreamMugenAssignment* parseMugenComparisonGroupFromString(char* tText) {
-	std::vector<std::tuple<int(*)(const char*, int, int), DreamMugenAssignmentType, std::string>> patterns;
-	patterns.push_back(std::make_tuple(isEqualityCharacter, MUGEN_ASSIGNMENT_TYPE_COMPARISON, "="));
-	patterns.push_back(std::make_tuple(isInequalityCharacter, MUGEN_ASSIGNMENT_TYPE_INEQUALITY, "!="));
+	static const std::vector<std::tuple<int(*)(const char*, int, int), DreamMugenAssignmentType, std::string>> patterns = {
+		std::make_tuple(isEqualityCharacter, MUGEN_ASSIGNMENT_TYPE_COMPARISON, "="),
+		std::make_tuple(isInequalityCharacter, MUGEN_ASSIGNMENT_TYPE_INEQUALITY, "!="),
+	};
 	return parseBinaryTwoElementMultipleRightToLeftMugenAssignmentFromString(tText, patterns, 1);
 }
 
@@ -729,20 +731,22 @@ static int isLessThanEqualCharacter(const char* tText, int n, int tPos) {
 }
 
 static int isOrdinalGroup(const char* tText) {
-	std::vector<std::tuple<int(*)(const char*, int, int), DreamMugenAssignmentType, std::string>> patterns;
-	patterns.push_back(std::make_tuple(isGreaterThanCharacter, MUGEN_ASSIGNMENT_TYPE_GREATER, ">"));
-	patterns.push_back(std::make_tuple(isGreaterThanEqualCharacter, MUGEN_ASSIGNMENT_TYPE_GREATER_OR_EQUAL, ">="));
-	patterns.push_back(std::make_tuple(isLessThanCharacter, MUGEN_ASSIGNMENT_TYPE_LESS, "<"));
-	patterns.push_back(std::make_tuple(isLessThanEqualCharacter, MUGEN_ASSIGNMENT_TYPE_LESS_OR_EQUAL, "<="));
+	static const std::vector<std::tuple<int(*)(const char*, int, int), DreamMugenAssignmentType, std::string>> patterns = {
+		std::make_tuple(isGreaterThanCharacter, MUGEN_ASSIGNMENT_TYPE_GREATER, ">"),
+		std::make_tuple(isGreaterThanEqualCharacter, MUGEN_ASSIGNMENT_TYPE_GREATER_OR_EQUAL, ">="),
+		std::make_tuple(isLessThanCharacter, MUGEN_ASSIGNMENT_TYPE_LESS, "<"),
+		std::make_tuple(isLessThanEqualCharacter, MUGEN_ASSIGNMENT_TYPE_LESS_OR_EQUAL, "<="),
+	};
 	return isOnHighestLevelMultipleRightToLeft(tText, patterns, 1, NULL, NULL);
 }
 
 static DreamMugenAssignment* parseMugenOrdinalGroupFromString(char* tText) {
-	std::vector<std::tuple<int(*)(const char*, int, int), DreamMugenAssignmentType, std::string>> patterns;
-	patterns.push_back(std::make_tuple(isGreaterThanCharacter, MUGEN_ASSIGNMENT_TYPE_GREATER, ">"));
-	patterns.push_back(std::make_tuple(isGreaterThanEqualCharacter, MUGEN_ASSIGNMENT_TYPE_GREATER_OR_EQUAL, ">="));
-	patterns.push_back(std::make_tuple(isLessThanCharacter, MUGEN_ASSIGNMENT_TYPE_LESS, "<"));
-	patterns.push_back(std::make_tuple(isLessThanEqualCharacter, MUGEN_ASSIGNMENT_TYPE_LESS_OR_EQUAL, "<="));
+	static const std::vector<std::tuple<int(*)(const char*, int, int), DreamMugenAssignmentType, std::string>> patterns = {
+		std::make_tuple(isGreaterThanCharacter, MUGEN_ASSIGNMENT_TYPE_GREATER, ">"),
+		std::make_tuple(isGreaterThanEqualCharacter, MUGEN_ASSIGNMENT_TYPE_GREATER_OR_EQUAL, ">="),
+		std::make_tuple(isLessThanCharacter, MUGEN_ASSIGNMENT_TYPE_LESS, "<"),
+		std::make_tuple(isLessThanEqualCharacter, MUGEN_ASSIGNMENT_TYPE_LESS_OR_EQUAL, "<="),
+	};
 	return parseTwoElementMultipleRightToLeftMugenAssignmentFromString(tText, patterns, 1);
 }
 
@@ -790,18 +794,20 @@ static int isModuloCharacter(const char* tText, int /*n*/, int tPos) {
 }
 
 static int isMultiplicativeGroup(const char* tText) {
-	std::vector<std::tuple<int(*)(const char*, int, int), DreamMugenAssignmentType, std::string>> patterns;
-	patterns.push_back(std::make_tuple(isMultiplicationCharacter, MUGEN_ASSIGNMENT_TYPE_MULTIPLICATION, "*"));
-	patterns.push_back(std::make_tuple(isDivisionCharacter, MUGEN_ASSIGNMENT_TYPE_DIVISION, "/"));
-	patterns.push_back(std::make_tuple(isModuloCharacter, MUGEN_ASSIGNMENT_TYPE_MODULO, "%"));
+	static const std::vector<std::tuple<int(*)(const char*, int, int), DreamMugenAssignmentType, std::string>> patterns = {
+		std::make_tuple(isMultiplicationCharacter, MUGEN_ASSIGNMENT_TYPE_MULTIPLICATION, "*"),
+		std::make_tuple(isDivisionCharacter, MUGEN_ASSIGNMENT_TYPE_DIVISION, "/"),
+		std::make_tuple(isModuloCharacter, MUGEN_ASSIGNMENT_TYPE_MODULO, "%"),
+	};
 	return isOnHighestLevelMultipleRightToLeft(tText, patterns, 1, NULL, NULL);
 }
 
 static DreamMugenAssignment* parseMugenMultiplicativeGroupFromString(char* tText) {
-	std::vector<std::tuple<int(*)(const char*, int, int), DreamMugenAssignmentType, std::string>> patterns;
-	patterns.push_back(std::make_tuple(isMultiplicationCharacter, MUGEN_ASSIGNMENT_TYPE_MULTIPLICATION, "*"));
-	patterns.push_back(std::make_tuple(isDivisionCharacter, MUGEN_ASSIGNMENT_TYPE_DIVISION, "/"));
-	patterns.push_back(std::make_tuple(isModuloCharacter, MUGEN_ASSIGNMENT_TYPE_MODULO, "%"));
+	static const std::vector<std::tuple<int(*)(const char*, int, int), DreamMugenAssignmentType, std::string>> patterns = {
+		std::make_tuple(isMultiplicationCharacter, MUGEN_ASSIGNMENT_TYPE_MULTIPLICATION, "*"),
+		std::make_tuple(isDivisionCharacter, MUGEN_ASSIGNMENT_TYPE_DIVISION, "/"),
+		std::make_tuple(isModuloCharacter, MUGEN_ASSIGNMENT_TYPE_MODULO, "%"),
+	};
 	return parseTwoElementMultipleRightToLeftMugenAssignmentFromString(tText, patterns, 1);
 }
 
@@ -891,30 +897,26 @@ int doDreamAssignmentStringsBeginsWithPattern(const char* tPattern, char* tText)
 
 extern std::unordered_map<std::string, AssignmentReturnValue*(*)(DreamPlayer*)>& getActiveMugenAssignmentVariableMap();
 
+// The variable map is looked up in place: a copy of it (all its names) for
+// each word made loading a character several times slower.
 static int isMugenVariable(char* tText) {
-	char* text = (char*)allocMemory(int(strlen(tText)) + 2);
-	strcpy(text, tText);
-	turnStringLowercase(text);
+	std::string text(tText);
+	turnStringLowercase(&text[0]);
 
-	auto m = getActiveMugenAssignmentVariableMap();
-	
-	int ret = m.find(text) != m.end();
-	freeMemory(text);
-
-	return ret;
+	const auto& m = getActiveMugenAssignmentVariableMap();
+	return m.find(text) != m.end();
 }
 
 static DreamMugenAssignment* parseMugenVariableFromString(char* tText) {
-	char* text = (char*)allocMemory(int(strlen(tText)) + 2);
-	strcpy(text, tText);
-	turnStringLowercase(text);
+	std::string text(tText);
+	turnStringLowercase(&text[0]);
 	
 	DreamMugenVariableAssignment* data = (DreamMugenVariableAssignment*)allocMemoryOnMemoryStackOrMemory(sizeof(DreamMugenVariableAssignment));
 	gDebugAssignmentAmount++;
-	auto m = getActiveMugenAssignmentVariableMap();
-	data->mFunc = (void*)m[text];
+	const auto& m = getActiveMugenAssignmentVariableMap();
+	const auto it = m.find(text);
+	data->mFunc = it != m.end() ? (void*)it->second : NULL;
 	data->mType = MUGEN_ASSIGNMENT_TYPE_VARIABLE;
-	freeMemory(text);
 	return (DreamMugenAssignment*)data;
 }
 
@@ -1073,14 +1075,8 @@ static int isCommaContextFree(char* tText, int tPosition) {
 	assert(tPosition >= -1);
 	int start = tPosition + 1;
 
-	char* prevWord = (char*)allocMemory(int(strlen(&tText[start]) + 2));
-	strcpy(prevWord, &tText[start]);
-	int length = end - start;
-	prevWord[length] = '\0';
-
-	int ret = !isVectorTarget(prevWord);
-	freeMemory(prevWord);
-	return ret;
+	std::string prevWord(&tText[start], size_t(end - start));
+	return !isVectorTarget(&prevWord[0]);
 }
 
 static int hasContextFreeComma(char* tText, int* tPosition) {
