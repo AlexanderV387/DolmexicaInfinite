@@ -1,5 +1,7 @@
 #define HAVE_M_PI 
 
+#include <map>
+#include <algorithm>
 #include "mugenassignmentevaluator.h"
 
 #include <assert.h>
@@ -59,23 +61,32 @@ typedef struct {
 
 #define REGULAR_STACK_SIZE 500
 
+// A return value 8 bytes aligned: ARM's two-word loads (LDRD) need it, and
+// a plain array of them (204 bytes each) had every other one 4 bytes off
+// (the 3DS crashed on one in evaluateRangeAssignment, the Vita likewise).
+typedef struct alignas(8) {
+	AssignmentReturnValue mValue;
+} AlignedAssignmentReturnValue;
+
 static struct {
 	int mStackSize;
-	AssignmentReturnValue mStack[REGULAR_STACK_SIZE];
+	AlignedAssignmentReturnValue mStack[REGULAR_STACK_SIZE];
 	std::list<AssignmentReturnValue> mEmergencyStack;
 	int mFreePointer;
+	int mDepth; // evaluations started and not over: one inside another keeps the outer's values
 
 } gAssignmentEvaluator;
 
 static void initEvaluationStack() {
 #ifdef __3DS__
-	// [3DS] As on the Vita (also ARM): with the regular stack, the first
-	// fight crashed on a misaligned return value.
-	gAssignmentEvaluator.mStackSize = 0;
+	// [3DS] The regular stack, aligned (the emergency one allocated each
+	// return value: thousands of allocations a frame).
+	gAssignmentEvaluator.mStackSize = REGULAR_STACK_SIZE;
 #else
 	gAssignmentEvaluator.mStackSize = isOnVita() ? 0 : REGULAR_STACK_SIZE; // TODO: fix regular stack on Vita (still broken with vita2D, only on real hardware)
 #endif
 	gAssignmentEvaluator.mEmergencyStack.clear();
+	gAssignmentEvaluator.mDepth = 0;
 }
 
 static AssignmentReturnValue* getFreeAssignmentReturnValue() {
@@ -84,7 +95,7 @@ static AssignmentReturnValue* getFreeAssignmentReturnValue() {
 		return &gAssignmentEvaluator.mEmergencyStack.back();
 	}
 	else {
-		return &gAssignmentEvaluator.mStack[gAssignmentEvaluator.mFreePointer++];
+		return &gAssignmentEvaluator.mStack[gAssignmentEvaluator.mFreePointer++].mValue;
 	}
 }
 
@@ -2951,10 +2962,16 @@ void setupDreamAssignmentEvaluator() {
 
 static AssignmentReturnValue* evaluateAssignmentStart(DreamMugenAssignment** tAssignment, DreamPlayer* tPlayer, int* oIsStatic) {
 	setProfilingSectionMarkerCurrentFunction();
-	gAssignmentEvaluator.mFreePointer = 0;
-	if (!gAssignmentEvaluator.mEmergencyStack.empty()) gAssignmentEvaluator.mEmergencyStack.clear();
+	// The values start over only outside any other evaluation (one started
+	// inside another overwrote the outer's).
+	if (!gAssignmentEvaluator.mDepth) {
+		gAssignmentEvaluator.mFreePointer = 0;
+		if (!gAssignmentEvaluator.mEmergencyStack.empty()) gAssignmentEvaluator.mEmergencyStack.clear();
+	}
 
+	gAssignmentEvaluator.mDepth++;
 	auto ret = evaluateAssignmentInternal(tAssignment, tPlayer, oIsStatic);
+	gAssignmentEvaluator.mDepth--;
 	return ret;
 }
 
@@ -3487,6 +3504,582 @@ void shutdownDreamAssignmentEvaluator()
 	gVariableHandler.mComparisons.clear();
 	gVariableHandler.mArrays.clear();
 	gVariableHandler.mVariables.clear();
+}
+
+// ============================================================================
+// Triggers, quicker: a controller's trigger turned once into a list of
+// steps on whole numbers (a "program"), run in place of the general
+// evaluation, with the same results in the same order. What it does not
+// cover with certainty (floats, strings, redirections, most functions) is a
+// step that runs the general evaluation for that part and takes its truth;
+// a trigger with nothing covered keeps the general evaluation. Numbers and
+// booleans are both whole numbers here: the general evaluation's
+// conversions between them give the value itself (a division or modulo by
+// 0 gives bottom there: 0 as a number and as a truth, as here).
+
+enum FastTriggerOp : uint8_t {
+	FAST_TRIGGER_CONSTANT,
+	FAST_TRIGGER_VARIABLE,       // a variable function returning a number or a boolean
+	FAST_TRIGGER_VAR,            // var(a)
+	FAST_TRIGGER_SYSVAR,         // sysvar(a)
+	FAST_TRIGGER_AND,
+	FAST_TRIGGER_OR,
+	FAST_TRIGGER_NOT,
+	FAST_TRIGGER_EQUAL,          // b, then a
+	FAST_TRIGGER_NOT_EQUAL,
+	FAST_TRIGGER_LESS,
+	FAST_TRIGGER_LESS_OR_EQUAL,
+	FAST_TRIGGER_GREATER,
+	FAST_TRIGGER_GREATER_OR_EQUAL,
+	FAST_TRIGGER_IN_RANGE,       // a in [b, c] (the ends already moved in when excluded); b, c, then a
+	FAST_TRIGGER_NOT_IN_RANGE,
+	FAST_TRIGGER_ADD,            // a, then b
+	FAST_TRIGGER_SUBTRACT,
+	FAST_TRIGGER_MULTIPLY,
+	FAST_TRIGGER_DIVIDE,
+	FAST_TRIGGER_MODULO,
+	FAST_TRIGGER_NEGATE,         // unary minus
+	FAST_TRIGGER_COMMAND,        // command = "name" (its lookup index)
+	FAST_TRIGGER_STATE_TYPE,     // statetype = letters (the mask of s, c, a, l), of the player or of p2
+	FAST_TRIGGER_MOVE_TYPE,      // movetype = letters (the mask of a, h, i)
+	FAST_TRIGGER_ARRAY,          // an array function returning a number or a boolean, on its own index
+	FAST_TRIGGER_REDIRECT,       // a: the part on another player (p2, parent...), b: the general evaluation when there is none
+	FAST_TRIGGER_FVAR_TRUTH,     // fvar(a) as a truth: the float cut to a whole number
+	FAST_TRIGGER_GENERAL,        // the general evaluation's truth of a part
+};
+
+typedef struct {
+	FastTriggerOp mOp;
+	uint8_t mFlags;              // 1: of p2, 2: exclude left, 4: exclude right
+	int mValue;
+	void* mPointer;
+	void* mPointer2;
+	int a, b, c;
+} FastTriggerStep;
+
+struct FastTriggerProgram {
+	std::vector<FastTriggerStep> mSteps;
+	int mRoot;
+	int mIsCheckable;            // no random and no := (both evaluations may run, for the check)
+};
+
+static std::unordered_map<void*, int> gFastTriggerVariables;   // variable function: 1 if covered
+static std::unordered_map<void*, int> gFastTriggerArrays;      // array function: 1 if covered
+
+static void setupFastTriggerVariables() {
+	static const char* names[] = {
+		"ailevel", "alive", "anim", "animtime", "canrecover", "ctrl", "drawgame", "facing", "gametime", "hitcount", "hitfall", "hitover",
+		"hitpausetime", "hitshakeover", "id", "inguarddist", "ishelper", "ishometeam", "life", "lifemax", "lose", "matchno", "matchover",
+		"movecontact", "moveguarded", "movehit", "movereversed", "numenemy", "numexplod", "numhelper", "numpartner", "numproj", "numtarget",
+		"p2life", "p2stateno", "palno", "power", "powermax", "prevstateno", "random", "roundno", "roundsexisted", "roundstate", "stateno",
+		"statetime", "teamside", "tickspersecond", "time", "uniqhitcount", "uniquehitcount", "win", "winko", "winperfect", "wintime", "inputallowed",
+		"const(data.life)", "const(data.power)", "const(data.attack)", "const(data.defence)", "const(data.liedown.time)", "const(data.airjuggle)",
+		"const(data.sparkno)", "const(data.guard.sparkno)", "const(data.ko.echo)", "const(data.intpersistindex)", "const(data.floatpersistindex)",
+		"const(size.ground.back)", "const(size.ground.front)", "const(size.air.back)", "const(size.air.front)", "const(size.height)",
+		"const(size.attack.dist)", "const(size.proj.attack.dist)", "const(size.proj.doscale)", "const(size.shadowoffset)", "const(size.draw.offset.x)",
+		"const(size.draw.offset.y)", "const(movement.airjump.num)", "const(movement.airjump.height)", "gethitvar(type)", "gethitvar(animtype)",
+		"gethitvar(airtype)", "gethitvar(groundtype)", "gethitvar(damage)", "gethitvar(hitcount)", "gethitvar(fallcount)", "gethitvar(hitshaketime)",
+		"gethitvar(hittime)", "gethitvar(slidetime)", "gethitvar(ctrltime)", "gethitvar(recovertime)", "gethitvar(chainid)", "gethitvar(guarded)",
+		"gethitvar(isbound)", "gethitvar(fall)", "gethitvar(fall.damage)", "gethitvar(fall.recover)", "gethitvar(fall.recovertime)", "gethitvar(fall.kill)",
+		"gethitvar(fall.envshake.time)", "gethitvar(fall.envshake.ampl)",
+	};
+	gFastTriggerVariables.clear();
+	for (const auto name : names) {
+		const auto it = gVariableHandler.mVariables.find(name);
+		if (it != gVariableHandler.mVariables.end()) gFastTriggerVariables[(void*)it->second] = 1;
+	}
+	// Array functions whose value is always a number or a boolean (whatever
+	// their index's).
+	static const char* arrays[] = {
+		"globalvar", "strlen", "floor", "ceil", "animelemtime", "animelemno", "animexist", "selfanimexist", "numtarget", "numhelper",
+		"numexplod", "ishelper", "playeridexist", "numprojid", "projcanceltime", "projcontacttime", "projguardedtime", "projhittime",
+		"projhit", "projcontact", "projguarded",
+	};
+	gFastTriggerArrays.clear();
+	for (const auto name : arrays) {
+		const auto it = gVariableHandler.mArrays.find(name);
+		if (it != gVariableHandler.mArrays.end()) gFastTriggerArrays[(void*)it->second] = 1;
+	}
+}
+
+static int addFastTriggerStep(FastTriggerProgram* tProgram, FastTriggerOp tOp, int tValue = 0, void* tPointer = NULL, int a = -1, int b = -1, int c = -1, uint8_t tFlags = 0) {
+	FastTriggerStep step;
+	step.mOp = tOp;
+	step.mFlags = tFlags;
+	step.mValue = tValue;
+	step.mPointer = tPointer;
+	step.mPointer2 = NULL;
+	step.a = a;
+	step.b = b;
+	step.c = c;
+	tProgram->mSteps.push_back(step);
+	return int(tProgram->mSteps.size()) - 1;
+}
+
+static int compileFastTriggerTruth(FastTriggerProgram* tProgram, DreamMugenAssignment** tAssignment);
+
+// The letters of a constant (statetype = A, movetype = H, I): a mask, -1 if
+// not a constant.
+static int getFastTriggerLetterMask(DreamMugenAssignment* tAssignment, const char* tLetters) {
+	const char* text;
+	if (tAssignment->mType == MUGEN_ASSIGNMENT_TYPE_RAW_VARIABLE) {
+		text = ((DreamMugenRawVariableAssignment*)tAssignment)->mName;
+		if (isIsInOtherFileVariable(text)) return -1;
+	}
+	else if (tAssignment->mType == MUGEN_ASSIGNMENT_TYPE_STRING) text = ((DreamMugenStringAssignment*)tAssignment)->mValue;
+	else return -1;
+	int mask = 0;
+	for (int i = 0; tLetters[i]; i++) {
+		if (strchr(text, tLetters[i])) mask |= 1 << i;
+	}
+	return mask;
+}
+
+// A comparison of a raw variable (command, statetype, movetype...) to a
+// constant, as tryEvaluateVariableComparison would: its step, -1 if not one
+// of those.
+static int compileFastTriggerVariableComparison(FastTriggerProgram* tProgram, DreamMugenRawVariableAssignment* tVariable, DreamMugenAssignment* b) {
+	resolveRawVariableComparison(tVariable);
+	if (tVariable->mComparisonResolution == RAW_VARIABLE_COMPARISON_RESOLUTION_COMMAND) {
+		if (b->mType == MUGEN_ASSIGNMENT_TYPE_NUMBER) return addFastTriggerStep(tProgram, FAST_TRIGGER_COMMAND, ((DreamMugenNumberAssignment*)b)->mValue);
+		if (b->mType == MUGEN_ASSIGNMENT_TYPE_STRING) return addFastTriggerStep(tProgram, FAST_TRIGGER_CONSTANT, 0);
+		return -1;
+	}
+	if (tVariable->mComparisonResolution != RAW_VARIABLE_COMPARISON_RESOLUTION_MAP_FUNCTION) return -1;
+	const auto function = (ComparisonFunction)tVariable->mComparisonFunc;
+	if (function == stateTypeComparisonFunction || function == p2StateTypeComparisonFunction) {
+		const int mask = getFastTriggerLetterMask(b, "scal");
+		if (mask < 0) return -1;
+		return addFastTriggerStep(tProgram, FAST_TRIGGER_STATE_TYPE, mask, NULL, -1, -1, -1, function == p2StateTypeComparisonFunction ? 1 : 0);
+	}
+	if (function == moveTypeComparisonFunction || function == p2MoveTypeComparisonFunction) {
+		const int mask = getFastTriggerLetterMask(b, "ahi");
+		if (mask < 0) return -1;
+		return addFastTriggerStep(tProgram, FAST_TRIGGER_MOVE_TYPE, mask, NULL, -1, -1, -1, function == p2MoveTypeComparisonFunction ? 1 : 0);
+	}
+	return -1;
+}
+
+static int compileFastTriggerNumber(FastTriggerProgram* tProgram, DreamMugenAssignment** tAssignment);
+static int hasFastTriggerSideEffects(DreamMugenAssignment* e);
+
+// The first part of a redirection (p2, parent, helper(1)...).
+static int isFastTriggerPlayerPart(DreamMugenAssignment* e) {
+	if (e->mType == MUGEN_ASSIGNMENT_TYPE_RAW_VARIABLE) {
+		const char* name = ((DreamMugenRawVariableAssignment*)e)->mName;
+		static const char* names[] = { "p1", "p2", "target", "enemy", "enemynear", "root", "parent", "helper", "playerid" };
+		for (const auto candidate : names) {
+			if (!strcmp(candidate, name)) return 1;
+		}
+		return 0;
+	}
+	if (e->mType == MUGEN_ASSIGNMENT_TYPE_ARRAY) {
+		void* function = ((DreamMugenArrayAssignment*)e)->mFunc;
+		return function == (void*)helperFunction || function == (void*)numTargetArrayFunction || function == (void*)enemyNearFunction || function == (void*)playerIDFunction;
+	}
+	return 0;
+}
+
+// A part whose value is the same whoever evaluates it.
+static int isFastTriggerConstant(DreamMugenAssignment* e) {
+	switch (e->mType) {
+	case MUGEN_ASSIGNMENT_TYPE_NUMBER:
+	case MUGEN_ASSIGNMENT_TYPE_FIXED_BOOLEAN:
+	case MUGEN_ASSIGNMENT_TYPE_STRING:
+	case MUGEN_ASSIGNMENT_TYPE_FLOAT:
+		return 1;
+	case MUGEN_ASSIGNMENT_TYPE_RAW_VARIABLE:
+		return !isIsInOtherFileVariable(((DreamMugenRawVariableAssignment*)e)->mName);
+	case MUGEN_ASSIGNMENT_TYPE_RANGE: {
+		DreamMugenRangeAssignment* range = (DreamMugenRangeAssignment*)e;
+		if (range->a->mType != MUGEN_ASSIGNMENT_TYPE_VECTOR) return 0;
+		DreamMugenDependOnTwoAssignment* ends = (DreamMugenDependOnTwoAssignment*)range->a;
+		return ends->a->mType == MUGEN_ASSIGNMENT_TYPE_NUMBER && ends->b->mType == MUGEN_ASSIGNMENT_TYPE_NUMBER;
+	}
+	default:
+		return 0;
+	}
+}
+
+// a = b, as evaluateComparisonAssignmentInternal (b first, then a): its
+// step, -1 if not covered.
+static int compileFastTriggerEquality(FastTriggerProgram* tProgram, DreamMugenAssignment** aPointer, DreamMugenAssignment** bPointer) {
+	DreamMugenAssignment* a = *aPointer;
+	DreamMugenAssignment* b = *bPointer;
+	if (a->mType == MUGEN_ASSIGNMENT_TYPE_RAW_VARIABLE) {
+		return compileFastTriggerVariableComparison(tProgram, (DreamMugenRawVariableAssignment*)a, b);
+	}
+	if (a->mType == MUGEN_ASSIGNMENT_TYPE_VECTOR || a->mType == MUGEN_ASSIGNMENT_TYPE_NEGATION) return -1;
+	if (b->mType == MUGEN_ASSIGNMENT_TYPE_RANGE) {
+		DreamMugenRangeAssignment* range = (DreamMugenRangeAssignment*)b;
+		if (range->a->mType != MUGEN_ASSIGNMENT_TYPE_VECTOR) return -1;
+		DreamMugenDependOnTwoAssignment* ends = (DreamMugenDependOnTwoAssignment*)range->a;
+		const int low = compileFastTriggerNumber(tProgram, &ends->a);
+		if (low < 0) return -1;
+		const int high = compileFastTriggerNumber(tProgram, &ends->b);
+		if (high < 0) return -1;
+		const int value = compileFastTriggerNumber(tProgram, aPointer);
+		if (value < 0) return -1;
+		const uint8_t flags = (range->mExcludeLeft ? 2 : 0) | (range->mExcludeRight ? 4 : 0);
+		return addFastTriggerStep(tProgram, FAST_TRIGGER_IN_RANGE, 0, NULL, value, low, high, flags);
+	}
+	const int bStep = compileFastTriggerNumber(tProgram, bPointer);
+	if (bStep < 0) return -1;
+	const int aStep = compileFastTriggerNumber(tProgram, aPointer);
+	if (aStep < 0) return -1;
+	return addFastTriggerStep(tProgram, FAST_TRIGGER_EQUAL, 0, NULL, aStep, bStep);
+}
+
+// A part whose value is surely a whole number (or a boolean): its step, -1
+// if not covered.
+static int compileFastTriggerNumber(FastTriggerProgram* tProgram, DreamMugenAssignment** tAssignment) {
+	DreamMugenAssignment* e = *tAssignment;
+	switch (e->mType) {
+	case MUGEN_ASSIGNMENT_TYPE_NUMBER:
+		return addFastTriggerStep(tProgram, FAST_TRIGGER_CONSTANT, ((DreamMugenNumberAssignment*)e)->mValue);
+	case MUGEN_ASSIGNMENT_TYPE_FIXED_BOOLEAN:
+		return addFastTriggerStep(tProgram, FAST_TRIGGER_CONSTANT, ((DreamMugenFixedBooleanAssignment*)e)->mValue);
+	case MUGEN_ASSIGNMENT_TYPE_VARIABLE: {
+		void* function = ((DreamMugenVariableAssignment*)e)->mFunc;
+		if (!gFastTriggerVariables.count(function)) return -1;
+		if (function == (void*)randomFunction) tProgram->mIsCheckable = 0;
+		return addFastTriggerStep(tProgram, FAST_TRIGGER_VARIABLE, 0, function);
+	}
+	case MUGEN_ASSIGNMENT_TYPE_ARRAY: {
+		DreamMugenArrayAssignment* array = (DreamMugenArrayAssignment*)e;
+		const FastTriggerOp op = array->mFunc == (void*)varFunction ? FAST_TRIGGER_VAR : array->mFunc == (void*)sysVarFunction ? FAST_TRIGGER_SYSVAR : FAST_TRIGGER_GENERAL;
+		if (op == FAST_TRIGGER_GENERAL) {
+			if (!gFastTriggerArrays.count(array->mFunc)) return -1;
+			if (hasFastTriggerSideEffects(array->mIndex)) tProgram->mIsCheckable = 0;
+			const int step = addFastTriggerStep(tProgram, FAST_TRIGGER_ARRAY, 0, (void*)&array->mIndex);
+			tProgram->mSteps[step].mPointer2 = array->mFunc;
+			return step;
+		}
+		const int index = compileFastTriggerNumber(tProgram, &array->mIndex);
+		if (index < 0) return -1;
+		return addFastTriggerStep(tProgram, op, 0, NULL, index);
+	}
+	case MUGEN_ASSIGNMENT_TYPE_AND:
+	case MUGEN_ASSIGNMENT_TYPE_OR: {
+		DreamMugenDependOnTwoAssignment* two = (DreamMugenDependOnTwoAssignment*)e;
+		const int a = compileFastTriggerTruth(tProgram, &two->a);
+		const int b = compileFastTriggerTruth(tProgram, &two->b);
+		return addFastTriggerStep(tProgram, e->mType == MUGEN_ASSIGNMENT_TYPE_AND ? FAST_TRIGGER_AND : FAST_TRIGGER_OR, 0, NULL, a, b);
+	}
+	case MUGEN_ASSIGNMENT_TYPE_NEGATION: {
+		const int a = compileFastTriggerTruth(tProgram, &((DreamMugenDependOnOneAssignment*)e)->a);
+		return addFastTriggerStep(tProgram, FAST_TRIGGER_NOT, 0, NULL, a);
+	}
+	case MUGEN_ASSIGNMENT_TYPE_COMPARISON:
+	case MUGEN_ASSIGNMENT_TYPE_INEQUALITY: {
+		DreamMugenDependOnTwoAssignment* two = (DreamMugenDependOnTwoAssignment*)e;
+		const int isInequality = e->mType == MUGEN_ASSIGNMENT_TYPE_INEQUALITY;
+		if (two->a->mType == MUGEN_ASSIGNMENT_TYPE_VECTOR) {
+			// Another player's part (p2, stateno = 5000): when that player
+			// is there, the comparison on them (the constant compared to
+			// being the same for both).
+			DreamMugenDependOnTwoAssignment* vector = (DreamMugenDependOnTwoAssignment*)two->a;
+			if (!isFastTriggerPlayerPart(vector->a) || hasFastTriggerSideEffects(vector->a) || !isFastTriggerConstant(two->b)) return -1;
+			int inner = compileFastTriggerEquality(tProgram, &vector->b, &two->b);
+			if (inner < 0) return -1;
+			if (isInequality) inner = addFastTriggerStep(tProgram, FAST_TRIGGER_NOT, 0, NULL, inner);
+			const int general = addFastTriggerStep(tProgram, FAST_TRIGGER_GENERAL, 0, (void*)tAssignment);
+			// Not a valid player: bottom (0) for the comparison, its negation for the other.
+			return addFastTriggerStep(tProgram, FAST_TRIGGER_REDIRECT, isInequality ? 1 : 0, (void*)&vector->a, inner, general, -1, 0);
+		}
+		const int step = compileFastTriggerEquality(tProgram, &two->a, &two->b);
+		if (step < 0) return -1;
+		return isInequality ? addFastTriggerStep(tProgram, FAST_TRIGGER_NOT, 0, NULL, step) : step;
+	}
+	case MUGEN_ASSIGNMENT_TYPE_LESS:
+	case MUGEN_ASSIGNMENT_TYPE_LESS_OR_EQUAL:
+	case MUGEN_ASSIGNMENT_TYPE_GREATER:
+	case MUGEN_ASSIGNMENT_TYPE_GREATER_OR_EQUAL: {
+		DreamMugenDependOnTwoAssignment* two = (DreamMugenDependOnTwoAssignment*)e;
+		if (two->a->mType == MUGEN_ASSIGNMENT_TYPE_RAW_VARIABLE) return -1;
+		const int b = compileFastTriggerNumber(tProgram, &two->b);
+		if (b < 0) return -1;
+		const int a = compileFastTriggerNumber(tProgram, &two->a);
+		if (a < 0) return -1;
+		const FastTriggerOp op = e->mType == MUGEN_ASSIGNMENT_TYPE_LESS ? FAST_TRIGGER_LESS : e->mType == MUGEN_ASSIGNMENT_TYPE_LESS_OR_EQUAL ? FAST_TRIGGER_LESS_OR_EQUAL : e->mType == MUGEN_ASSIGNMENT_TYPE_GREATER ? FAST_TRIGGER_GREATER : FAST_TRIGGER_GREATER_OR_EQUAL;
+		return addFastTriggerStep(tProgram, op, 0, NULL, a, b);
+	}
+	case MUGEN_ASSIGNMENT_TYPE_ADDITION:
+	case MUGEN_ASSIGNMENT_TYPE_SUBTRACTION:
+	case MUGEN_ASSIGNMENT_TYPE_MULTIPLICATION:
+	case MUGEN_ASSIGNMENT_TYPE_DIVISION:
+	case MUGEN_ASSIGNMENT_TYPE_MODULO: {
+		DreamMugenDependOnTwoAssignment* two = (DreamMugenDependOnTwoAssignment*)e;
+		const int a = compileFastTriggerNumber(tProgram, &two->a);
+		if (a < 0) return -1;
+		const int b = compileFastTriggerNumber(tProgram, &two->b);
+		if (b < 0) return -1;
+		const FastTriggerOp op = e->mType == MUGEN_ASSIGNMENT_TYPE_ADDITION ? FAST_TRIGGER_ADD : e->mType == MUGEN_ASSIGNMENT_TYPE_SUBTRACTION ? FAST_TRIGGER_SUBTRACT : e->mType == MUGEN_ASSIGNMENT_TYPE_MULTIPLICATION ? FAST_TRIGGER_MULTIPLY : e->mType == MUGEN_ASSIGNMENT_TYPE_DIVISION ? FAST_TRIGGER_DIVIDE : FAST_TRIGGER_MODULO;
+		return addFastTriggerStep(tProgram, op, 0, NULL, a, b);
+	}
+	case MUGEN_ASSIGNMENT_TYPE_UNARY_MINUS: {
+		const int a = compileFastTriggerNumber(tProgram, &((DreamMugenDependOnOneAssignment*)e)->a);
+		if (a < 0) return -1;
+		return addFastTriggerStep(tProgram, FAST_TRIGGER_NEGATE, 0, NULL, a);
+	}
+	default:
+		return -1;
+	}
+}
+
+// Whether a part may change something or give another value each time (a
+// := or random): not evaluated twice for the check.
+static int hasFastTriggerSideEffects(DreamMugenAssignment* e) {
+	if (!e) return 0;
+	switch (e->mType) {
+	case MUGEN_ASSIGNMENT_TYPE_SET_VARIABLE:
+		return 1;
+	case MUGEN_ASSIGNMENT_TYPE_VARIABLE:
+		return ((DreamMugenVariableAssignment*)e)->mFunc == (void*)randomFunction;
+	case MUGEN_ASSIGNMENT_TYPE_NEGATION:
+	case MUGEN_ASSIGNMENT_TYPE_BITWISE_INVERSION:
+	case MUGEN_ASSIGNMENT_TYPE_UNARY_MINUS:
+		return hasFastTriggerSideEffects(((DreamMugenDependOnOneAssignment*)e)->a);
+	case MUGEN_ASSIGNMENT_TYPE_RANGE:
+		return hasFastTriggerSideEffects(((DreamMugenRangeAssignment*)e)->a);
+	case MUGEN_ASSIGNMENT_TYPE_ARRAY:
+		return hasFastTriggerSideEffects(((DreamMugenArrayAssignment*)e)->mIndex);
+	case MUGEN_ASSIGNMENT_TYPE_FIXED_BOOLEAN:
+	case MUGEN_ASSIGNMENT_TYPE_NULL:
+	case MUGEN_ASSIGNMENT_TYPE_RAW_VARIABLE:
+	case MUGEN_ASSIGNMENT_TYPE_NUMBER:
+	case MUGEN_ASSIGNMENT_TYPE_FLOAT:
+	case MUGEN_ASSIGNMENT_TYPE_STRING:
+	case MUGEN_ASSIGNMENT_TYPE_STATIC:
+		return 0;
+	default: {
+		DreamMugenDependOnTwoAssignment* two = (DreamMugenDependOnTwoAssignment*)e;
+		return hasFastTriggerSideEffects(two->a) || hasFastTriggerSideEffects(two->b);
+	}
+	}
+}
+
+static int compileFastTriggerTruth(FastTriggerProgram* tProgram, DreamMugenAssignment** tAssignment) {
+	const int step = compileFastTriggerNumber(tProgram, tAssignment);
+	if (step >= 0) return step;
+	DreamMugenAssignment* e = *tAssignment;
+	if (e->mType == MUGEN_ASSIGNMENT_TYPE_ARRAY && ((DreamMugenArrayAssignment*)e)->mFunc == (void*)fVarFunction) {
+		const int index = compileFastTriggerNumber(tProgram, &((DreamMugenArrayAssignment*)e)->mIndex);
+		if (index >= 0) return addFastTriggerStep(tProgram, FAST_TRIGGER_FVAR_TRUTH, 0, NULL, index);
+	}
+	if (e->mType == MUGEN_ASSIGNMENT_TYPE_VECTOR) {
+		// Another player's value as a truth (parent, var(5)), as
+		// evaluatePlayerVectorAssignment; the general evaluation when there
+		// is no such player (then a vector: true).
+		DreamMugenDependOnTwoAssignment* vector = (DreamMugenDependOnTwoAssignment*)e;
+		const uint8_t valueType = vector->b->mType;
+		if (isFastTriggerPlayerPart(vector->a) && !hasFastTriggerSideEffects(vector->a)
+			&& (valueType == MUGEN_ASSIGNMENT_TYPE_VARIABLE || valueType == MUGEN_ASSIGNMENT_TYPE_RAW_VARIABLE || valueType == MUGEN_ASSIGNMENT_TYPE_ARRAY)) {
+			const int inner = compileFastTriggerTruth(tProgram, &vector->b);
+			const int general = addFastTriggerStep(tProgram, FAST_TRIGGER_GENERAL, 0, (void*)tAssignment);
+			return addFastTriggerStep(tProgram, FAST_TRIGGER_REDIRECT, 0, (void*)&vector->a, inner, general, -1, 1);
+		}
+	}
+	if (hasFastTriggerSideEffects(*tAssignment)) tProgram->mIsCheckable = 0;
+	return addFastTriggerStep(tProgram, FAST_TRIGGER_GENERAL, 0, (void*)tAssignment);
+}
+
+static int runFastTriggerStep(const FastTriggerStep* tSteps, int tIndex, DreamPlayer* tPlayer) {
+	const FastTriggerStep& step = tSteps[tIndex];
+	switch (step.mOp) {
+	case FAST_TRIGGER_CONSTANT:
+		return step.mValue;
+	case FAST_TRIGGER_VARIABLE:
+		return convertAssignmentReturnToNumber(((VariableFunction)step.mPointer)(tPlayer));
+	case FAST_TRIGGER_VAR:
+		return getPlayerVariable(tPlayer, runFastTriggerStep(tSteps, step.a, tPlayer));
+	case FAST_TRIGGER_SYSVAR:
+		return getPlayerSystemVariable(tPlayer, runFastTriggerStep(tSteps, step.a, tPlayer));
+	case FAST_TRIGGER_AND: {
+		const int a = runFastTriggerStep(tSteps, step.a, tPlayer);
+		if (!a) return 0;
+		return runFastTriggerStep(tSteps, step.b, tPlayer);
+	}
+	case FAST_TRIGGER_OR: {
+		const int a = runFastTriggerStep(tSteps, step.a, tPlayer);
+		if (a) return a;
+		return runFastTriggerStep(tSteps, step.b, tPlayer);
+	}
+	case FAST_TRIGGER_NOT:
+		return !runFastTriggerStep(tSteps, step.a, tPlayer);
+	case FAST_TRIGGER_EQUAL:
+	case FAST_TRIGGER_NOT_EQUAL:
+	case FAST_TRIGGER_LESS:
+	case FAST_TRIGGER_LESS_OR_EQUAL:
+	case FAST_TRIGGER_GREATER:
+	case FAST_TRIGGER_GREATER_OR_EQUAL: {
+		const int b = runFastTriggerStep(tSteps, step.b, tPlayer);
+		const int a = runFastTriggerStep(tSteps, step.a, tPlayer);
+		switch (step.mOp) {
+		case FAST_TRIGGER_EQUAL: return a == b;
+		case FAST_TRIGGER_NOT_EQUAL: return a != b;
+		case FAST_TRIGGER_LESS: return a < b;
+		case FAST_TRIGGER_LESS_OR_EQUAL: return a <= b;
+		case FAST_TRIGGER_GREATER: return a > b;
+		default: return a >= b;
+		}
+	}
+	case FAST_TRIGGER_IN_RANGE:
+	case FAST_TRIGGER_NOT_IN_RANGE: {
+		int low = runFastTriggerStep(tSteps, step.b, tPlayer);
+		int high = runFastTriggerStep(tSteps, step.c, tPlayer);
+		if (step.mFlags & 2) low++;
+		if (step.mFlags & 4) high--;
+		const int a = runFastTriggerStep(tSteps, step.a, tPlayer);
+		const int isIn = a >= low && a <= high;
+		return step.mOp == FAST_TRIGGER_IN_RANGE ? isIn : !isIn;
+	}
+	case FAST_TRIGGER_ADD:
+	case FAST_TRIGGER_SUBTRACT:
+	case FAST_TRIGGER_MULTIPLY:
+	case FAST_TRIGGER_DIVIDE:
+	case FAST_TRIGGER_MODULO: {
+		const int a = runFastTriggerStep(tSteps, step.a, tPlayer);
+		const int b = runFastTriggerStep(tSteps, step.b, tPlayer);
+		switch (step.mOp) {
+		case FAST_TRIGGER_ADD: return a + b;
+		case FAST_TRIGGER_SUBTRACT: return a - b;
+		case FAST_TRIGGER_MULTIPLY: return a * b;
+		case FAST_TRIGGER_DIVIDE: return b ? a / b : 0;
+		default: return b ? a % b : 0;
+		}
+	}
+	case FAST_TRIGGER_NEGATE:
+		return -runFastTriggerStep(tSteps, step.a, tPlayer);
+	case FAST_TRIGGER_COMMAND:
+		return isPlayerCommandActiveWithLookup(tPlayer, step.mValue);
+	case FAST_TRIGGER_STATE_TYPE: {
+		DreamPlayer* p = (step.mFlags & 1) ? getPlayerOtherPlayer(tPlayer) : tPlayer;
+		const DreamMugenStateType type = getPlayerStateType(p);
+		if (type == MUGEN_STATE_TYPE_STANDING) return (step.mValue & 1) != 0;
+		if (type == MUGEN_STATE_TYPE_CROUCHING) return (step.mValue & 2) != 0;
+		if (type == MUGEN_STATE_TYPE_AIR) return (step.mValue & 4) != 0;
+		if (type == MUGEN_STATE_TYPE_LYING) return (step.mValue & 8) != 0;
+		logWarningFormat("Undefined player state %d. Default to false.", type);
+		return 0;
+	}
+	case FAST_TRIGGER_MOVE_TYPE: {
+		DreamPlayer* p = (step.mFlags & 1) ? getPlayerOtherPlayer(tPlayer) : tPlayer;
+		const DreamMugenStateMoveType type = getPlayerStateMoveType(p);
+		if (type == MUGEN_STATE_MOVE_TYPE_ATTACK) return (step.mValue & 1) != 0;
+		if (type == MUGEN_STATE_MOVE_TYPE_BEING_HIT) return (step.mValue & 2) != 0;
+		if (type == MUGEN_STATE_MOVE_TYPE_IDLE) return (step.mValue & 4) != 0;
+		logWarningFormat("Undefined player state %d. Default to false.", type);
+		return 0;
+	}
+	case FAST_TRIGGER_FVAR_TRUTH:
+		return (int)getPlayerFloatVariable(tPlayer, runFastTriggerStep(tSteps, step.a, tPlayer));
+	case FAST_TRIGGER_ARRAY: {
+		int isStatic;
+		return convertAssignmentReturnToNumber(((ArrayFunction)step.mPointer2)((DreamMugenAssignment**)step.mPointer, tPlayer, &isStatic));
+	}
+	case FAST_TRIGGER_REDIRECT: {
+		int isStatic;
+		DreamPlayer* target = getPlayerFromFirstVectorPartOrNullIfNonexistant((DreamMugenAssignment**)step.mPointer, tPlayer, &isStatic);
+		if (!target) return runFastTriggerStep(tSteps, step.b, tPlayer);
+		if (!isPlayerTargetValid(target)) {
+			if (step.mFlags & 1) logWarning("Unable to evaluate player vector assignment with NULL. Defaulting to bottom.")
+			else logWarning("Accessed player was NULL. Defaulting to bottom.");
+			return step.mValue;
+		}
+		return runFastTriggerStep(tSteps, step.a, target);
+	}
+	case FAST_TRIGGER_GENERAL:
+	default: {
+#if !defined(__3DS__)
+		static const int isCountingGeneral = getenv("DOLMEXICA_FAST_STATS") ? 1 : 0;
+		if (isCountingGeneral) {
+			static std::map<std::string, int> counts;
+			static int total = 0;
+			DreamMugenAssignment* e = *(DreamMugenAssignment**)step.mPointer;
+			std::string key = std::to_string(e->mType);
+			DreamMugenAssignment* first = NULL;
+			if (e->mType != MUGEN_ASSIGNMENT_TYPE_VARIABLE && e->mType != MUGEN_ASSIGNMENT_TYPE_RAW_VARIABLE && e->mType != MUGEN_ASSIGNMENT_TYPE_ARRAY && e->mType != MUGEN_ASSIGNMENT_TYPE_NUMBER && e->mType != MUGEN_ASSIGNMENT_TYPE_STRING && e->mType != MUGEN_ASSIGNMENT_TYPE_FLOAT && e->mType != MUGEN_ASSIGNMENT_TYPE_FIXED_BOOLEAN) first = ((DreamMugenDependOnTwoAssignment*)e)->a;
+			if (e->mType == MUGEN_ASSIGNMENT_TYPE_ARRAY) for (auto& v : gVariableHandler.mArrays) if ((void*)v.second == ((DreamMugenArrayAssignment*)e)->mFunc) { key += " " + v.first; break; }
+			if (e->mType == MUGEN_ASSIGNMENT_TYPE_RAW_VARIABLE) key += std::string(" ") + ((DreamMugenRawVariableAssignment*)e)->mName;
+			if (first) {
+				key += " a:" + std::to_string(first->mType);
+				if (first->mType == MUGEN_ASSIGNMENT_TYPE_RAW_VARIABLE) key += std::string(" ") + ((DreamMugenRawVariableAssignment*)first)->mName;
+				if (first->mType == MUGEN_ASSIGNMENT_TYPE_VARIABLE) for (auto& v : gVariableHandler.mVariables) if ((void*)v.second == ((DreamMugenVariableAssignment*)first)->mFunc) { key += " " + v.first; break; }
+				if (first->mType == MUGEN_ASSIGNMENT_TYPE_ARRAY) for (auto& v : gVariableHandler.mArrays) if ((void*)v.second == ((DreamMugenArrayAssignment*)first)->mFunc) { key += " " + v.first; break; }
+			}
+			counts[key]++;
+			if (++total % 200000 == 0) {
+				std::vector<std::pair<int, std::string>> sorted;
+				for (auto& c : counts) sorted.push_back(std::make_pair(c.second, c.first));
+				std::sort(sorted.rbegin(), sorted.rend());
+				for (int i = 0; i < 25 && i < int(sorted.size()); i++) fprintf(stderr, "FAST_STATS %7d %s\n", sorted[i].first, sorted[i].second.c_str());
+			}
+		}
+#endif
+		int isStatic;
+		return convertAssignmentReturnToBool(evaluateAssignmentInternal((DreamMugenAssignment**)step.mPointer, tPlayer, &isStatic));
+	}
+	}
+}
+
+// A program made for nothing (a trigger without covered parts).
+static FastTriggerProgram gNoFastTriggerProgram;
+
+int evaluateDreamTrigger(DreamMugenAssignment** tAssignment, void** tFastProgram, DreamPlayer* tPlayer)
+{
+	if (!(*tAssignment)) return 0;
+	if (gIsUsingStaticAssignments || gVariableHandler.mType != MUGEN_ASSIGNMENT_EVALUATOR_TYPE_REGULAR) {
+		return evaluateDreamAssignment(tAssignment, tPlayer);
+	}
+	static int isDisabled = -1;
+	static int isChecking = 0;
+	if (isDisabled < 0) {
+		isDisabled = getenv("DOLMEXICA_NO_FAST_TRIGGERS") ? 1 : 0;
+		isChecking = getenv("DOLMEXICA_FAST_CHECK") ? 1 : 0;
+	}
+	if (isDisabled) return evaluateDreamAssignment(tAssignment, tPlayer);
+
+	FastTriggerProgram* program = (FastTriggerProgram*)*tFastProgram;
+	if (!program) {
+		if (gFastTriggerVariables.empty()) setupFastTriggerVariables();
+		program = new FastTriggerProgram();
+		program->mIsCheckable = 1;
+		program->mRoot = compileFastTriggerTruth(program, tAssignment);
+		if (program->mSteps[program->mRoot].mOp == FAST_TRIGGER_GENERAL) {
+			delete program;
+			program = &gNoFastTriggerProgram;
+		}
+		else {
+			program->mSteps.shrink_to_fit();
+		}
+		*tFastProgram = program;
+	}
+	if (program == &gNoFastTriggerProgram) return evaluateDreamAssignment(tAssignment, tPlayer);
+
+	if (!gAssignmentEvaluator.mDepth) {
+		gAssignmentEvaluator.mFreePointer = 0;
+		if (!gAssignmentEvaluator.mEmergencyStack.empty()) gAssignmentEvaluator.mEmergencyStack.clear();
+	}
+	gAssignmentEvaluator.mDepth++;
+	const int ret = runFastTriggerStep(program->mSteps.data(), program->mRoot, tPlayer);
+	gAssignmentEvaluator.mDepth--;
+
+	if (isChecking && program->mIsCheckable) {
+		static int mismatches = 0;
+		const int general = evaluateDreamAssignment(tAssignment, tPlayer);
+		if (general != ret && mismatches++ < 20) {
+			fprintf(stderr, "FAST_CHECK mismatch: fast %d, general %d, player %d state %d, %d steps\n", ret, general, tPlayer ? tPlayer->mRootID : -1, tPlayer ? getPlayerState(tPlayer) : -1, int(program->mSteps.size()));
+		}
+	}
+	return ret;
+}
+
+void destroyDreamTriggerProgram(void** tFastProgram)
+{
+	FastTriggerProgram* program = (FastTriggerProgram*)*tFastProgram;
+	if (program && program != &gNoFastTriggerProgram) delete program;
+	*tFastProgram = NULL;
 }
 
 int evaluateDreamAssignment(DreamMugenAssignment** tAssignment, DreamPlayer* tPlayer)

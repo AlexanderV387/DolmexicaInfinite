@@ -158,7 +158,7 @@ static void loadPlayerAnimationsAndName(MugenDefScript* tPlayerScript, const cha
 	getMugenDefStringOrDefault(file, tPlayerScript, "files", name, "");
 	int hasPalettePath = strcmp("", file);
 	sprintf(palettePath, "%s%s", tPath, file);
-	if(!isFile(palettePath)){
+	if(hasPalettePath && !isFile(palettePath)){
 		logErrorFormat("Unable to find palette file %s. Ignoring.", palettePath);
 		hasPalettePath = 0;
 	}

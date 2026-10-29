@@ -13,6 +13,10 @@ void setupDreamGlobalAssignmentEvaluator();
 void shutdownDreamAssignmentEvaluator();
 
 int evaluateDreamAssignment(DreamMugenAssignment** tAssignment, DreamPlayer* tPlayer);
+// A controller's trigger: its truth, as evaluateDreamAssignment's, through a
+// program on whole numbers made the first time (in *tFastProgram).
+int evaluateDreamTrigger(DreamMugenAssignment** tAssignment, void** tFastProgram, DreamPlayer* tPlayer);
+void destroyDreamTriggerProgram(void** tFastProgram);
 float evaluateDreamAssignmentAndReturnAsFloat(DreamMugenAssignment** tAssignment, DreamPlayer* tPlayer);
 int evaluateDreamAssignmentAndReturnAsInteger(DreamMugenAssignment** tAssignment, DreamPlayer* tPlayer);
 void evaluateDreamAssignmentAndReturnAsString(std::string& oString, DreamMugenAssignment** tAssignment, DreamPlayer* tPlayer);

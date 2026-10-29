@@ -56,7 +56,7 @@ static int isStateMachineInHitPause(RegisteredMugenStateMachine* tRegisteredStat
 
 static int evaluateTrigger(DreamMugenStateControllerTrigger* tTrigger, DreamPlayer* tPlayer) {
 	setProfilingSectionMarkerCurrentFunction();
-	return evaluateDreamAssignment(&tTrigger->mAssignment, tPlayer);
+	return evaluateDreamTrigger(&tTrigger->mAssignment, &tTrigger->mFastProgram, tPlayer);
 }
 
 static void updateSingleController(void* tCaller, void* tData) {

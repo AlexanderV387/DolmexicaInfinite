@@ -106,6 +106,7 @@ static void parseStateControllerTriggers(DreamMugenStateController* tController,
 		root = makeDreamTrueMugenAssignment();
 	}
 	tController->mTrigger.mAssignment = root;
+	tController->mTrigger.mFastProgram = NULL;
 }
 
 static void* allocMemoryOnMemoryStackOrMemory(uint32_t tSize) {
@@ -2649,6 +2650,7 @@ static void unloadStateControllerType(DreamMugenStateController* tController) {
 
 void unloadDreamMugenStateController(DreamMugenStateController * tController)
 {
+	destroyDreamTriggerProgram(&tController->mTrigger.mFastProgram);
 	destroyDreamMugenAssignment(tController->mTrigger.mAssignment);
 	unloadStateControllerType(tController);
 }

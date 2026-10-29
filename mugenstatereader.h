@@ -184,6 +184,7 @@ enum DreamMugenStateControllerTarget : uint8_t {
 
 typedef struct {
 	DreamMugenAssignment* mAssignment;
+	void* mFastProgram; // made when first evaluated (evaluateDreamTrigger)
 
 } DreamMugenStateControllerTrigger;
 
