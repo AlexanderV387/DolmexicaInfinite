@@ -333,6 +333,12 @@ static GeoRectangle2D getBackgroundElementWindow(MugenDefScriptGroup* tGroup, co
 	}
 	else {
 		returnRectangle = getMugenDefGeoRectangle2DOrDefaultAsGroup(tGroup, "window", GeoRectangle2D(-INF / 2, -INF / 2, INF, INF));
+		// [3DS] A window up to the screen's sides goes on to the sides of
+		// the wider screen (Kung Fu Man's stage: the landscape behind the
+		// windows, "window = 0,0, 319,239", had black sides).
+		const float margin = getDreamScreenSideMargin(tLocalCoordinates.x);
+		if (returnRectangle.mTopLeft.x <= 0) returnRectangle.mTopLeft.x -= margin;
+		if (returnRectangle.mBottomRight.x >= tLocalCoordinates.x - 1) returnRectangle.mBottomRight.x += margin;
 	}
 
 	// Padding to avoid black lines when pixel not totally on screen
