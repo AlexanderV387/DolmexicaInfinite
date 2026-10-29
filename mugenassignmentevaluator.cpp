@@ -4023,8 +4023,25 @@ static int runFastTriggerStep(const FastTriggerStep* tSteps, int tIndex, DreamPl
 	}
 }
 
-// A program made for nothing (a trigger without covered parts).
-static FastTriggerProgram gNoFastTriggerProgram;
+// The programs made, all let go after each fight (their controllers are
+// freed with the fight's memory, never one by one): a trigger keeps a handle
+// (the generation it was made in and its number), a handle of an older
+// generation is made again.
+static std::vector<FastTriggerProgram*> gFastTriggerPrograms;
+static uintptr_t gFastTriggerGeneration = 1;
+static const uintptr_t FAST_TRIGGER_GENERAL_ONLY = 0xFFFFFF;   // a trigger without covered parts
+
+static uintptr_t makeFastTriggerHandle(uintptr_t tNumber) {
+	return ((gFastTriggerGeneration & 0xFF) << 24) | (tNumber + 1);
+}
+
+void destroyAllDreamTriggerPrograms()
+{
+	for (auto program : gFastTriggerPrograms) delete program;
+	gFastTriggerPrograms.clear();
+	gFastTriggerPrograms.shrink_to_fit();
+	gFastTriggerGeneration++;
+}
 
 int evaluateDreamTrigger(DreamMugenAssignment** tAssignment, void** tFastProgram, DreamPlayer* tPlayer)
 {
@@ -4040,22 +4057,26 @@ int evaluateDreamTrigger(DreamMugenAssignment** tAssignment, void** tFastProgram
 	}
 	if (isDisabled) return evaluateDreamAssignment(tAssignment, tPlayer);
 
-	FastTriggerProgram* program = (FastTriggerProgram*)*tFastProgram;
-	if (!program) {
+	uintptr_t handle = (uintptr_t)*tFastProgram;
+	if (!handle || (handle >> 24) != (gFastTriggerGeneration & 0xFF)) {
 		if (gFastTriggerVariables.empty()) setupFastTriggerVariables();
-		program = new FastTriggerProgram();
-		program->mIsCheckable = 1;
-		program->mRoot = compileFastTriggerTruth(program, tAssignment);
-		if (program->mSteps[program->mRoot].mOp == FAST_TRIGGER_GENERAL) {
-			delete program;
-			program = &gNoFastTriggerProgram;
+		FastTriggerProgram* made = new FastTriggerProgram();
+		made->mIsCheckable = 1;
+		made->mRoot = compileFastTriggerTruth(made, tAssignment);
+		if (made->mSteps[made->mRoot].mOp == FAST_TRIGGER_GENERAL) {
+			delete made;
+			handle = makeFastTriggerHandle(FAST_TRIGGER_GENERAL_ONLY - 1);
 		}
 		else {
-			program->mSteps.shrink_to_fit();
+			made->mSteps.shrink_to_fit();
+			gFastTriggerPrograms.push_back(made);
+			handle = makeFastTriggerHandle(gFastTriggerPrograms.size() - 1);
 		}
-		*tFastProgram = program;
+		*tFastProgram = (void*)handle;
 	}
-	if (program == &gNoFastTriggerProgram) return evaluateDreamAssignment(tAssignment, tPlayer);
+	const uintptr_t number = (handle & 0xFFFFFF) - 1;
+	if (number == FAST_TRIGGER_GENERAL_ONLY - 1) return evaluateDreamAssignment(tAssignment, tPlayer);
+	FastTriggerProgram* program = gFastTriggerPrograms[number];
 
 	if (!gAssignmentEvaluator.mDepth) {
 		gAssignmentEvaluator.mFreePointer = 0;
@@ -4077,8 +4098,7 @@ int evaluateDreamTrigger(DreamMugenAssignment** tAssignment, void** tFastProgram
 
 void destroyDreamTriggerProgram(void** tFastProgram)
 {
-	FastTriggerProgram* program = (FastTriggerProgram*)*tFastProgram;
-	if (program && program != &gNoFastTriggerProgram) delete program;
+	// Let go with all the others (destroyAllDreamTriggerPrograms).
 	*tFastProgram = NULL;
 }
 

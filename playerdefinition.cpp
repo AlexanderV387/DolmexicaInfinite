@@ -657,6 +657,7 @@ void unloadPlayers() {
 		unloadPlayerHeader(i);
 		unloadSinglePlayer(&gPlayerDefinition.mPlayers[i], &gPlayerDefinition.mPlayerHeader[i]);
 	}
+	destroyAllDreamTriggerPrograms();
 
 	gPlayerDefinition.mHelperStore.clear();
 	gPlayerDefinition.mAllProjectiles.clear();

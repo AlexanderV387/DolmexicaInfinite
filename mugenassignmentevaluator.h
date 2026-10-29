@@ -17,6 +17,8 @@ int evaluateDreamAssignment(DreamMugenAssignment** tAssignment, DreamPlayer* tPl
 // program on whole numbers made the first time (in *tFastProgram).
 int evaluateDreamTrigger(DreamMugenAssignment** tAssignment, void** tFastProgram, DreamPlayer* tPlayer);
 void destroyDreamTriggerProgram(void** tFastProgram);
+// The triggers' programs let go (after a fight: their controllers are gone).
+void destroyAllDreamTriggerPrograms();
 float evaluateDreamAssignmentAndReturnAsFloat(DreamMugenAssignment** tAssignment, DreamPlayer* tPlayer);
 int evaluateDreamAssignmentAndReturnAsInteger(DreamMugenAssignment** tAssignment, DreamPlayer* tPlayer);
 void evaluateDreamAssignmentAndReturnAsString(std::string& oString, DreamMugenAssignment** tAssignment, DreamPlayer* tPlayer);
