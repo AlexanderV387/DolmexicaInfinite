@@ -68,7 +68,13 @@ static struct {
 } gAssignmentEvaluator;
 
 static void initEvaluationStack() {
+#ifdef __3DS__
+	// [3DS] As on the Vita (also ARM): with the regular stack, the first
+	// fight crashed on a misaligned return value.
+	gAssignmentEvaluator.mStackSize = 0;
+#else
 	gAssignmentEvaluator.mStackSize = isOnVita() ? 0 : REGULAR_STACK_SIZE; // TODO: fix regular stack on Vita (still broken with vita2D, only on real hardware)
+#endif
 	gAssignmentEvaluator.mEmergencyStack.clear();
 }
 

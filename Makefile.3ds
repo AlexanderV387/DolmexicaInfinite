@@ -16,7 +16,7 @@ PREFIX = $(DEVKITPRO)/devkitARM/bin/arm-none-eabi-
 CXX = $(PREFIX)g++
 
 ARCH = -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
-CXXFLAGS = $(ARCH) -std=gnu++17 -fpermissive -O2 -g -mword-relocations -ffunction-sections \
+CXXFLAGS = $(ARCH) -std=gnu++17 -fsigned-char -fpermissive -O2 -g -mword-relocations -ffunction-sections \
 	-Wno-write-strings -D__3DS__ -I$(PRISM_PATH)/include -I$(PRISM_PATH)/linux/shim -I. \
 	-I$(DEVKITPRO)/libctru/include -I$(DEVKITPRO)/portlibs/3ds/include
 LDFLAGS = $(ARCH) -specs=3dsx.specs -g -Wl,--gc-sections \
