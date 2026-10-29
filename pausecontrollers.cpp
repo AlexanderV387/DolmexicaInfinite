@@ -243,9 +243,10 @@ void setDreamSuperPauseDarkening(DreamPlayer* /*tPlayer*/, int tIsDarkening)
 {
 	gPauseControllerData.mSuperPause.mIsDarkening = tIsDarkening;
 	if (tIsDarkening) {
-		gPauseControllerData.mSuperPause.mDarkeningAnimationElement = playOneFrameAnimationLoop(Vector3D(0, 0, SUPERPAUSE_DARKENING_Z), getEmptyWhiteTextureReference());
 		const auto sz = getScreenSize();
-		setAnimationSize(gPauseControllerData.mSuperPause.mDarkeningAnimationElement, Vector3D(sz.x, sz.y, 1), Vector3D(0, 0, 0));
+		const auto margin = getDreamScreenSideMargin(sz.x);
+		gPauseControllerData.mSuperPause.mDarkeningAnimationElement = playOneFrameAnimationLoop(Vector3D(-margin, 0, SUPERPAUSE_DARKENING_Z), getEmptyWhiteTextureReference());
+		setAnimationSize(gPauseControllerData.mSuperPause.mDarkeningAnimationElement, Vector3D(sz.x + 2 * margin, sz.y, 1), Vector3D(0, 0, 0));
 		setAnimationTransparency(gPauseControllerData.mSuperPause.mDarkeningAnimationElement, 0.7f);
 		setAnimationColor(gPauseControllerData.mSuperPause.mDarkeningAnimationElement, 0.0f, 0.0f, 0.1f);
 	}

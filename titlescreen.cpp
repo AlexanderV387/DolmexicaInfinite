@@ -342,8 +342,9 @@ static void setSelectedMenuElementInactive() {
 }
 
 static void loadCredits() {
-	gTitleScreenData.mCreditBGAnimationElement = playOneFrameAnimationLoop(Vector3D(0, 230, 50), &gTitleScreenData.mWhiteTexture);
-	setAnimationSize(gTitleScreenData.mCreditBGAnimationElement, Vector3D(320, 20, 1), Vector3D(0, 0, 0));
+	const auto margin = getDreamScreenSideMargin(320);
+	gTitleScreenData.mCreditBGAnimationElement = playOneFrameAnimationLoop(Vector3D(-margin, 230, 50), &gTitleScreenData.mWhiteTexture);
+	setAnimationSize(gTitleScreenData.mCreditBGAnimationElement, Vector3D(320 + 2 * margin, 20, 1), Vector3D(0, 0, 0));
 	setAnimationColor(gTitleScreenData.mCreditBGAnimationElement, 0, 0, 0.5);
 
 	gTitleScreenData.mLeftCreditTextID = addMugenText("Dolmexica Infinite 1.8", Vector3D(0, 240, 51), -1);

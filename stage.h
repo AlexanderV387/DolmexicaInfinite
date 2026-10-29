@@ -54,6 +54,9 @@ GeoRectangle2D transformDreamCoordinatesGeoRectangle2D(const GeoRectangle2D& tVa
 float getDreamStageTopOfScreenBasedOnPlayer(int tCoordinateP);
 float getDreamStageTopOfScreenBasedOnPlayerInStageCoordinateOffset(int tCoordinateP);
 float getDreamStageLeftOfScreenBasedOnPlayer(int tCoordinateP);
+// [3DS] How far the screen shows past each side of the game's 4:3 screen (the
+// top screen's full width), in tCoordinateP's coordinates; 0 elsewhere.
+float getDreamScreenSideMargin(int tCoordinateP);
 float getDreamStageRightOfScreenBasedOnPlayer(int tCoordinateP);
 Position2D getDreamStageCenterOfScreenBasedOnPlayer(int tCoordinateP);
 

@@ -489,9 +489,19 @@ static void loadStageBackgroundDefinitionAndElements(char* tPath, MugenDefScript
 }
 
 static void setStageCamera() {
+	float boundLeft = gStageData.mCamera.mBoundLeft;
 	float sizeX = gStageData.mCamera.mBoundRight - gStageData.mCamera.mBoundLeft;
 	float sizeY = gStageData.mCamera.mBoundLow - gStageData.mCamera.mBoundHigh;
-	setDreamMugenStageHandlerCameraRange(transformDreamCoordinatesGeoRectangle2D(GeoRectangle2D(gStageData.mCamera.mBoundLeft, gStageData.mCamera.mBoundHigh, sizeX, sizeY), gStageData.mStageInfo.mLocalCoordinates.x, getDreamMugenStageHandlerCameraCoordinateP()));
+	// [3DS] A wider screen sees past the stage's edges where the camera
+	// stops: it stops that much sooner (in the middle if the stage is narrow).
+	const float margin = getDreamScreenSideMargin(gStageData.mStageInfo.mLocalCoordinates.x);
+	boundLeft += margin;
+	sizeX -= 2 * margin;
+	if (sizeX < 0) {
+		boundLeft += sizeX / 2;
+		sizeX = 0;
+	}
+	setDreamMugenStageHandlerCameraRange(transformDreamCoordinatesGeoRectangle2D(GeoRectangle2D(boundLeft, gStageData.mCamera.mBoundHigh, sizeX, sizeY), gStageData.mStageInfo.mLocalCoordinates.x, getDreamMugenStageHandlerCameraCoordinateP()));
 }
 
 static void loadStage(void* tData)
@@ -569,8 +579,9 @@ static void updateCameraMovementX() {
 	minX -= gStageData.mStageInfo.mLocalCoordinates.x / 2;
 	maxX -= gStageData.mStageInfo.mLocalCoordinates.x / 2;
 
-	float right = getDreamCameraTargetPositionX(gStageData.mStageInfo.mLocalCoordinates.x) + gStageData.mStageInfo.mLocalCoordinates.x / 2;
-	float left = getDreamCameraTargetPositionX(gStageData.mStageInfo.mLocalCoordinates.x) - gStageData.mStageInfo.mLocalCoordinates.x / 2;
+	const float margin = getDreamScreenSideMargin(gStageData.mStageInfo.mLocalCoordinates.x);
+	float right = getDreamCameraTargetPositionX(gStageData.mStageInfo.mLocalCoordinates.x) + gStageData.mStageInfo.mLocalCoordinates.x / 2 + margin;
+	float left = getDreamCameraTargetPositionX(gStageData.mStageInfo.mLocalCoordinates.x) - gStageData.mStageInfo.mLocalCoordinates.x / 2 - margin;
 
 	float lx = (left + gStageData.mCamera.mTension) - minX;
 	float rx = maxX - (right - gStageData.mCamera.mTension);
@@ -827,7 +838,17 @@ float getDreamStageLeftOfScreenBasedOnPlayer(int tCoordinateP)
 	Position p = *getDreamMugenStageHandlerCameraPositionReference();
 	p = transformDreamCoordinatesVector(p, getDreamMugenStageHandlerCameraCoordinateP(), tCoordinateP);
 
-	return p.x;
+	return p.x - getDreamScreenSideMargin(tCoordinateP);
+}
+
+float getDreamScreenSideMargin(int tCoordinateP)
+{
+#ifdef __3DS__
+	return transformDreamCoordinates(getN3DSScreenSideMargin(), getScreenSize().x, tCoordinateP);
+#else
+	(void)tCoordinateP;
+	return 0;
+#endif
 }
 
 float getDreamStageRightOfScreenBasedOnPlayer(int tCoordinateP)
@@ -836,7 +857,7 @@ float getDreamStageRightOfScreenBasedOnPlayer(int tCoordinateP)
 	p = transformDreamCoordinatesVector(p, getDreamMugenStageHandlerCameraCoordinateP(), tCoordinateP);
 	float screenSize = transformDreamCoordinates(gStageData.mStageInfo.mLocalCoordinates.x, gStageData.mStageInfo.mLocalCoordinates.x, tCoordinateP);
 
-	return p.x + screenSize;
+	return p.x + screenSize + getDreamScreenSideMargin(tCoordinateP);
 }
 
 Position2D getDreamStageCenterOfScreenBasedOnPlayer(int tCoordinateP)

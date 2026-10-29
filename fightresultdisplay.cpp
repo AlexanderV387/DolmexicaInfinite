@@ -11,6 +11,7 @@
 #include "playerdefinition.h"
 #include "gamelogic.h"
 #include "mugenstagehandler.h"
+#include "stage.h"
 
 
 #define BLACK_BG_Z 33
@@ -138,11 +139,12 @@ static void movePlayersOutOfScreen() {
 }
 
 static void fadeToResultFinishedCB(void* /*tData*/) {
-	gFightResultDisplayData.mBlackBGAnimationElement = playOneFrameAnimationLoop(Vector3D(0, 0, BLACK_BG_Z), &gFightResultDisplayData.mWhiteTexture);
+	ScreenSize sz = getScreenSize();
+	const auto margin = getDreamScreenSideMargin(sz.x);
+	gFightResultDisplayData.mBlackBGAnimationElement = playOneFrameAnimationLoop(Vector3D(-margin, 0, BLACK_BG_Z), &gFightResultDisplayData.mWhiteTexture);
 	setAnimationColor(gFightResultDisplayData.mBlackBGAnimationElement, 0, 0, 0);
 	setAnimationTransparency(gFightResultDisplayData.mBlackBGAnimationElement, 0.6f);
-	ScreenSize sz = getScreenSize();
-	setAnimationSize(gFightResultDisplayData.mBlackBGAnimationElement, Vector3D(sz.x, sz.y, 1), Vector3D(0, 0, 0));
+	setAnimationSize(gFightResultDisplayData.mBlackBGAnimationElement, Vector3D(sz.x + 2 * margin, sz.y, 1), Vector3D(0, 0, 0));
 
 	float z;
 	if (gFightResultDisplayData.mLayerNo == 0) {

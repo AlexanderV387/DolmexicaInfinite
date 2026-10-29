@@ -33,7 +33,7 @@ all: dolmexica.3dsx
 
 $(OBJDIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 dolmexica.elf: $(ALL_OBJS) $(PRISM_PATH)/bin_3ds/libprism.a
 	$(CXX) $(LDFLAGS) $(ALL_OBJS) $(LIBS) -o $@
@@ -49,6 +49,9 @@ dolmexica.smdh: $(ICON)
 
 dolmexica.3dsx: dolmexica.elf dolmexica.smdh $(ROMFS)
 	$(DEVKITPRO)/tools/bin/3dsxtool $< $@ --smdh=dolmexica.smdh --romfs=$(ROMFS)
+
+# Rebuilt when a header they use changes.
+-include $(shell find $(OBJDIR) -name '*.d' 2>/dev/null)
 
 clean:
 	rm -rf $(OBJDIR) dolmexica.elf dolmexica.3dsx dolmexica.smdh

@@ -119,13 +119,15 @@ static void updateSingleStaticStageElementTileTiling(StaticStageHandlerElement* 
 	}
 
 	const auto sz = getScreenSize();
+	// [3DS] The screen past the game's sides, in full width.
+	const auto margin = getDreamScreenSideMargin(sz.x);
 	if (e->mTile.x == 1) {
 		const auto right = tSingleAnimation->mReferencePosition.x * (1.0 / tTotalScale.x) + e->mTileSize.x - offset.x + std::max(0.0f, getMugenAnimationShearLowerOffsetX(tSingleAnimation->mElement));
-		if (right < 0) {
+		if (right < -margin) {
 			tSingleAnimation->mOffset.x += amount.x*totalSizeX;
 		}
 		const auto left = tSingleAnimation->mReferencePosition.x * (1.0 / tTotalScale.x) - offset.x + std::min(0.0f, getMugenAnimationShearLowerOffsetX(tSingleAnimation->mElement));
-		if (left > sz.x) {
+		if (left > sz.x + margin) {
 			tSingleAnimation->mOffset.x -= amount.x*totalSizeX;
 		}
 	}
