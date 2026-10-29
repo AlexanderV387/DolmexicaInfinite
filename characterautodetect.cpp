@@ -50,17 +50,28 @@ static std::vector<std::string> getEntries(const std::string& tFullPath, int tAr
 	return ret;
 }
 
-// A character's .def has a [Files] group with its sprites or states (intro
-// and ending storyboards, also .def files, do not).
-static int isCharacterDefinition(const std::string& tFullPath) {
+// The start of a .def, lowercase.
+static std::string readDefinitionStart(const std::string& tFullPath) {
 	FILE* file = fopen(tFullPath.c_str(), "rb");
-	if (!file) return 0;
+	if (!file) return "";
 	char buffer[8192];
 	const size_t length = fread(buffer, 1, sizeof(buffer) - 1, file);
 	fclose(file);
 	buffer[length] = '\0';
-	const auto text = lowercase(buffer);
+	return lowercase(buffer);
+}
+
+// A character's .def has a [Files] group with its sprites or states (intro
+// and ending storyboards, also .def files, do not).
+static int isCharacterDefinition(const std::string& tFullPath) {
+	const auto text = readDefinitionStart(tFullPath);
 	return text.find("[files]") != std::string::npos && (text.find("sprite") != std::string::npos || text.find("cns") != std::string::npos);
+}
+
+// Ikemen GO's own characters (states in .zss, its script language) run on no
+// MUGEN, nor here.
+static int isIkemenOnlyDefinition(const std::string& tFullPath) {
+	return readDefinitionStart(tFullPath).find(".zss") != std::string::npos;
 }
 
 // The folder's character .def: the one named as the folder, else the first
@@ -94,6 +105,10 @@ static void searchCharacters() {
 		const auto definition = findCharacterDefinition(charsFolder + folder + "/", folder);
 		if (definition.empty()) {
 			addCompatLine("%s: no character .def in it, left out", folder.c_str());
+			continue;
+		}
+		if (isIkemenOnlyDefinition(charsFolder + folder + "/" + definition)) {
+			addCompatLine("%s: %s is an Ikemen GO character (.zss states), left out", folder.c_str(), definition.c_str());
 			continue;
 		}
 		// As select.def lists it: the folder alone if its .def is named so.
