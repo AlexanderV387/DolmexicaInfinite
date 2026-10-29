@@ -832,23 +832,21 @@ typedef struct {
 static void parseSingleVarSetControllerEntry(VarSetControllerCaller* tCaller, const string& tName, MugenDefScriptGroupElement& /*tElement*/) {
 	VarSetControllerCaller* caller = (VarSetControllerCaller*)tCaller;
 
-	int isEntry = tName.find('(') != string::npos;
-	if (!isEntry) return;
+	// Only var(n), fvar(n), sysvar(n) and sysfvar(n); anything else ignored, as
+	// in MUGEN (Lei-lei's states have a formula's second half on a line of
+	// its own, read as a name with parentheses).
+	const auto open = tName.find('(');
+	if (open == string::npos || tName.find(')', open) == string::npos) return;
+	string variableName = tName.substr(0, open);
+	while (!variableName.empty() && variableName.back() == ' ') variableName.pop_back();
+	for (auto& c : variableName) c = (char)tolower(c);
+	if (variableName != "var" && variableName != "fvar" && variableName != "sysvar" && variableName != "sysfvar") return;
 
 	VarSetControllerEntry* e = (VarSetControllerEntry*)allocMemoryOnMemoryStackOrMemory(sizeof(VarSetControllerEntry));
 
-	char name[100];
-	strcpy(name, tName.data());
-	char* start = strchr(name, '(');
-	assert(start != NULL);
-	*start = '\0';
-
-	char value[100];
-	strcpy(value, start + 1);
-	char* end = strchr(value, ')');
-	assert(end != NULL);
-	*end = '\0';
-
+	const string valueText = tName.substr(open + 1, tName.find(')', open) - open - 1);
+	const char* name = variableName.c_str();
+	const char* value = valueText.c_str();
 
 	if (!strcmp("var", name)) {
 		e->mType = VAR_SET_TYPE_INTEGER;

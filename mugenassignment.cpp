@@ -482,16 +482,15 @@ static DreamMugenAssignment* parseTwoElementMugenAssignmentFromStringWithFixedPo
 	int start = tPosition;
 	int end = tPosition + m;
 
-	char text1[MUGEN_DEF_STRING_LENGTH];
-	char text2[MUGEN_DEF_STRING_LENGTH];
-
-	strcpy(text1, tText);
+	// The parts as long as they are (fixed 500 characters overflowed on
+	// longer formulas; on the heap, the stack stays small).
+	std::vector<char> text1(tText, tText + strlen(tText) + 1);
 	text1[start] = '\0';
 
-	strcpy(text2, &tText[end]);
+	std::vector<char> text2(&tText[end], &tText[end] + strlen(&tText[end]) + 1);
 
-	DreamMugenAssignment* a = parseDreamMugenAssignmentFromStringInParts(text1);
-	DreamMugenAssignment* b = parseDreamMugenAssignmentFromStringInParts(text2);
+	DreamMugenAssignment* a = parseDreamMugenAssignmentFromStringInParts(text1.data());
+	DreamMugenAssignment* b = parseDreamMugenAssignmentFromStringInParts(text2.data());
 
 	return makeMugenTwoElementAssignment(tType, a, b);
 }
@@ -982,21 +981,18 @@ static DreamMugenAssignment* parseArrayFromString(char* tText) {
 	assert(posOpen >= 0);
 	assert((strrchr(tText, ')') - tText) >= 0);
 
-	char text1[MUGEN_DEF_STRING_LENGTH];
-	char text2[MUGEN_DEF_STRING_LENGTH];
-
-	strcpy(text1, tText);
+	std::vector<char> text1(tText, tText + strlen(tText) + 1);
 	text1[posOpen] = '\0';
 
-	char* saneText1 = text1;
+	char* saneText1 = text1.data();
 	sanitizeText(&saneText1);
 	turnStringLowercase(saneText1);
 
-	strcpy(text2, &tText[posOpen+1]);
-	char* text2End = strrchr(text2, ')');
+	std::vector<char> text2(&tText[posOpen + 1], &tText[posOpen + 1] + strlen(&tText[posOpen + 1]) + 1);
+	char* text2End = strrchr(text2.data(), ')');
 	*text2End = '\0';
 
-	DreamMugenAssignment* b = parseDreamMugenAssignmentFromStringInParts(text2);
+	DreamMugenAssignment* b = parseDreamMugenAssignmentFromStringInParts(text2.data());
 	return makeMugenArrayAssignment(saneText1, b);
 }
 
@@ -1172,11 +1168,11 @@ static int isOperatorArgument(char* tText) {
 
 static DreamMugenAssignment* parseMugenOperatorArgumentFromString(char* tText) {
 	char dst[10];
-	char text[200];
 	isOperatorAndReturnType(tText, dst);
 
-	sprintf(text, "%s $$ %s", dst, tText + strlen(dst));
-	return parseTwoElementLeftToRightMugenAssignmentFromString(text, MUGEN_ASSIGNMENT_TYPE_OPERATOR_ARGUMENT, "$$");
+	std::vector<char> text(strlen(tText) + 20);
+	sprintf(text.data(), "%s $$ %s", dst, tText + strlen(dst));
+	return parseTwoElementLeftToRightMugenAssignmentFromString(text.data(), MUGEN_ASSIGNMENT_TYPE_OPERATOR_ARGUMENT, "$$");
 }
 
 static int isStringComparisonRedirection(const char* tText, int tStart, int tEnd) {
@@ -1360,9 +1356,8 @@ static DreamMugenAssignment* parseDreamMugenAssignmentFromStringInParts(char * t
 }
 
 DreamMugenAssignment*  parseDreamMugenAssignmentFromString(const char* tText) {
-	char evalText[1024];
-	strcpy(evalText, tText);
-	return parseDreamMugenAssignmentFromString(evalText);
+	std::vector<char> evalText(tText, tText + strlen(tText) + 1);
+	return parseDreamMugenAssignmentFromString(evalText.data());
 }
 
 uint8_t fetchDreamAssignmentFromGroupAndReturnWhetherItExists(const char* tName, MugenDefScriptGroup* tGroup, DreamMugenAssignment** tOutput) {
