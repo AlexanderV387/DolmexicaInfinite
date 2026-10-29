@@ -73,8 +73,9 @@ int main(int argc, char** argv) {
 	setDevelopMode();
 	setMinimumLogType((isOnDreamcast() || isOnVita()) ? LOG_TYPE_NORMAL : LOG_TYPE_NORMAL);
 #elif defined(__3DS__)
-	// [3DS] The log (bottom screen and the SD card) while the port is young.
-	setMinimumLogType(LOG_TYPE_NORMAL);
+	// [3DS] The log's warnings and errors (bottom screen and the SD card)
+	// while the port is young: every line costs time on both.
+	setMinimumLogType(LOG_TYPE_WARNING);
 #else
 	setMinimumLogType(LOG_TYPE_NONE);
 #endif
