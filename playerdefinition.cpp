@@ -26,6 +26,7 @@
 #include "playerhitdata.h"
 #include "projectile.h"
 #include "mugenlog.h"
+#include "loadprofile.h"
 
 #include "stage.h"
 #include "fightui.h"
@@ -160,7 +161,9 @@ static void loadPlayerFiles(char* tPath, DreamPlayer* tPlayer, MugenDefScript* t
 	getMugenDefStringOrDefault(file, tScript, "files", "cmd", "");
 	assert(strcmp("", file));
 	sprintf(scriptPath, "%s%s", path, file);
+	LoadProfileStep cmdStep("cmd");
 	tPlayer->mHeader->mFiles.mCommands = loadDreamMugenCommandFile(scriptPath);
+	cmdStep.end();
 	logMemoryState();
 	tPlayer->mCommandID = registerDreamMugenCommands(tPlayer->mControllerID, &tPlayer->mHeader->mFiles.mCommands);
 	logMemoryState();
@@ -169,10 +172,13 @@ static void loadPlayerFiles(char* tPath, DreamPlayer* tPlayer, MugenDefScript* t
 	getMugenDefStringOrDefault(file, tScript, "files", "cns", "");
 	assert(strcmp("", file));
 	sprintf(scriptPath, "%s%s", path, file);
+	LoadProfileStep cnsStep("cns");
 	tPlayer->mHeader->mFiles.mConstants = loadDreamMugenConstantsFile(scriptPath);
+	cnsStep.end();
 	tPlayer->mCustomSizeData = tPlayer->mHeader->mFiles.mConstants.mSizeData;
 	logMemoryState();
 	
+	LoadProfileStep stcommonStep("stcommon");
 	getMugenDefStringOrDefault(file, tScript, "files", "stcommon", "");
 	sprintf(scriptPath, "%s%s", path, file);
 	if (isFile(scriptPath)) {
@@ -184,28 +190,37 @@ static void loadPlayerFiles(char* tPath, DreamPlayer* tPlayer, MugenDefScript* t
 			loadDreamMugenStateDefinitionsFromFile(&tPlayer->mHeader->mFiles.mConstants.mStates, scriptPath, 1);
 		}
 	}
+	stcommonStep.end();
 	logMemoryState();
 
+	LoadProfileStep stStep("st");
 	getMugenDefStringOrDefault(file, tScript, "files", "st", "");
 	sprintf(scriptPath, "%s%s", path, file);
 	if (isFile(scriptPath)) {
 		loadDreamMugenStateDefinitionsFromFile(&tPlayer->mHeader->mFiles.mConstants.mStates, scriptPath);
 	}
+	stStep.end();
 	logMemoryState();
 
+	LoadProfileStep optionalStep("st1-st9");
 	loadOptionalStateFiles(tScript, path, tPlayer);
+	optionalStep.end();
 
 	getMugenDefStringOrDefault(file, tScript, "files", "cmd", "");
 	assert(strcmp("", file));
 	sprintf(scriptPath, "%s%s", path, file);
+	LoadProfileStep cmdStatesStep("cmd states");
 	loadDreamMugenStateDefinitionsFromFile(&tPlayer->mHeader->mFiles.mConstants.mStates, scriptPath);
+	cmdStatesStep.end();
 
 	resetDreamAssignmentCommandLookupID();
 
 	getMugenDefStringOrDefault(file, tScript, "files", "anim", "");
 	assert(strcmp("", file));
 	sprintf(scriptPath, "%s%s", path, file);
+	LoadProfileStep airStep("air");
 	tPlayer->mHeader->mFiles.mAnimations = loadMugenAnimationFile(scriptPath);
+	airStep.end();
 	logMemoryState();
 
 	char palettePath[1024];
@@ -228,12 +243,14 @@ static void loadPlayerFiles(char* tPath, DreamPlayer* tPlayer, MugenDefScript* t
 
 	getMugenDefStringOrDefault(file, tScript, "files", "sound", "");
 	sprintf(scriptPath, "%s%s", path, file);
+	LoadProfileStep sndStep("snd");
 	if (isFile(scriptPath)) {
 		tPlayer->mHeader->mFiles.mSounds = loadMugenSoundFile(scriptPath);
 	}
 	else {
 		tPlayer->mHeader->mFiles.mSounds = createEmptyMugenSoundFile();
 	}
+	sndStep.end();
 	logMemoryState();
 
 	setPlayerExternalDependencies(tPlayer);

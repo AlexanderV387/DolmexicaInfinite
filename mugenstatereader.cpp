@@ -10,6 +10,7 @@
 #include <prism/stlutil.h>
 
 #include "mugenstatecontrollers.h"
+#include "loadprofile.h"
 
 using namespace std;
 
@@ -361,15 +362,21 @@ static void loadMugenStateDefinitionsFromScript(DreamMugenStates* tStates, Mugen
 
 void loadDreamMugenStateDefinitionsFromFile(DreamMugenStates* tStates, const char* tPath, int tIsOverwritable) {
 	MugenDefScript script;
+	LoadProfileStep parseStep("  def parse", tPath);
 	loadMugenDefScript(&script, tPath);
+	parseStep.end();
 #ifdef _WIN32
 	gMugenStateControllerProvenanceData.mCurrentScriptPath = tPath;
 #endif
+	LoadProfileStep statesStep("  states", tPath);
 	loadMugenStateDefinitionsFromScript(tStates, &script, tIsOverwritable);
+	statesStep.end();
 #ifdef _WIN32
 	gMugenStateControllerProvenanceData.mCurrentScriptPath.clear();
 #endif
+	LoadProfileStep unloadStep("  def unload", tPath);
 	unloadMugenDefScript(&script);
+	unloadStep.end();
 }
 
 DreamMugenStates createEmptyMugenStates() {
