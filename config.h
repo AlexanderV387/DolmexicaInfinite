@@ -31,6 +31,8 @@ const std::string& getMugenConfigStartStage();
 int isUsingStaticAssignments();
 float getConfigGameSpeedTimeFactor();
 int isDrawingShadowsConfig();
+// [3DS] The characters in chars/ that select.def leaves out, added by themselves (characterautodetect.h).
+int isAutoDetectingCharactersConfig();
 
 void setDefaultOptionVariables();
 int getDifficulty();

@@ -1,4 +1,5 @@
 #include "exhibitmode.h"
+#include "characterautodetect.h"
 
 #include "characterselectscreen.h"
 #include "titlescreen.h"
@@ -50,6 +51,7 @@ static void loadExhibitHeader(MugenDefScript* tScript) {
 static int loadRandomCharactersAndReturnIfSuccessful() {
 	MugenDefScript script;
 	loadMugenDefScript(&script, getDolmexicaAssetFolder() + "data/select.def");
+	addAutoDetectedCharactersToSelectScript(&script);
 	if (!setCharacterRandomAndReturnIfSuccessful(&script, 0)) return 0;
 	if (!setCharacterRandomAndReturnIfSuccessful(&script, 1)) return 0;
 	setStageRandom(&script);

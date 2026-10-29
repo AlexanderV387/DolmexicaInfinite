@@ -9,7 +9,7 @@ include Makefile.common
 PRISM_PATH ?= ../prism
 
 OBJDIR = build_3ds
-ALL_OBJS = $(addprefix $(OBJDIR)/,$(OBJS) pausemenu3ds.o)
+ALL_OBJS = $(addprefix $(OBJDIR)/,$(OBJS) pausemenu3ds.o characterautodetect.o)
 
 DEVKITPRO ?= /opt/devkitpro
 PREFIX = $(DEVKITPRO)/devkitARM/bin/arm-none-eabi-
@@ -17,7 +17,7 @@ CXX = $(PREFIX)g++
 
 ARCH = -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 CXXFLAGS = $(ARCH) -std=gnu++17 -fsigned-char -fpermissive -O2 -g -mword-relocations -ffunction-sections \
-	-Wno-write-strings -D__3DS__ -I$(PRISM_PATH)/include -I$(PRISM_PATH)/linux/shim -I. \
+	-Wno-write-strings -D__3DS__ -DDOLMEXICA_CHARACTER_AUTODETECT -I$(PRISM_PATH)/include -I$(PRISM_PATH)/linux/shim -I. \
 	-I$(DEVKITPRO)/libctru/include -I$(DEVKITPRO)/portlibs/3ds/include
 LDFLAGS = $(ARCH) -specs=3dsx.specs -g -Wl,--gc-sections \
 	-L$(PRISM_PATH)/bin_3ds -L$(DEVKITPRO)/portlibs/3ds/lib -L$(DEVKITPRO)/libctru/lib

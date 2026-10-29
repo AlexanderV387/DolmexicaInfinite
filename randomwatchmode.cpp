@@ -1,4 +1,5 @@
 #include "watchmode.h"
+#include "characterautodetect.h"
 
 #include "characterselectscreen.h"
 #include "titlescreen.h"
@@ -25,6 +26,7 @@ static void versusScreenFinishedCB() {
 static void fightFinishedCB() {
 	MugenDefScript script; 
 	loadMugenDefScript(&script, getDolmexicaAssetFolder() + "data/select.def");
+	addAutoDetectedCharactersToSelectScript(&script);
 
 	setCharacterRandomAndReturnIfSuccessful(&script, 0);
 	setCharacterRandomAndReturnIfSuccessful(&script, 1);

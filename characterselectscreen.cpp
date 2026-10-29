@@ -1,4 +1,5 @@
 #include "characterselectscreen.h"
+#include "characterautodetect.h"
 
 #include <assert.h>
 #include <algorithm>
@@ -773,6 +774,19 @@ static void loadSingleMenuCell(const Vector2DI& tCellPosition) {
 	stl_list_at(gCharacterSelectScreenData.mSelectCharacters, tCellPosition.y).push_back(e);
 }
 
+// [3DS] Rows enough for every character (the found ones too): a select.def
+// longer than the grid went past its last cell.
+static void ensureMenuCellsForCharacters() {
+#ifdef DOLMEXICA_CHARACTER_AUTODETECT
+	if (gCharacterSelectScreenData.mSelectScreenType == CHARACTER_SELECT_SCREEN_TYPE_STORY) return;
+	if (!stl_string_map_contains_array(gCharacterSelectScreenData.mCharacterScript.mGroups, "characters")) return;
+	const int amount = list_size(&gCharacterSelectScreenData.mCharacterScript.mGroups["characters"].mOrderedElementList);
+	const int columns = std::max(1, gCharacterSelectScreenData.mHeader.mColumns);
+	const int rows = (amount + columns - 1) / columns;
+	if (rows > gCharacterSelectScreenData.mHeader.mRows) gCharacterSelectScreenData.mHeader.mRows = rows;
+#endif
+}
+
 static void loadMenuCells() {
 	gCharacterSelectScreenData.mSelectCharacters.clear();
 	gCharacterSelectScreenData.mRealSelectCharacters.clear();
@@ -986,6 +1000,7 @@ static void loadCharacterSelectScreen() {
 	else gCharacterSelectScreenData.mCustomSelectFilePath = "";
 
 	loadMugenDefScript(&gCharacterSelectScreenData.mCharacterScript, selectPath);
+	addAutoDetectedCharactersToSelectScript(&gCharacterSelectScreenData.mCharacterScript);
 
 	gCharacterSelectScreenData.mAnimations = loadMugenAnimationFile(motifPath);
 
@@ -1003,6 +1018,7 @@ static void loadCharacterSelectScreen() {
 	loadScriptBackground(&gCharacterSelectScreenData.mScript, &gCharacterSelectScreenData.mSprites, &gCharacterSelectScreenData.mAnimations, "selectbgdef", "selectbg", gCharacterSelectScreenData.mLocalCoord);
 
 	loadStageSelectStages();
+	ensureMenuCellsForCharacters();
 	loadMenuCells();
 	loadMenuSelectables();
 	loadExtraStages();

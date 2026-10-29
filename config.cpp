@@ -48,6 +48,7 @@ typedef struct {
 	int mIsUsingStaticAssignments;
 	float mGameSpeedFactor;
 	int mIsDrawingShadows;
+	int mIsAutoDetectingCharacters;
 } ConfigConfigData;
 
 typedef struct {
@@ -129,6 +130,7 @@ static void loadConfigConfig(MugenDefScript* tScript) {
 	const auto gameSpeed = getMugenDefIntegerOrDefault(tScript, "config", "gamespeed", 60);
 	gConfigData.mConfig.mGameSpeedFactor = gameSpeed / 60.0f;
 	gConfigData.mConfig.mIsDrawingShadows = getMugenDefIntegerOrDefault(tScript, "config", "drawshadows", 1);
+	gConfigData.mConfig.mIsAutoDetectingCharacters = getMugenDefIntegerOrDefault(tScript, "config", "autocharacters", 1);
 
 	setWrapperTimeDilatation(gConfigData.mConfig.mGameSpeedFactor);
 }
@@ -474,6 +476,11 @@ float getConfigGameSpeedTimeFactor()
 int isDrawingShadowsConfig()
 {
 	return gConfigData.mConfig.mIsDrawingShadows;
+}
+
+int isAutoDetectingCharactersConfig()
+{
+	return gConfigData.mConfig.mIsAutoDetectingCharacters;
 }
 
 void setDefaultOptionVariables() {

@@ -1,4 +1,5 @@
 #include "survivalmode.h"
+#include "characterautodetect.h"
 
 #include <assert.h>
 
@@ -58,6 +59,7 @@ static void updateSurvivalResultIsShowingWinPose() {
 static void updateSurvivalEnemy() {
 	MugenDefScript script;
 	loadMugenDefScript(&script, getDolmexicaAssetFolder() + "data/select.def");
+	addAutoDetectedCharactersToSelectScript(&script);
 	setCharacterRandomAndReturnIfSuccessful(&script, 1);
 }
 

@@ -1,4 +1,5 @@
 #include "arcademode.h"
+#include "characterautodetect.h"
 
 #include <assert.h>
 #include <algorithm>
@@ -192,6 +193,7 @@ static int unloadSingleOrder(void* tCaller, void* tData) {
 static void generateEnemies() {
 	MugenDefScript script;
 	loadMugenDefScript(&script, getDolmexicaAssetFolder() + "data/select.def");
+	addAutoDetectedCharactersToSelectScript(&script);
 
 	MugenStringVector enemyTypeAmountVector = getMugenDefStringVectorVariable(&script, "options", "arcade.maxmatches");
 
@@ -265,6 +267,7 @@ static void victoryQuoteFinishedCB() {
 	if (!strcmp("random", gArcadeModeData.mEnemies[gArcadeModeData.mCurrentEnemy].mStagePath)) {
 		MugenDefScript script;
 		loadMugenDefScript(&script, getDolmexicaAssetFolder() + "data/select.def");
+		addAutoDetectedCharactersToSelectScript(&script);
 		setStageRandom(&script);
 	}
 	else {
