@@ -336,6 +336,9 @@ static int isBinaryOperator(const char* tText, int tPosition) {
 static int isOnHighestLevelWithStartPositionGoingLeftToRight(char* tText, const char* tPattern, int* tOptionalPosition, int tStart, int isBinary) {
 	int n = int(strlen(tText));
 	int m = int(strlen(tPattern));
+	// Not in the text at all (the usual case, asked for each operator): no
+	// need to go through its levels.
+	if (tStart >= n || !strstr(tText + tStart, tPattern)) return 0;
 
 	int depth1 = 0;
 	int depth2 = 0;
@@ -372,6 +375,10 @@ static int isOnHighestLevelWithStartPositionGoingLeftToRight(char* tText, const 
 // start is first position in string that can hold end of pattern, e.g. strlen(tText) - 1
 static int isOnHighestLevelWithStartPositionGoingRightToLeft(char* tText, const char* tPattern, int* tOptionalPosition, int tStart, int isBinary) {
 	int m = int(strlen(tPattern));
+	// Not in the text up to the start (the usual case, asked for each
+	// operator): no need to go through its levels.
+	const char* first = strstr(tText, tPattern);
+	if (!first || int(first - tText) > tStart - m + 1) return 0;
 
 	int depth1 = 0;
 	int depth2 = 0;
@@ -409,6 +416,18 @@ static int isOnHighestLevelWithStartPositionGoingRightToLeft(char* tText, const 
 static int isOnHighestLevelMultipleWithStartPositionGoingRightToLeft(const char* tText, const std::vector<std::tuple<int(*)(const char*, int, int), DreamMugenAssignmentType, std::string>>& tPatterns, int tPatternSize, int* tOptionalPosition, int* tOptionalFoundIndex, int tStart, int tIsBinary) {
 	int n = int(strlen(tText));
 	int m = tPatternSize;
+
+	// None of the patterns' characters in the text up to the start (each
+	// pattern's test asks for its first character there): no need to go
+	// through its levels.
+	int hasAny = 0;
+	for (const auto& pattern : tPatterns) {
+		if (tStart >= 0 && memchr(tText, std::get<2>(pattern)[0], tStart + 1)) {
+			hasAny = 1;
+			break;
+		}
+	}
+	if (!hasAny) return 0;
 
 	int depth1 = 0;
 	int depth2 = 0;

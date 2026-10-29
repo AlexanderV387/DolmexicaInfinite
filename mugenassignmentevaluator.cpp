@@ -2909,6 +2909,10 @@ static void setAssignmentStatic(DreamMugenAssignment** tAssignment, AssignmentRe
 	}
 }
 
+// The configuration's choice, kept here when setting up (asked for every
+// part of every formula evaluated).
+static int gIsUsingStaticAssignments;
+
 static AssignmentReturnValue* evaluateAssignmentInternal(DreamMugenAssignment** tAssignment, DreamPlayer* tPlayer, int* oIsStatic) {
 	setProfilingSectionMarkerCurrentFunction();
 	*oIsStatic = 1;
@@ -2927,7 +2931,7 @@ static AssignmentReturnValue* evaluateAssignmentInternal(DreamMugenAssignment** 
 	AssignmentEvaluationFunction* func = (AssignmentEvaluationFunction*)gEvaluationFunctions[(*tAssignment)->mType];
 	AssignmentReturnValue* ret = func(tAssignment, tPlayer, oIsStatic);
 
-	if (isUsingStaticAssignments() && *oIsStatic) {
+	if (gIsUsingStaticAssignments && *oIsStatic) {
 		setAssignmentStatic(tAssignment, ret);
 	}
 
@@ -2937,6 +2941,7 @@ static AssignmentReturnValue* evaluateAssignmentInternal(DreamMugenAssignment** 
 static void setupArrayAssignments();
 
 void setupDreamAssignmentEvaluator() {
+	gIsUsingStaticAssignments = isUsingStaticAssignments();
 	gVariableHandler.mType = MUGEN_ASSIGNMENT_EVALUATOR_TYPE_REGULAR;
 	initEvaluationStack();
 	setupVariableAssignments();

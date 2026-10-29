@@ -5464,6 +5464,13 @@ Vector3DI getIsCameraFollowingPlayer(DreamPlayer* p)
 int parsePlayerSoundEffectChannel(int tChannel, DreamPlayer* tPlayer) {
 	if (tChannel == -1) return -1;
 
+#ifdef __3DS__
+	// [3DS] The DSP's 23 channels: a player's 0 to 7 (the others wrap) on 1
+	// to 8, the other's on 9 to 16 (the PC's mapping gave 0 and 32 and up,
+	// not there: voices, mostly on channel 0, were never heard).
+	return 1 + tPlayer->mRootID * 8 + ((tChannel % 8) + 8) % 8;
+#endif
+
 	static const auto CHANNEL_AMOUNT = 64;
 	static const auto STEREO_CHANNEL_FACTOR = 2;
 	static const auto CHANNEL_AMOUNT_PER_PLAYER = (CHANNEL_AMOUNT / STEREO_CHANNEL_FACTOR) / 2;
