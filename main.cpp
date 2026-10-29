@@ -43,10 +43,11 @@ extern "C" {
 
 #ifdef __3DS__
 // [3DS] libctru gives the textures' (linear) memory at most 32 MB by default
-// and the rest to the heap, of which the game uses some 5: two MUGEN 1.1
-// characters did not fit. The heap gets 32 MB, the textures the rest.
+// and the rest to the heap. The heap gets 48 MB (the game's some 5, and the
+// sprites' palette indices, compressed: 11 MB for a CvS character), the
+// textures the rest (some 72 MB, made again when drawn when they run short).
 extern "C" {
-	u32 __ctru_heap_size = 32 * 1024 * 1024;
+	u32 __ctru_heap_size = 48 * 1024 * 1024;
 }
 #endif
 
