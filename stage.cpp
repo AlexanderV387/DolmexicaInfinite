@@ -218,8 +218,8 @@ static void loadStagePlayerInfo(MugenDefScript* s) {
 }
 
 static void loadStageBound(MugenDefScript* s) {
-	gStageData.mBound.mScreenLeft = getMugenDefFloatOrDefault(s, "bound", "screenleft", 0);
-	gStageData.mBound.mScreenRight = getMugenDefFloatOrDefault(s, "bound", "screenright", 0);
+	gStageData.mBound.mScreenLeft = getMugenDefFloatOrDefault(s, "bound", "screenleft", 15);
+	gStageData.mBound.mScreenRight = getMugenDefFloatOrDefault(s, "bound", "screenright", 15);
 }
 
 static void sanitizeLocalCoordinates()

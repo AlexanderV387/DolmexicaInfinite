@@ -113,6 +113,7 @@ struct DreamPlayer {
 	DreamPlayer* mRoot;
 	DreamPlayer* mOtherPlayer;
 	int mPreferredPalette;
+	int mPaletteNumber; // the one used, after pal.defaults
 	int mRootID;
 	int mControllerID;
 	int mID;
@@ -305,6 +306,9 @@ void playerReversalHitCB(void* tData, void* tHitData, int tOtherCollisionList);
 void setPlayerDefinitionPath(int i, const char* tDefinitionPath);
 void getPlayerDefinitionPath(char* tDst, int i);
 void setPlayerPreferredPalette(int i, int tPalette);
+// A character's palette number for the palette asked for (1 the first), as
+// its pal.defaults orders them (CvS Mai: 4,1, her original colors first).
+int getMugenDefDefaultPaletteNumber(prism::MugenDefScript* tScript, int tRequested);
 void setPlayerPreferredPaletteRandom(int i);
 
 DreamPlayer* getRootPlayer(int i);

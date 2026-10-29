@@ -41,11 +41,11 @@
 #include "config.h"
 #include "mugenassignmentevaluator.h"
 
-#ifdef __3DS__
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 #include <malloc.h>
 #include <prism/mugenspritefilereader.h>
 extern "C" {
-	extern u32 __ctru_heap_size;
+	extern uint32_t __ctru_heap_size;
 }
 #endif
 
@@ -150,12 +150,33 @@ static int getPlayerRandomPaletteIndex(MugenDefScript* tScript) {
 	else return possibleValues[randfromInteger(0, int(possibleValues.size()) - 1)];
 }
 
+int getMugenDefDefaultPaletteNumber(MugenDefScript* tScript, int tRequested) {
+	char defaults[200];
+	getMugenDefStringOrDefault(defaults, tScript, "info", "pal.defaults", "");
+	std::vector<int> order;
+	for (const char* p = defaults; *p;) {
+		char* end;
+		const long value = strtol(p, &end, 10);
+		if (end == p) {
+			p++;
+			continue;
+		}
+		if (value >= 1 && value <= 12) order.push_back(int(value));
+		p = end;
+	}
+	if (tRequested < 1 || tRequested > int(order.size())) return tRequested;
+	char name[20];
+	sprintf(name, "pal%d", order[tRequested - 1]);
+	if (!isMugenDefStringVariable(tScript, "files", name)) return tRequested;
+	return order[tRequested - 1];
+}
+
 static int parsePlayerPreferredPalette(int tPalette, MugenDefScript* tScript) {
 	if (tPalette == -1) {
 		return getPlayerRandomPaletteIndex(tScript);
 	}
 	else {
-		return tPalette;
+		return getMugenDefDefaultPaletteNumber(tScript, tPalette);
 	}
 }
 
@@ -249,6 +270,7 @@ static void loadPlayerFiles(char* tPath, DreamPlayer* tPlayer, MugenDefScript* t
 
 	char palettePath[1024];
 	const auto preferredPalette = parsePlayerPreferredPalette(tPlayer->mPreferredPalette, tScript);
+	tPlayer->mPaletteNumber = preferredPalette;
 	sprintf(name, "pal%d", preferredPalette);
 	getMugenDefStringOrDefault(file, tScript, "files", name, "");
 	int hasPalettePath = strcmp("", file);
@@ -551,7 +573,7 @@ static void loadSinglePlayerSprites(DreamPlayer* tPlayer) {
 	const uint64_t compatStart = getLoadProfileTicks();
 	const int compatTextureStart = getCompatTextureFreeKB();
 	setMugenSpriteFileReaderToUsePalette(tPlayer->mRootID);
-#ifdef __3DS__
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 	// [3DS] The heap left when sprites do not fit (those are left out): 4 MB
 	// for the fight; for the first player, also about the other's sprites
 	// (they take about their file's size), at most half of what is free.
@@ -566,7 +588,7 @@ static void loadSinglePlayerSprites(DreamPlayer* tPlayer) {
 #endif
 	tPlayer->mHeader->mFiles.mSprites = loadMugenSpriteFile(tPlayer->mHeader->mFiles.mSpritePath, tPlayer->mHeader->mFiles.mHasPalettePath, tPlayer->mHeader->mFiles.mPalettePath);
 	setMugenSpriteFileReaderToNotUsePalette();
-#ifdef __3DS__
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 	setMugenSpriteFileReaderHeapReserve(4 * 1024 * 1024);
 #endif
 	addCompatLine("P%d sprites %s: %d, %.0f ms, textures %d KB",
@@ -1120,12 +1142,12 @@ static int isPlayerInCorner(DreamPlayer* p, int tIsCheckingRightCorner) {
 	float front = getPlayerFrontXStage(p, getPlayerCoordinateP(p));
 
 	if (tIsCheckingRightCorner) {
-		float right = getDreamStageRightOfScreenBasedOnPlayer(getPlayerCoordinateP(p));
+		float right = getDreamStageRightOfScreenBasedOnPlayer(getPlayerCoordinateP(p)) - getDreamStageRightEdgeMinimumPlayerDistance(getPlayerCoordinateP(p));
 		float maxX = max(back, front);
 		return (maxX > right - CORNER_CHECK_EPSILON);
 	}
 	else {
-		float left = getDreamStageLeftOfScreenBasedOnPlayer(getPlayerCoordinateP(p));
+		float left = getDreamStageLeftOfScreenBasedOnPlayer(getPlayerCoordinateP(p)) + getDreamStageLeftEdgeMinimumPlayerDistance(getPlayerCoordinateP(p));
 		float minX = min(back, front);
 		return (minX < left + CORNER_CHECK_EPSILON);
 	}
@@ -1134,8 +1156,11 @@ static int isPlayerInCorner(DreamPlayer* p, int tIsCheckingRightCorner) {
 static void updateStageBorderPost(DreamPlayer* p) {
 	if (!p->mIsBoundToScreenForTick || !p->mIsBoundToScreenForever) return;
 
-	float left = getDreamStageLeftOfScreenBasedOnPlayer(getPlayerCoordinateP(p));
-	float right = getDreamStageRightOfScreenBasedOnPlayer(getPlayerCoordinateP(p));
+	// As far as the stage's screenleft and screenright from the screen's
+	// sides (15 in most stages): the sprites, wider than the players' bodies,
+	// were cut at the sides.
+	float left = getDreamStageLeftOfScreenBasedOnPlayer(getPlayerCoordinateP(p)) + getDreamStageLeftEdgeMinimumPlayerDistance(getPlayerCoordinateP(p));
+	float right = getDreamStageRightOfScreenBasedOnPlayer(getPlayerCoordinateP(p)) - getDreamStageRightEdgeMinimumPlayerDistance(getPlayerCoordinateP(p));
 
 	float back = getPlayerBackXStage(p, getPlayerCoordinateP(p));
 	float front = getPlayerFrontXStage(p, getPlayerCoordinateP(p));
@@ -3219,12 +3244,8 @@ void changePlayerState(DreamPlayer* p, int mNewState)
 		changeDreamHandledStateMachineStateToOwnStateMachineWithoutChangingState(p->mRegisteredStateMachine);
 	}
 
-	if (!hasPlayerState(p, mNewState)) {
-		logWarning("Trying to change into state that does not exist");
-		logWarningInteger(getPlayerState(p));
-		logWarningInteger(mNewState);
-		return;
-	}
+	// A state the player does not have is still gone into (without
+	// controllers), as in MUGEN: see applyRegisteredStateMachineStateChange.
 	changeDreamHandledStateMachineState(p->mRegisteredStateMachine, mNewState);
 	updateDreamSingleStateMachineByID(p->mRegisteredStateMachine, 0);
 }
@@ -3252,12 +3273,8 @@ void changePlayerStateBeforeImmediatelyEvaluatingIt(DreamPlayer* p, int mNewStat
 		changeDreamHandledStateMachineStateToOwnStateMachineWithoutChangingState(p->mRegisteredStateMachine);
 	}
 
-	if (!hasPlayerState(p, mNewState)) {
-		logWarning("Trying to change into state that does not exist");
-		logWarningInteger(getPlayerState(p));
-		logWarningInteger(mNewState);
-		return;
-	}
+	// A state the player does not have is still gone into (without
+	// controllers), as in MUGEN: see applyRegisteredStateMachineStateChange.
 	changeDreamHandledStateMachineState(p->mRegisteredStateMachine, mNewState);
 
 }
@@ -3948,6 +3965,9 @@ typedef struct {
 static void setPlayerSubPlayerPaletteEffectCB(void* tCaller, void* tData) {
 	PlayerPaletteEffectCaller* caller = (PlayerPaletteEffectCaller*)tCaller;
 	DreamPlayer* p = (DreamPlayer*)tData;
+	// A helper destroyed this frame is still in the list (until the players
+	// are updated), its animation gone.
+	if (p->mIsDestroyed) return;
 	if (!caller->mIgnoreOwnPal && p->mHasOwnPalette) return;
 	setPlayerPaletteEffect(p, caller->mDuration, caller->mAddition, caller->mMultiplier, caller->mSineAmplitude, caller->mSinePeriod, caller->mInvertAll, caller->mColorFactor, caller->mIgnoreOwnPal);
 }
@@ -5137,7 +5157,7 @@ int getPlayerRoundsExisted(DreamPlayer* p)
 
 int getPlayerPaletteNumber(DreamPlayer* p)
 {
-	return p->mPreferredPalette;
+	return getPlayerRoot(p)->mPaletteNumber;
 }
 
 void setPlayerScreenBoundForTick(DreamPlayer* p, int tIsBoundToScreen, int tIsCameraFollowingX, int tIsCameraFollowingY)

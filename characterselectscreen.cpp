@@ -520,7 +520,7 @@ static int loadMenuCharacterSpritesAndNameAndReturnWhetherExists(SelectCharacter
 			getPathToFile(path, scriptPath);
 
 			int preferredPalette = 0;
-			sprintf(name, "pal%d", preferredPalette + 1);
+			sprintf(name, "pal%d", getMugenDefDefaultPaletteNumber(&script, preferredPalette + 1));
 			getMugenDefStringOrDefault(file, &script, "files", name, "");
 			int hasPalettePath = strcmp("", file);
 			sprintf(palettePath, "%s%s", path, file);

@@ -154,7 +154,7 @@ static void loadPlayerAnimationsAndName(MugenDefScript* tPlayerScript, const cha
 	char palettePath[1024];
 
 	int preferredPalette = 0;
-	sprintf(name, "pal%d", preferredPalette + 1);
+	sprintf(name, "pal%d", getMugenDefDefaultPaletteNumber(tPlayerScript, preferredPalette + 1));
 	getMugenDefStringOrDefault(file, tPlayerScript, "files", name, "");
 	int hasPalettePath = strcmp("", file);
 	sprintf(palettePath, "%s%s", tPath, file);

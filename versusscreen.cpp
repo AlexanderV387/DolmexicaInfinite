@@ -78,8 +78,9 @@ static void loadPlayerAnimationsAndName(int i) {
 	MugenDefScript script;
 	loadMugenDefScript(&script, scriptPath);
 
-	int preferredPalette = 0;
-	sprintf(name, "pal%d", preferredPalette + 1);
+	// The fight's palette (the first if random).
+	const int preferredPalette = getRootPlayer(i)->mPreferredPalette > 0 ? getRootPlayer(i)->mPreferredPalette - 1 : 0;
+	sprintf(name, "pal%d", getMugenDefDefaultPaletteNumber(&script, preferredPalette + 1));
 	getMugenDefStringOrDefault(file, &script, "files", name, "");
 	int hasPalettePath = strcmp("", file);
 	sprintf(palettePath, "%s%s", path, file);

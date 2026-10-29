@@ -8,6 +8,7 @@
 #include <prism/system.h>
 #include <prism/stlutil.h>
 #include <prism/log.h>
+#include <prism/n3dsperf.h>
 
 #include "playerdefinition.h"
 #include "pausecontrollers.h"
@@ -186,9 +187,49 @@ static void updateSingleStateMachineByReference(RegisteredMugenStateMachine* tRe
 	}
 
 	tRegisteredState->mIsBeingProcessed = 1;
+#ifdef __3DS__
+	// [3DS] For the load log: the special states (-3, -2, -1) and the
+	// current one, of each player and of the helpers.
+	const char* specialPart = "other machines";
+	const char* currentPart = "other machines";
+	if (!tRegisteredState->mIsInStoryMode && tRegisteredState->mPlayer && isPlayer(tRegisteredState->mPlayer)) {
+		DreamPlayer* player = tRegisteredState->mPlayer;
+		const int isFirst = player->mRootID == 0;
+		if (isPlayerHelper(player) || isPlayerProjectile(player)) {
+			specialPart = currentPart = isFirst ? "P1 helpers" : "P2 helpers";
+		}
+		else {
+			specialPart = isFirst ? "P1 states -3 -2 -1" : "P2 states -3 -2 -1";
+			currentPart = isFirst ? "P1 current state" : "P2 current state";
+		}
+	}
+	uint64_t partStart = getN3DSLogicPartTicks();
+	updateSingleStateMachineSpecialStates(tRegisteredState, isHitPaused);
+	uint64_t partEnd = getN3DSLogicPartTicks();
+	addN3DSLogicPartTicks(specialPart, partEnd - partStart);
+	updateSingleState(tRegisteredState, tRegisteredState->mState, 0, isHitPaused);
+	addN3DSLogicPartTicks(currentPart, getN3DSLogicPartTicks() - partEnd);
+#else
 	updateSingleStateMachineSpecialStates(tRegisteredState, isHitPaused);
 	updateSingleState(tRegisteredState, tRegisteredState->mState, 0, isHitPaused);
+#endif
 	tRegisteredState->mIsBeingProcessed = 0;
+
+	// [Compatibility] A character (not a helper) left in a state it does not
+	// have, standing or crouching: nothing there takes it out (in MUGEN it
+	// plays its move again until hit), so once the animation is over it is
+	// back to standing or crouching, with control. Lei-lei's normal moves end
+	// in state 59, which she does not have.
+	DreamPlayer* p = tRegisteredState->mPlayer;
+	if (!isHitPaused && !tRegisteredState->mIsInStoryMode && p && !tRegisteredState->mIsUsingTemporaryOtherStateMachine
+		&& isPlayer(p) && !isPlayerDestroyed(p) && !isPlayerHelper(p) && !isPlayerProjectile(p)
+		&& !stl_map_contains(tRegisteredState->mStates->mStates, tRegisteredState->mState)
+		&& (getPlayerStateType(p) == MUGEN_STATE_TYPE_STANDING || getPlayerStateType(p) == MUGEN_STATE_TYPE_CROUCHING) && getPlayerAnimationTimeDeltaUntilFinished(p) >= 0) {
+		const int crouching = getPlayerStateType(p) == MUGEN_STATE_TYPE_CROUCHING;
+		logWarningFormat("Player %d left in nonexistant state %d at the end of its animation: back to %s, with control.", p->mRootID, tRegisteredState->mState, crouching ? "crouching" : "standing");
+		setPlayerControl(p, 1);
+		changePlayerState(p, crouching ? 11 : 0);
+	}
 }
 
 static void updateSingleStateMachine(void* tCaller, RegisteredMugenStateMachine& tData) {
@@ -388,10 +429,22 @@ static void applyRegisteredStateMachineStateChange(RegisteredMugenStateMachine* 
 	if (!stl_map_contains(states->mStates, tNewState)) {
 		if (!e->mPlayer || e->mIsInStoryMode) {
 			logWarningFormat("ID %d trying to change into nonexistant state %d. Ignoring.", e->mID, tNewState);
+			return;
 		}
-		else {
-			logWarningFormat("Player %d %d trying to change into nonexistant state %d. Ignoring.", e->mPlayer->mRootID, e->mPlayer->mID, tNewState);
-		}
+		// A player still goes into it, as in MUGEN (and Ikemen): no
+		// controllers to run there, its state type, move type and physics
+		// as they were, hit definitions and move hits not kept (Lei-lei's
+		// moves end in state 59, which she does not have; refused, the move
+		// was started again 2500 times a frame).
+		logWarningFormat("Player %d %d changed into nonexistant state %d (without controllers).", e->mPlayer->mRootID, e->mPlayer->mID, tNewState);
+		e->mTimeInState = 0;
+		e->mPreviousState = e->mState;
+		e->mState = tNewState;
+		resetPlayerMoveContactCounter(e->mPlayer);
+		setPlayerMoveHitReset(e->mPlayer);
+		resetPlayerHitCount(e->mPlayer);
+		setHitDataInactive(e->mPlayer);
+		setPlayerPositionUnfrozen(e->mPlayer);
 		return;
 	}
 

@@ -5063,6 +5063,14 @@ static int handleAfterImageTime(DreamMugenStateController* tController, DreamPla
 }
 
 static int handleAppendToClipboardController(DreamMugenStateController* tController, DreamPlayer* tPlayer) {
+#ifdef __3DS__
+	// [3DS] The clipboard (debug text) is never shown: its text, formatted
+	// each frame by some characters (CvS ones: 5% of a fight's logic), is
+	// not made.
+	(void)tController;
+	(void)tPlayer;
+	return 0;
+#endif
 	ClipboardController* e = (ClipboardController*)tController->mData;
 	string formatString, parameterString;
 	if(e->mText) evaluateDreamAssignmentAndReturnAsString(formatString, &e->mText, tPlayer);
