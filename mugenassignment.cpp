@@ -4,6 +4,9 @@
 #include <string.h>
 #include <assert.h>
 #include <math.h>
+#include <ctype.h>
+#include <string>
+#include <vector>
 
 #include <prism/memoryhandler.h>
 #include <prism/log.h>
@@ -1174,9 +1177,93 @@ static DreamMugenAssignment* parseMugenOperatorArgumentFromString(char* tText) {
 	return parseTwoElementLeftToRightMugenAssignmentFromString(text, MUGEN_ASSIGNMENT_TYPE_OPERATOR_ARGUMENT, "$$");
 }
 
+static int isStringComparisonRedirection(const char* tText, int tStart, int tEnd) {
+	std::string word(tText + tStart, tEnd - tStart);
+	for (auto& c : word) c = (char)tolower(c);
+	return word == "root" || word == "parent" || word == "partner" || word == "enemy" || word == "enemynear" || word == "helper" || word == "target" || word == "playerid";
+}
+
+// MUGEN reads a trigger compared with a string (command = "x", name != "y")
+// as one term: command = "holdfwd" - command = "holdback" is
+// (command = "holdfwd") - (command = "holdback"), not a comparison of a
+// difference. Puts those in parentheses; 0 if there were none to put.
+static int putStringComparisonsInParentheses(const char* tText, std::string& oText) {
+	const int n = int(strlen(tText));
+	int isChanged = 0;
+	int last = 0;
+	oText.clear();
+	for (int i = 0; i < n; i++) {
+		if (tText[i] != '"') continue;
+		const char* close = strchr(tText + i + 1, '"');
+		if (!close) break;
+		const int end = int(close - tText) + 1;
+		const int stringStart = i;
+		i = end - 1;
+
+		int j = stringStart - 1;
+		while (j >= 0 && isEmptyCharacter(tText[j])) j--;
+		if (j < 0 || tText[j] != '=') continue;
+		int operatorStart = j;
+		if (j > 0 && (tText[j - 1] == '<' || tText[j - 1] == '>' || tText[j - 1] == ':')) continue;
+		if (j > 0 && tText[j - 1] == '!') operatorStart = j - 1;
+		int k = operatorStart - 1;
+		while (k >= 0 && isEmptyCharacter(tText[k])) k--;
+		const int nameEnd = k + 1;
+		while (k >= 0 && (isalnum((unsigned char)tText[k]) || tText[k] == '_')) k--;
+		int nameStart = k + 1;
+		if (nameStart == nameEnd) continue;
+
+		int before = nameStart - 1;
+		while (before >= 0 && isEmptyCharacter(tText[before])) before--;
+		if (before >= 0 && tText[before] == ',') {
+			int r = before - 1;
+			while (r >= 0 && isEmptyCharacter(tText[r])) r--;
+			if (r >= 0 && tText[r] == ')') {
+				int depth = 0;
+				for (; r >= 0; r--) {
+					if (tText[r] == ')') depth++;
+					else if (tText[r] == '(' && !--depth) break;
+				}
+				r--;
+				while (r >= 0 && isEmptyCharacter(tText[r])) r--;
+			}
+			const int redirectionEnd = r + 1;
+			while (r >= 0 && isalnum((unsigned char)tText[r])) r--;
+			if (r + 1 < redirectionEnd && isStringComparisonRedirection(tText, r + 1, redirectionEnd)) {
+				nameStart = r + 1;
+				before = r;
+				while (before >= 0 && isEmptyCharacter(tText[before])) before--;
+			}
+		}
+		if (nameStart < last) continue;
+		int after = end;
+		while (after < n && isEmptyCharacter(tText[after])) after++;
+		const int isAlone = before < 0 && after >= n;
+		const int isInParentheses = before >= 0 && tText[before] == '(' && after < n && tText[after] == ')';
+		if (isAlone || isInParentheses) continue;
+
+		oText.append(tText + last, nameStart - last);
+		oText += '(';
+		oText.append(tText + nameStart, end - nameStart);
+		oText += ')';
+		last = end;
+		isChanged = 1;
+	}
+	if (!isChanged) return 0;
+	oText.append(tText + last);
+	return 1;
+}
+
 DreamMugenAssignment* parseDreamMugenAssignmentFromString(char * tText)
 {
 	sanitizeText(&tText);
+
+	std::string stringComparisonsInParentheses;
+	if (putStringComparisonsInParentheses(tText, stringComparisonsInParentheses)) {
+		std::vector<char> text(stringComparisonsInParentheses.begin(), stringComparisonsInParentheses.end());
+		text.push_back('\0');
+		return parseDreamMugenAssignmentFromString(text.data());
+	}
 
 	if (isEmpty(tText)) {
 		return parseMugenNullFromString();

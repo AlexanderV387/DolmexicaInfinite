@@ -41,6 +41,14 @@
 #include "config.h"
 #include "mugenassignmentevaluator.h"
 
+#ifdef __3DS__
+#include <malloc.h>
+#include <prism/mugenspritefilereader.h>
+extern "C" {
+	extern u32 __ctru_heap_size;
+}
+#endif
+
 using namespace std;
 
 #define SPRITE_PRIORITY_MIN -10
@@ -245,7 +253,7 @@ static void loadPlayerFiles(char* tPath, DreamPlayer* tPlayer, MugenDefScript* t
 	getMugenDefStringOrDefault(file, tScript, "files", name, "");
 	int hasPalettePath = strcmp("", file);
 	sprintf(palettePath, "%s%s", path, file);
-	if(!isFile(palettePath)){
+	if(hasPalettePath && !isFile(palettePath)){
 		logWarningFormat("Unable to find palette file %s. Ignoring.", palettePath);
 		hasPalettePath = 0;
 	}
@@ -543,8 +551,24 @@ static void loadSinglePlayerSprites(DreamPlayer* tPlayer) {
 	const uint64_t compatStart = getLoadProfileTicks();
 	const int compatTextureStart = getCompatTextureFreeKB();
 	setMugenSpriteFileReaderToUsePalette(tPlayer->mRootID);
+#ifdef __3DS__
+	// [3DS] The heap left when sprites do not fit (those are left out): 4 MB
+	// for the fight; for the first player, also about the other's sprites
+	// (they take about their file's size), at most half of what is free.
+	size_t heapReserve = 4 * 1024 * 1024;
+	if (tPlayer->mRootID == 0) {
+		const size_t otherSize = (size_t)getFileSize(gPlayerDefinition.mPlayers[1].mHeader->mFiles.mSpritePath);
+		const size_t heapUsed = mallinfo().uordblks;
+		const size_t heapFree = __ctru_heap_size > heapUsed ? __ctru_heap_size - heapUsed : 0;
+		heapReserve += std::min(otherSize + otherSize / 10, heapFree / 2);
+	}
+	setMugenSpriteFileReaderHeapReserve(heapReserve);
+#endif
 	tPlayer->mHeader->mFiles.mSprites = loadMugenSpriteFile(tPlayer->mHeader->mFiles.mSpritePath, tPlayer->mHeader->mFiles.mHasPalettePath, tPlayer->mHeader->mFiles.mPalettePath);
 	setMugenSpriteFileReaderToNotUsePalette();
+#ifdef __3DS__
+	setMugenSpriteFileReaderHeapReserve(4 * 1024 * 1024);
+#endif
 	addCompatLine("P%d sprites %s: %d, %.0f ms, textures %d KB",
 		tPlayer->mRootID + 1, tPlayer->mHeader->mFiles.mSpritePath, (int)tPlayer->mHeader->mFiles.mSprites.mAllSprites.size(),
 		getLoadProfileMilliseconds(getLoadProfileTicks() - compatStart), compatTextureStart - getCompatTextureFreeKB());

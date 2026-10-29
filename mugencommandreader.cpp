@@ -167,6 +167,11 @@ static DreamMugenCommandInputStepTarget extractTargetFromInputStep(char* tInputS
 	else if (mask == ((1 << 1) | (1 << 11))) ret = MUGEN_COMMAND_INPUT_STEP_TARGET_MULTI_UP;
 	else if (mask == ((1 << 2) | (1 << 11))) ret = MUGEN_COMMAND_INPUT_STEP_TARGET_MULTI_FORWARD;
 	else if (mask == ((1 << 3) | (1 << 11))) ret = MUGEN_COMMAND_INPUT_STEP_TARGET_MULTI_BACKWARD;
+	// A diagonal with $ ("/$DF"): the diagonal itself.
+	else if (mask == ((1 << 0) | (1 << 2) | (1 << 11))) ret = MUGEN_COMMAND_INPUT_STEP_TARGET_DOWN_FORWARD;
+	else if (mask == ((1 << 0) | (1 << 3) | (1 << 11))) ret = MUGEN_COMMAND_INPUT_STEP_TARGET_DOWN_BACKWARD;
+	else if (mask == ((1 << 1) | (1 << 2) | (1 << 11))) ret = MUGEN_COMMAND_INPUT_STEP_TARGET_UP_FORWARD;
+	else if (mask == ((1 << 1) | (1 << 3) | (1 << 11))) ret = MUGEN_COMMAND_INPUT_STEP_TARGET_UP_BACKWARD;
 	else {
 		logWarningFormat("Unable to determine target %s. Defaulting to invalid input.", tInputStep);
 		ret = (DreamMugenCommandInputStepTarget)-1;
