@@ -437,6 +437,16 @@ void finalizeExplod(int tID)
 {
 	Explod* e = &gMugenExplod.mExplods[tID];
 
+	// An explod of an animation that is not there is not made, as in MUGEN:
+	// with the empty one instead, which never ends, a character making one
+	// every frame (CvS Morrigan's score display) piled up thousands.
+	const int hasAnimation = e->mIsInFightDefFile ? hasDreamFightEffectAnimation(e->mAnimationNumber) : hasMugenAnimation(getPlayerAnimations(e->mPlayer), e->mAnimationNumber);
+	if (!hasAnimation) {
+		logWarningFormat("Explod of animation %d, which is not there: left out.", e->mAnimationNumber);
+		gMugenExplod.mExplods.erase(tID);
+		return;
+	}
+
 	MugenSpriteFile* sprites;
 	MugenAnimation* animation;
 	float baseScale;

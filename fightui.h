@@ -23,6 +23,7 @@ void disableDreamTimer();
 void resetDreamTimer();
 void setTimerFinished();
 
+int hasDreamFightEffectAnimation(int tNumber);
 MugenAnimation* getDreamFightEffectAnimation(int tNumber);
 MugenSpriteFile* getDreamFightEffectSprites();
 MugenSounds* getDreamCommonSounds();

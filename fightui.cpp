@@ -2089,6 +2089,11 @@ static void setTimerFinishedInternal() {
 	gFightUIData.mTime.mFinishedCB();
 }
 
+int hasDreamFightEffectAnimation(int tNumber)
+{
+	return hasMugenAnimation(&gFightUIData.mFightFXAnimations, tNumber);
+}
+
 MugenAnimation* getDreamFightEffectAnimation(int tNumber)
 {
 	return getMugenAnimation(&gFightUIData.mFightFXAnimations, tNumber);
