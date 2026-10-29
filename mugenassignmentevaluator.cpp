@@ -2678,7 +2678,22 @@ static AssignmentReturnValue* floorFunction(DreamMugenAssignment** tIndexAssignm
 static AssignmentReturnValue* ceilFunction(DreamMugenAssignment** tIndexAssignment, DreamPlayer* tPlayer, int* tIsStatic) { return evaluateCeilArrayAssignment(evaluateAssignmentDependency(tIndexAssignment, tPlayer, tIsStatic)); }
 static AssignmentReturnValue* animElemTimeFunction(DreamMugenAssignment** tIndexAssignment, DreamPlayer* tPlayer, int* tIsStatic) { return evaluateAnimationElementTimeArrayAssignment(evaluateAssignmentDependency(tIndexAssignment, tPlayer, tIsStatic), tPlayer, tIsStatic); }
 static AssignmentReturnValue* animElemNoFunction(DreamMugenAssignment** tIndexAssignment, DreamPlayer* tPlayer, int* tIsStatic) { return evaluateAnimationElementNumberArrayAssignment(evaluateAssignmentDependency(tIndexAssignment, tPlayer, tIsStatic), tPlayer, tIsStatic); }
-static AssignmentReturnValue* ifElseFunction(DreamMugenAssignment** tIndexAssignment, DreamPlayer* tPlayer, int* tIsStatic) { return evaluateIfElseArrayAssignment(evaluateAssignmentDependency(tIndexAssignment, tPlayer, tIsStatic)); }
+// ifelse(condition, yes, no): its three parts evaluated as they are (both
+// values, as in MUGEN), the chosen one returned with its type; not through
+// text (each number formatted and read back took much of a CvS character's
+// frame on the 3DS).
+static AssignmentReturnValue* ifElseFunction(DreamMugenAssignment** tIndexAssignment, DreamPlayer* tPlayer, int* tIsStatic) {
+	DreamMugenAssignment* index = *tIndexAssignment;
+	if (index->mType != MUGEN_ASSIGNMENT_TYPE_VECTOR || ((DreamMugenDependOnTwoAssignment*)index)->b->mType != MUGEN_ASSIGNMENT_TYPE_VECTOR) {
+		return evaluateIfElseArrayAssignment(evaluateAssignmentDependency(tIndexAssignment, tPlayer, tIsStatic));
+	}
+	DreamMugenDependOnTwoAssignment* firstV = (DreamMugenDependOnTwoAssignment*)index;
+	DreamMugenDependOnTwoAssignment* secondV = (DreamMugenDependOnTwoAssignment*)firstV->b;
+	const int isTrue = convertAssignmentReturnToFloat(evaluateAssignmentDependency(&firstV->a, tPlayer, tIsStatic)) != 0;
+	AssignmentReturnValue* yes = evaluateAssignmentDependency(&secondV->a, tPlayer, tIsStatic);
+	AssignmentReturnValue* no = evaluateAssignmentDependency(&secondV->b, tPlayer, tIsStatic);
+	return isTrue ? yes : no;
+}
 static AssignmentReturnValue* condFunction(DreamMugenAssignment** tIndexAssignment, DreamPlayer* tPlayer, int* tIsStatic) { return evaluateCondArrayAssignment(tIndexAssignment, tPlayer, tIsStatic); }
 static AssignmentReturnValue* animExistFunction(DreamMugenAssignment** tIndexAssignment, DreamPlayer* tPlayer, int* tIsStatic) { return evaluateAnimationExistArrayAssignment(evaluateAssignmentDependency(tIndexAssignment, tPlayer, tIsStatic), tPlayer, tIsStatic); }
 static AssignmentReturnValue* selfAnimExistFunction(DreamMugenAssignment** tIndexAssignment, DreamPlayer* tPlayer, int* tIsStatic) { return evaluateSelfAnimationExistArrayAssignment(evaluateAssignmentDependency(tIndexAssignment, tPlayer, tIsStatic), tPlayer, tIsStatic); }
