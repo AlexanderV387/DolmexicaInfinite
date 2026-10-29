@@ -922,17 +922,37 @@ extern std::unordered_map<std::string, AssignmentReturnValue*(*)(DreamPlayer*)>&
 
 // The variable map is looked up in place: a copy of it (all its names) for
 // each word made loading a character several times slower.
-static int isMugenVariable(char* tText) {
+// A variable's name as the map has it: lowercase, without spaces around
+// its parentheses ("GetHitVar (HitCount)" is gethitvar(hitcount)).
+static std::string getMugenVariableName(const char* tText) {
 	std::string text(tText);
 	turnStringLowercase(&text[0]);
+	std::string ret;
+	for (size_t i = 0; i < text.size(); i++) {
+		if (text[i] == ' ' || text[i] == '\t') {
+			size_t next = i;
+			while (next < text.size() && (text[next] == ' ' || text[next] == '\t')) next++;
+			const char before = ret.empty() ? '\0' : ret.back();
+			const char after = next < text.size() ? text[next] : '\0';
+			if (before == '(' || after == '(' || after == ')') {
+				i = next - 1;
+				continue;
+			}
+		}
+		ret.push_back(text[i]);
+	}
+	return ret;
+}
+
+static int isMugenVariable(char* tText) {
+	std::string text = getMugenVariableName(tText);
 
 	const auto& m = getActiveMugenAssignmentVariableMap();
 	return m.find(text) != m.end();
 }
 
 static DreamMugenAssignment* parseMugenVariableFromString(char* tText) {
-	std::string text(tText);
-	turnStringLowercase(&text[0]);
+	std::string text = getMugenVariableName(tText);
 	
 	DreamMugenVariableAssignment* data = (DreamMugenVariableAssignment*)allocMemoryOnMemoryStackOrMemory(sizeof(DreamMugenVariableAssignment));
 	gDebugAssignmentAmount++;

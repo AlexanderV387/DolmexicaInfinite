@@ -1,3 +1,4 @@
+#include <strings.h>
 #include "characterselectscreen.h"
 #include "characterautodetect.h"
 
@@ -1815,13 +1816,14 @@ void parseOptionalCharacterSelectParameters(const MugenStringVector& tVector, in
 }
 
 void getCharacterSelectNamePath(const char* tName, char* oDst) {
-	if (strchr(tName, '.')) {
-		if (!strcmp("zip", getFileExtension(tName))) {
-			logWarningFormat("No support for zipped characters. Error loading %s.", tName);
-			*oDst = '\0';
-		}
-		else sprintf(oDst, "%schars/%s", getDolmexicaAssetFolder().c_str(), tName);
+	// A file only when it says .def (or .zip), as in MUGEN: otherwise a
+	// folder, its name with a dot or not (Modern Kitana 4.0).
+	const char* extension = strrchr(tName, '.');
+	if (extension && !strcasecmp(extension, ".zip")) {
+		logWarningFormat("No support for zipped characters. Error loading %s.", tName);
+		*oDst = '\0';
 	}
+	else if (extension && !strcasecmp(extension, ".def")) sprintf(oDst, "%schars/%s", getDolmexicaAssetFolder().c_str(), tName);
 	else sprintf(oDst, "%schars/%s/%s.def", getDolmexicaAssetFolder().c_str(), tName, tName);
 }
 
