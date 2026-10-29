@@ -954,7 +954,7 @@ BlendType getBackgroundBlendType(MugenDefScriptGroup* tGroup) {
 	char* text = getAllocatedMugenDefStringVariableAsGroup(tGroup, "trans");
 	turnStringLowercase(text);
 
-	if (!strcmp("add", text) || !strcmp("addalpha", text)) {
+	if (!strcmp("add", text) || !strcmp("addalpha", text) || !strcmp("add1", text)) {
 		ret = BLEND_TYPE_ADDITION;
 	}
 	else if (!strcmp("sub", text)) {

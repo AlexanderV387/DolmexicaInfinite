@@ -21,7 +21,7 @@ CXXFLAGS = $(ARCH) -std=gnu++17 -fsigned-char -fpermissive -O2 -g -mword-relocat
 	-I$(DEVKITPRO)/libctru/include -I$(DEVKITPRO)/portlibs/3ds/include
 LDFLAGS = $(ARCH) -specs=3dsx.specs -g -Wl,--gc-sections \
 	-L$(PRISM_PATH)/bin_3ds -L$(DEVKITPRO)/portlibs/3ds/lib -L$(DEVKITPRO)/libctru/lib
-LIBS = -lprism -lpng -lzstd -lz -lcitro3d -lctru -lm
+LIBS = -lprism -lpng -lzstd -lz -lmpg123 -lvorbisidec -logg -lcitro3d -lctru -lm
 
 APP_TITLE = Dolmexica Infinite
 APP_DESCRIPTION = MUGEN-compatible fighting game engine
