@@ -14,6 +14,8 @@
 #include <prism/math.h>
 
 #include "playerdefinition.h"
+
+static DreamMugenAssignment* parseDreamMugenAssignmentFromStringInParts(char* tText);
 #include "stage.h"
 #include "playerhitdata.h"
 #include "gamelogic.h"
@@ -463,7 +465,7 @@ static int isOnHighestLevelBinaryMultipleRightToLeft(const char* tText, const st
 
 static DreamMugenAssignment* parseOneElementMugenAssignmentFromString(char* tText, DreamMugenAssignmentType tType) {
 	
-	DreamMugenAssignment* a = parseDreamMugenAssignmentFromString(tText);
+	DreamMugenAssignment* a = parseDreamMugenAssignmentFromStringInParts(tText);
 
 	return makeMugenOneElementAssignment(tType, a);
 }
@@ -488,8 +490,8 @@ static DreamMugenAssignment* parseTwoElementMugenAssignmentFromStringWithFixedPo
 
 	strcpy(text2, &tText[end]);
 
-	DreamMugenAssignment* a = parseDreamMugenAssignmentFromString(text1);
-	DreamMugenAssignment* b = parseDreamMugenAssignmentFromString(text2);
+	DreamMugenAssignment* a = parseDreamMugenAssignmentFromStringInParts(text1);
+	DreamMugenAssignment* b = parseDreamMugenAssignmentFromStringInParts(text2);
 
 	return makeMugenTwoElementAssignment(tType, a, b);
 }
@@ -555,7 +557,7 @@ static DreamMugenAssignment* parseMugenAssignmentStringInBraces(char* tText) {
 	tText[n - 1] = '\0';
 	tText++;
 
-	return parseDreamMugenAssignmentFromString(tText);
+	return parseDreamMugenAssignmentFromStringInParts(tText);
 }
 
 static int isNegation(char* tText) {
@@ -611,7 +613,7 @@ static DreamMugenAssignment* parseMugenRangeFromString(char* tText) {
 	tText[n - 1] = '\0';
 	tText++;
 
-	e->a = parseDreamMugenAssignmentFromString(tText);
+	e->a = parseDreamMugenAssignmentFromStringInParts(tText);
 	e->mType = MUGEN_ASSIGNMENT_TYPE_RANGE;
 	return (DreamMugenAssignment*)e;
 }
@@ -994,7 +996,7 @@ static DreamMugenAssignment* parseArrayFromString(char* tText) {
 	char* text2End = strrchr(text2, ')');
 	*text2End = '\0';
 
-	DreamMugenAssignment* b = parseDreamMugenAssignmentFromString(text2);
+	DreamMugenAssignment* b = parseDreamMugenAssignmentFromStringInParts(text2);
 	return makeMugenArrayAssignment(saneText1, b);
 }
 
@@ -1254,16 +1256,22 @@ static int putStringComparisonsInParentheses(const char* tText, std::string& oTe
 	return 1;
 }
 
+// The whole text: its string comparisons put in parentheses once, before its
+// parts are parsed (each part, then, as it is).
 DreamMugenAssignment* parseDreamMugenAssignmentFromString(char * tText)
 {
-	sanitizeText(&tText);
-
 	std::string stringComparisonsInParentheses;
 	if (putStringComparisonsInParentheses(tText, stringComparisonsInParentheses)) {
 		std::vector<char> text(stringComparisonsInParentheses.begin(), stringComparisonsInParentheses.end());
 		text.push_back('\0');
-		return parseDreamMugenAssignmentFromString(text.data());
+		return parseDreamMugenAssignmentFromStringInParts(text.data());
 	}
+	return parseDreamMugenAssignmentFromStringInParts(tText);
+}
+
+static DreamMugenAssignment* parseDreamMugenAssignmentFromStringInParts(char * tText)
+{
+	sanitizeText(&tText);
 
 	if (isEmpty(tText)) {
 		return parseMugenNullFromString();

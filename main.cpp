@@ -46,8 +46,12 @@ extern "C" {
 // and the rest to the heap. The heap gets 48 MB (the game's some 5, and the
 // sprites' palette indices, compressed: 11 MB for a CvS character), the
 // textures the rest (some 72 MB, made again when drawn when they run short).
+// The stack: 512 KB, from the heap (libctru's 32 KB was about what reading a
+// CvS character's formulas takes: a few more parentheses overflowed it, with
+// Mai).
 extern "C" {
 	u32 __ctru_heap_size = 48 * 1024 * 1024;
+	u32 __stacksize__ = 512 * 1024;
 }
 #endif
 
