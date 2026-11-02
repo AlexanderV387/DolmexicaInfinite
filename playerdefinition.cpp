@@ -574,10 +574,11 @@ static void loadSinglePlayerSprites(DreamPlayer* tPlayer) {
 	const int compatTextureStart = getCompatTextureFreeKB();
 	setMugenSpriteFileReaderToUsePalette(tPlayer->mRootID);
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
-	// [3DS] The heap left when sprites do not fit (those are left out): 4 MB
-	// for the fight; for the first player, also about the other's sprites
-	// (they take about their file's size), at most half of what is free.
-	size_t heapReserve = 4 * 1024 * 1024;
+	// [3DS] The heap left when sprites do not fit (those are streamed): 6 MB
+	// for the fight (helpers, explods, the streamed sprites read when
+	// drawn); for the first player, also about the other's sprites (they
+	// take about their file's size), at most half of what is free.
+	size_t heapReserve = 6 * 1024 * 1024;
 	if (tPlayer->mRootID == 0) {
 		const size_t otherSize = (size_t)getFileSize(gPlayerDefinition.mPlayers[1].mHeader->mFiles.mSpritePath);
 		const size_t heapUsed = mallinfo().uordblks;
