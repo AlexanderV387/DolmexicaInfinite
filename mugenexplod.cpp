@@ -283,14 +283,19 @@ static Position2D getFinalExplodPositionFromPositionType(DreamExplodPositionType
 	}
 	else if (tPositionType == EXPLOD_POSITION_TYPE_RELATIVE_TO_FRONT) {
 		DreamPlayer* target = tPlayer;
-		const auto p = Vector2D(getPlayerScreenEdgeInFrontX(target, getDreamMugenStageHandlerCameraCoordinateP()), getDreamStageTopOfScreenBasedOnPlayerInStageCoordinateOffset(getDreamMugenStageHandlerCameraCoordinateP()));
+		// The screen's own edges, its sides on the wide 3DS screen with them
+		// (as postype left and right): an ultimate's full-screen background
+		// at the back left a strip on the left, its colors unchanged.
+		const float margin = getDreamScreenSideMargin(getDreamMugenStageHandlerCameraCoordinateP());
+		const auto p = Vector2D(getPlayerScreenEdgeInFrontX(target, getDreamMugenStageHandlerCameraCoordinateP()) + (getPlayerIsFacingRight(target) ? margin : -margin), getDreamStageTopOfScreenBasedOnPlayerInStageCoordinateOffset(getDreamMugenStageHandlerCameraCoordinateP()));
 		int isReversed = !getPlayerIsFacingRight(target);
 		if (isReversed) mOffset.x *= -1;
 		return p + mOffset;
 	}
 	else if (tPositionType == EXPLOD_POSITION_TYPE_RELATIVE_TO_BACK) {
 		DreamPlayer* target = tPlayer;
-		const auto p = Vector2D(getPlayerScreenEdgeInBackX(target, getDreamMugenStageHandlerCameraCoordinateP()), getDreamStageTopOfScreenBasedOnPlayerInStageCoordinateOffset(getDreamMugenStageHandlerCameraCoordinateP()));
+		const float margin = getDreamScreenSideMargin(getDreamMugenStageHandlerCameraCoordinateP());
+		const auto p = Vector2D(getPlayerScreenEdgeInBackX(target, getDreamMugenStageHandlerCameraCoordinateP()) + (getPlayerIsFacingRight(target) ? -margin : margin), getDreamStageTopOfScreenBasedOnPlayerInStageCoordinateOffset(getDreamMugenStageHandlerCameraCoordinateP()));
 		int isReversed = getPlayerIsFacingRight(target);
 		if (isReversed) mOffset.x *= -1;
 		return p + mOffset;
