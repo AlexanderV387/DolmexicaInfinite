@@ -9,3 +9,4 @@
 using namespace prism;
 
 ActorBlueprint getPauseMenu3DS();
+void loadN3DSScreenSetting();

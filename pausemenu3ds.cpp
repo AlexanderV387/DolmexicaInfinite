@@ -1,6 +1,8 @@
 #include "pausemenu3ds.h"
 
 #include <vector>
+#include <stdio.h>
+#include <string.h>
 
 #include <prism/wrapper.h>
 #include <prism/input.h>
@@ -25,9 +27,29 @@
 
 typedef enum {
 	PAUSE_MENU_CONTINUE,
+	PAUSE_MENU_SCREEN,
 	PAUSE_MENU_CHARACTER_SELECT,
 	PAUSE_MENU_TITLE_SCREEN,
 } PauseMenuItem;
+
+// The screen's shape (stretched over the whole top screen, or the game's
+// own shape with more of the stage at the sides), kept on the SD card.
+#define SCREEN_SETTINGS_PATH "sdmc:/3ds/dolmexica/screen.txt"
+
+void loadN3DSScreenSetting() {
+	FILE* file = fopen(SCREEN_SETTINGS_PATH, "r");
+	if (!file) return;
+	char text[32] = { 0 };
+	if (fgets(text, sizeof(text), file)) setN3DSScreenStretched(strncmp(text, "wide", 4) != 0);
+	fclose(file);
+}
+
+static void saveN3DSScreenSetting() {
+	FILE* file = fopen(SCREEN_SETTINGS_PATH, "w");
+	if (!file) return;
+	fputs(isN3DSScreenStretched() ? "stretched\n" : "wide\n", file);
+	fclose(file);
+}
 
 static struct {
 	int mIsOpen;
@@ -55,6 +77,7 @@ static const char* getItemText(PauseMenuItem tItem) {
 	switch (tItem) {
 	case PAUSE_MENU_CONTINUE: return "CONTINUAR";
 	case PAUSE_MENU_CHARACTER_SELECT: return "ELEGIR PERSONAJES";
+	case PAUSE_MENU_SCREEN: return isN3DSScreenStretched() ? "PANTALLA: COMPLETA" : "PANTALLA: ANCHA";
 	default: return "MENU PRINCIPAL";
 	}
 }
@@ -80,6 +103,7 @@ static void openPauseMenu() {
 
 	gPauseMenu3DSData.mItems.clear();
 	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_CONTINUE);
+	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_SCREEN);
 	if (getCharacterSelectStart()) gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_CHARACTER_SELECT);
 	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_TITLE_SCREEN);
 
@@ -110,6 +134,13 @@ static void selectItem() {
 	const auto item = gPauseMenu3DSData.mItems[gPauseMenu3DSData.mSelected];
 	if (item == PAUSE_MENU_CONTINUE) {
 		closePauseMenu();
+		return;
+	}
+	// Changed at once (the stage's edges as seen fit from the next fight).
+	if (item == PAUSE_MENU_SCREEN) {
+		setN3DSScreenStretched(!isN3DSScreenStretched());
+		saveN3DSScreenSetting();
+		changeMugenText(gPauseMenu3DSData.mTextIDs[gPauseMenu3DSData.mSelected], getItemText(item));
 		return;
 	}
 

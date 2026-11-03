@@ -1,6 +1,7 @@
 #include "playerdefinition.h"
 
 #include <vector>
+#include <math.h>
 #include <assert.h>
 #include <string.h>
 #include <algorithm>
@@ -1953,6 +1954,18 @@ static void handlePlayerCornerPush(DreamPlayer* p, DreamPlayer* tOtherPlayer) {
 }
 
 static void setPlayerHitShakePaused(DreamPlayer* p, int tDuration);
+static int scaleLifeChange(int tValue, double tMultiplier);
+static int clampLifeChange(double tValue);
+
+// A hit's damage with the attack and defense: rounded, at least one point
+// when there is any (as MUGEN and Ikemen); a negative one (healing) as is.
+static int scaleHitDamage(int tDamage, double tMultiplier) {
+	if (tDamage <= 0) {
+		const double scaled = tDamage * tMultiplier;
+		return clampLifeChange(scaled < 0 ? -floor(-scaled + 0.5) : floor(scaled + 0.5));
+	}
+	return -scaleLifeChange(-tDamage, tMultiplier);
+}
 
 static void addPlayerAsActiveTarget(DreamPlayer* p, DreamPlayer* tNewTarget) {
 	if (isPlayerProjectile(tNewTarget)) return;
@@ -2083,14 +2096,14 @@ static void setPlayerHit(DreamPlayer* p, DreamPlayer* tOtherPlayer, void* tHitDa
 	int powerUp1;
 	int powerUp2;
 	if (isPlayerGuarding(p)) {
-		damage = (int)(getActiveHitDataGuardDamage(p) * getPlayerAttackMultiplier(tOtherPlayer) * getInvertedPlayerDefenseMultiplier(p));
+		damage = scaleHitDamage(getActiveHitDataGuardDamage(p), getPlayerAttackMultiplier(tOtherPlayer) * getInvertedPlayerDefenseMultiplier(p));
 		powerUp1 = getActiveHitDataPlayer2GuardPowerAdded(p);
 		powerUp2 = getActiveHitDataPlayer1GuardPowerAdded(p);
 		hitPauseDuration = getActiveHitDataPlayer1GuardPauseTime(p);
 		hitShakeDuration = getActiveHitDataPlayer2GuardPauseTime(p);
 	}
 	else {
-		damage = (int)(getActiveHitDataDamage(p) * getPlayerAttackMultiplier(tOtherPlayer) * getInvertedPlayerDefenseMultiplier(p));
+		damage = scaleHitDamage(getActiveHitDataDamage(p), getPlayerAttackMultiplier(tOtherPlayer) * getInvertedPlayerDefenseMultiplier(p));
 		powerUp1 = getActiveHitDataPlayer2PowerAdded(p);
 		powerUp2 = getActiveHitDataPlayer1PowerAdded(p);
 		hitPauseDuration = getActiveHitDataPlayer1PauseTime(p);
@@ -3823,6 +3836,17 @@ static int clampLifeChange(double tValue)
 	return int(tValue);
 }
 
+// A life change scaled by attack and defense, as MUGEN (and Ikemen) do it:
+// rounded, and a loss of less than one point is still one (New Kyouki's
+// attack is 40: a 4-point hit took 1 instead of 2, a 1-point hit none).
+static int scaleLifeChange(int tValue, double tMultiplier)
+{
+	if (!tValue) return 0;
+	double scaled = tValue * tMultiplier;
+	if (scaled < 0 && scaled > -1) scaled = -1;
+	return clampLifeChange(scaled < 0 ? -floor(-scaled + 0.5) : floor(scaled + 0.5));
+}
+
 void addPlayerDamage(DreamPlayer* p, DreamPlayer* tDamagingPlayer, int tDamage)
 {
 	long long newLife = (long long)p->mLife - (long long)tDamage;
@@ -5092,8 +5116,7 @@ void addPlayerTargetLife(DreamPlayer* p, DreamPlayer* tLifeGivingPlayer, int tID
 		if (!tIsAbsolute) {
 			const auto attackMultiplier = getPlayerAttackMultiplier(p);
 			const auto defenseMultiplier = getInvertedPlayerDefenseMultiplier(tPlayer);
-			if (attackMultiplier != 1.0) tLife = clampLifeChange(tLife * (double)attackMultiplier);
-			if (defenseMultiplier != 1.0) tLife = clampLifeChange(tLife * (double)defenseMultiplier);
+			if (attackMultiplier != 1.0 || defenseMultiplier != 1.0) tLife = scaleLifeChange(tLife, (double)attackMultiplier * defenseMultiplier);
 		}
 		tLife = clampLifeChange(tLife);
 

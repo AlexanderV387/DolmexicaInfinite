@@ -42,6 +42,10 @@ extern "C" {
 #endif
 
 #ifdef __3DS__
+#include "pausemenu3ds.h"
+#endif
+
+#ifdef __3DS__
 // [3DS] libctru gives the textures' (linear) memory at most 32 MB by default
 // and the rest to the heap. The heap gets 48 MB (the game's some 5, and the
 // sprites' palette indices, compressed: 11 MB for a CvS character), the
@@ -93,6 +97,9 @@ int main(int argc, char** argv) {
 	}
 
 	initPrismWrapperWithMugenFlags();
+#ifdef __3DS__
+	loadN3DSScreenSetting();
+#endif
 	loadMugenConfig();
 	loadGlobalVariables(PrismSaveSlot::AMOUNT);
 	setFont("$/rd/fonts/segoe.hdr", "$/rd/fonts/segoe.pkg");
