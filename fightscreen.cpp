@@ -49,6 +49,12 @@
 #include "pausemenu3ds.h"
 #endif
 
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+namespace prism {
+	int pinN3DSStreamedTextures(size_t tKeepFree, size_t* oPinnedBytes);   // 3ds/texture_3ds.cpp
+}
+#endif
+
 static struct {
 	void(*mWinCB)();
 	void(*mLoseCB)();
@@ -180,6 +186,12 @@ static void loadFightScreen() {
 	setPlayerStatemachineToUpdateAgain(getRootPlayer(0));
 	setPlayerStatemachineToUpdateAgain(getRootPlayer(1));
 	logg("[Fightscreen] Fight screen loaded");
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	// [3DS] The heap left over after loading: streamed sprites read now and
+	// kept, the biggest first (a full-screen X-ray image read from the card
+	// in the fight came in flashes), 6 MB still left for the fight.
+	pinN3DSStreamedTextures(6 * 1024 * 1024, NULL);
+#endif
 
 	
 

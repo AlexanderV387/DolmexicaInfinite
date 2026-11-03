@@ -113,7 +113,24 @@ static void applyRegisteredStateMachinePendingStateChange(RegisteredMugenStateMa
 	applyRegisteredStateMachineStateChange(tRegisteredState, tRegisteredState->mPendingStateChange);
 }
 
+// The machine running its state -3 or -2 now: a change from there into the
+// state it is in does not start that state over (see changeDreamHandledStateMachineState).
+static RegisteredMugenStateMachine* gMachineInGlobalState;
+
+static int isChangeIntoSameStateFromGlobalState(RegisteredMugenStateMachine* e, int tNewState) {
+	return e == gMachineInGlobalState && !e->mHasPendingStateChange && tNewState == e->mState;
+}
+
+static void updateSingleStateUnguarded(RegisteredMugenStateMachine* tRegisteredState, int tState, int tForceOwnStates, int tIsHitPaused);
+
 static void updateSingleState(RegisteredMugenStateMachine* tRegisteredState, int tState, int tForceOwnStates, int tIsHitPaused) {
+	RegisteredMugenStateMachine* previous = gMachineInGlobalState;
+	gMachineInGlobalState = (tState == -2 || tState == -3) ? tRegisteredState : NULL;
+	updateSingleStateUnguarded(tRegisteredState, tState, tForceOwnStates, tIsHitPaused);
+	gMachineInGlobalState = previous;
+}
+
+static void updateSingleStateUnguarded(RegisteredMugenStateMachine* tRegisteredState, int tState, int tForceOwnStates, int tIsHitPaused) {
 	setProfilingSectionMarkerCurrentFunction();
 	if (!tRegisteredState->mIsInStoryMode && tRegisteredState->mPlayer && (!isPlayer(tRegisteredState->mPlayer) || isPlayerDestroyed(tRegisteredState->mPlayer))) return;
 
@@ -531,6 +548,11 @@ void changeDreamHandledStateMachineState(RegisteredMugenStateMachine* e, int tNe
 {
 	setProfilingSectionMarkerCurrentFunction();
 	assert(stl_map_contains(gMugenStateHandlerData.mRegisteredStates, e->mID));
+	// From state -3 or -2, into the state it is in: kept going (its Time
+	// not back to 0 every tick). New Kyouki's -2 puts his hit-taking helper
+	// in its state each tick, and he takes a hit's damage while that
+	// helper's Time is 0: each hit was taken again every tick.
+	if (isChangeIntoSameStateFromGlobalState(e, tNewState)) return;
 	if (isDeferringStateMachineStateChange(e)) {
 		extern int gDolmexicaDeferCount; gDolmexicaDeferCount++;
 		// this hangs on Dreamcast if we don't init it delayed
@@ -562,6 +584,7 @@ void changeDreamHandledStateMachineStateToOtherPlayerStateMachine(RegisteredMuge
 void changeDreamHandledStateMachineStateToOwnStateMachine(RegisteredMugenStateMachine* e, int tNewState)
 {
 	assert(stl_map_contains(gMugenStateHandlerData.mRegisteredStates, e->mID));
+	if (!e->mIsUsingTemporaryOtherStateMachine && isChangeIntoSameStateFromGlobalState(e, tNewState)) return;
 	if (isDeferringStateMachineStateChange(e)) {
 		e->mHasPendingStateChange = 1;
 		e->mPendingStateChange = tNewState;
