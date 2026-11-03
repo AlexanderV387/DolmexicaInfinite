@@ -47,6 +47,7 @@
 #include "loadprofile.h"
 #ifdef __3DS__
 #include "pausemenu3ds.h"
+#include "fighttrace3ds.h"
 #endif
 
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
@@ -165,6 +166,7 @@ static void loadFightScreen() {
 	instantiateActor(getPauseControllerHandler());
 #ifdef __3DS__
 	setActorUnpausable(instantiateActor(getPauseMenu3DS()));
+	instantiateActor(getFightTrace3DS());
 #endif
 	instantiateActor(getPostStateMachinePlayersBlueprint());
 	instantiateActor(getDreamExplodHandler());
