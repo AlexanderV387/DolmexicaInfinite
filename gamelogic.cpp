@@ -115,6 +115,14 @@ static int updateWaitAndCheckIfOver(GameLogicWait* tWait, int tDuration) {
 
 static void fightAnimationFinishedCB() {
 	gGameLogicData.mRoundStateNumber = ROUND_STATE_FIGHT;
+	// The fight starts: MUGEN gives control to the characters standing
+	// there. Modern Kitana's -2 takes hers away all through the intro
+	// (CtrlSet while RoundState = 1); never given back, she could not walk
+	// or do anything that needs control (her X-rays among them).
+	for (int i = 0; i < 2; i++) {
+		DreamPlayer* p = getRootPlayer(i);
+		if (getPlayerState(p) == 0) setPlayerControl(p, 1);
+	}
 	enableDreamTimer();
 }
 

@@ -312,6 +312,7 @@ static void loadPlayerFiles(char* tPath, DreamPlayer* tPlayer, MugenDefScript* t
 	logMemoryState();
 
 	setPlayerExternalDependencies(tPlayer);
+	setHandledPhysicsUpdatedByOwner(tPlayer->mPhysicsElement, 1);
 
 	if (getPlayerAILevel(tPlayer) || (getGameMode() == GAME_MODE_TRAINING && tPlayer->mRootID == 1)) {
 		setDreamAIActive(tPlayer);
@@ -1266,9 +1267,25 @@ static void updateReflection(DreamPlayer* p) {
 
 }
 
+// A character or helper moves right after running its states, as in
+// MUGEN (and Ikemen), not with everything else at the start of the next
+// tick: a helper reading where its parent is then sees where he went this
+// tick. New Kyouki pulls himself back to his hit-taking helper if more than
+// 5 pixels apart, the helper following him: moved later, every dash of his
+// (30 pixels a tick into a grab) was pulled back to where he started.
+void updatePlayerPhysicsAfterStates(DreamPlayer* p)
+{
+	if (!isPlayer(p) || isPlayerDestroyed(p) || isPlayerProjectile(p)) return;
+	if (!p->mPhysicsElement->mIsUpdatedByOwner) return;
+	updateHandledPhysicsNow(p->mPhysicsElement);
+}
+
 static void updatePlayerPhysicsClamp(DreamPlayer* p) {
 	auto vel = getHandledPhysicsVelocityReference(p->mPhysicsElement);
 	if (!vel->x && !vel->y) return;
+	// Standing physics stops a sliding character once under a pixel a tick
+	// (in 320 wide coordinates), as MUGEN and Ikemen do.
+	if (p->mStatePhysics == MUGEN_STATE_PHYSICS_STANDING && std::fabs(vel->x) < transformDreamCoordinates(1.0, 320, getPlayerCoordinateP(p))) vel->x = 0;
 	const float PHYSICS_EPSILON = 1e-6f;
 	if (std::fabs(vel->x) < PHYSICS_EPSILON) vel->x = 0;
 	if (std::fabs(vel->y) < PHYSICS_EPSILON) vel->y = 0;
@@ -1306,8 +1323,12 @@ static void updateSingleProjectileCB(void* tCaller, void* tData) {
 	updateSingleProjectile((DreamPlayer*)tData);
 }
 
+// Training mode refills the characters themselves, not their helpers: a
+// helper's life is its own business (New Kyouki sets his helper's to 0 so
+// that it follows him, !Alive; refilled, it stayed put and so did he).
 static void updatePlayerTrainingMode(DreamPlayer* p) {
 	if (!gPlayerDefinition.mIsInTrainingMode) return;
+	if (isPlayerHelper(p) || isPlayerProjectile(p)) return;
 	if (!getPlayerControl(p)) return;
 
 	addPlayerLife(p, p, 3);
@@ -1883,6 +1904,12 @@ static int checkPlayerHitFlagsAndReturnIfHittable(DreamPlayer* tPlayer, const ch
 	const auto flags = hitFlagsStringToFlags(tFlags);
 	if ((isPlayerHit(tPlayer) && (flags & uint32_t(HitFlagFlags::NO_GETHIT))) || (!isPlayerHit(tPlayer) && (flags & uint32_t(HitFlagFlags::ONLY_GETHIT)))) return 0;
 
+	// As in MUGEN (and Ikemen): a player in a get-hit state with a fall can
+	// only be hit by a HitDef with F, whatever his state type (New Kyouki's R
+	// hits with MAD every tick: it took Rugal again and again once he had
+	// landed lying down, five hits instead of one).
+	if (getPlayerStateMoveType(tPlayer) == MUGEN_STATE_MOVE_TYPE_BEING_HIT && isPlayerFalling(tPlayer) && !(flags & uint32_t(HitFlagFlags::FALL))) return 0;
+
 	const auto type = getPlayerStateType(tPlayer);
 	switch (type)
 	{
@@ -2091,6 +2118,13 @@ static void setPlayerHit(DreamPlayer* p, DreamPlayer* tOtherPlayer, void* tHitDa
 		setActiveHitDataVelocityX(p, getActiveHitDataGroundVelocityX(p), getPlayerCoordinateP(p));
 		setActiveHitDataVelocityY(p, getActiveHitDataGroundVelocityY(p), getPlayerCoordinateP(p));
 		p->mIsFalling = getActiveHitDataFall(p);
+		// MUGEN's own workaround (kept by Ikemen): a falling hit on the
+		// ground with no y velocity gets a tiny upward one, so that P2 does
+		// fall and lie down (New Kyouki's L: Rugal stayed on his feet, and
+		// was hit by every one of its blasts instead of every other one).
+		if (p->mIsFalling && !getActiveHitDataForceNoFall(p) && getActiveHitDataGroundVelocityY(p) == 0) {
+			setActiveHitDataVelocityY(p, -0.001, 320);
+		}
 	}
 	p->mIsFalling = p->mIsFalling && !getActiveHitDataForceNoFall(p);
 
@@ -2619,7 +2653,10 @@ void setPlayerPhysics(DreamPlayer* p, DreamMugenStatePhysics tNewPhysics)
 		return;
 	}
 	else if (tNewPhysics == MUGEN_STATE_PHYSICS_STANDING) {
-		setHandledPhysicsDragCoefficient(p->mPhysicsElement, Vector3D(p->mHeader->mFiles.mConstants.mMovementData.mStandFiction, 0, 0));
+		// Prism takes off this fraction of the velocity every tick; MUGEN's
+		// friction is what is kept (0.85 kept 15% of it: a VelAdd of 1.7
+		// moved New Kyouki 2 pixels instead of about 5, and his rush missed).
+		setHandledPhysicsDragCoefficient(p->mPhysicsElement, Vector3D(1.0f - p->mHeader->mFiles.mConstants.mMovementData.mStandFiction, 0, 0));
 		setHandledPhysicsGravity(p->mPhysicsElement, Vector3D(0, 0, 0));
 		Velocity* vel = getHandledPhysicsVelocityReference(p->mPhysicsElement);
 		Acceleration* acc = getHandledPhysicsAccelerationReference(p->mPhysicsElement);
@@ -2628,7 +2665,7 @@ void setPlayerPhysics(DreamPlayer* p, DreamMugenStatePhysics tNewPhysics)
 		acc->y = 0;
 	}
 	else if (tNewPhysics == MUGEN_STATE_PHYSICS_CROUCHING) {
-		setHandledPhysicsDragCoefficient(p->mPhysicsElement, Vector3D(p->mHeader->mFiles.mConstants.mMovementData.mCrouchFriction, 0, 0));
+		setHandledPhysicsDragCoefficient(p->mPhysicsElement, Vector3D(1.0f - p->mHeader->mFiles.mConstants.mMovementData.mCrouchFriction, 0, 0));
 		setHandledPhysicsGravity(p->mPhysicsElement, Vector3D(0, 0, 0));
 		Position* pos = getHandledPhysicsPositionReference(p->mPhysicsElement);
 		Velocity* vel = getHandledPhysicsVelocityReference(p->mPhysicsElement);
@@ -3834,7 +3871,9 @@ void setPlayerUnHitPaused(DreamPlayer* p)
 }
 
 static void setPlayerDead(DreamPlayer* p) {
-	if (gPlayerDefinition.mIsInTrainingMode) return;
+	// In training the characters cannot be KOed; helpers can (in MUGEN a
+	// helper at life 0 is !Alive, which New Kyouki's helpers rely on).
+	if (gPlayerDefinition.mIsInTrainingMode && !isPlayerHelper(p)) return;
 	if (!p->mIsAlive) return;
 
 	p->mIsAlive = 0;
@@ -4877,6 +4916,7 @@ DreamPlayer * clonePlayerAsHelper(DreamPlayer* p)
 
 	resetHelperState(helper);
 	setPlayerExternalDependencies(helper);
+	setHandledPhysicsUpdatedByOwner(helper->mPhysicsElement, 1);
 	// Its full-screen images (a super's background drawn by a helper) also
 	// over the 3DS's wider sides; the characters themselves never.
 	setMugenAnimationStretchedToScreenWidth(helper->mAnimationElement, 1);

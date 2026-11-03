@@ -788,6 +788,7 @@ void setPlayersToTrainingMode();
 void setPlayersToRealFightMode();
 
 int isPlayer(DreamPlayer* p);
+void updatePlayerPhysicsAfterStates(DreamPlayer* p);
 int isValidPlayerOrProjectile(DreamPlayer* p);
 int isGeneralPlayer(DreamPlayer* p);
 int isPlayerTargetValid(DreamPlayer* p);

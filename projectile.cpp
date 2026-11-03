@@ -72,6 +72,11 @@ static void projectileRemoveAnimationFinishedCB(void* tCaller) {
 }
 
 static int changeProjectileAnimation(Projectile* e, int tAnimationNumber, int tShouldBeRemoved = 1) {
+	// A hit animation of -1 is MUGEN's "no change": the projectile keeps its
+	// animation, and its hitboxes with it, for the hits it has left (New
+	// Kyouki's B: three projectiles of 999 hits each, one hit a tick; changed
+	// to an animation that does not exist, each hit only once).
+	if (tAnimationNumber == -1 && !tShouldBeRemoved) return 0;
 	if (getPlayerAnimationNumber(e->mPlayer) != tAnimationNumber) {
 		changePlayerAnimation(e->mPlayer, tAnimationNumber);
 	}
@@ -93,8 +98,11 @@ static int changeProjectileAnimation(Projectile* e, int tAnimationNumber, int tS
 static int updateProjectileDurationAndReturnIfOver(Projectile* e) {
 	if (e->mRemoveTime == -1) return 0;
 
+	// Removed once it has been there for its whole removetime: MUGEN counts
+	// the tick it was made in too (New Kyouki's Vortrex Oscuro: projectiles
+	// of removetime 2, gone here before they could hit anything).
 	e->mNow++;
-	if (!e->mHasChangedAnimationFinal && e->mNow >= e->mRemoveTime) {
+	if (!e->mHasChangedAnimationFinal && e->mNow > e->mRemoveTime) {
 		return changeProjectileAnimation(e, e->mRemoveAnimation);
 	}
 	return 0;
@@ -179,7 +187,7 @@ ActorBlueprint getProjectileHandler() {
 
 void addAdditionalProjectileData(DreamPlayer* tProjectile) {
 	Projectile* e = (Projectile*)allocMemory(sizeof(Projectile));
-	e->mNow = 1;
+	e->mNow = 0;
 	e->mHasChangedAnimationFinal = 0;
 	e->mShouldBeRemoved = 0;
 	e->mPlayer = tProjectile;

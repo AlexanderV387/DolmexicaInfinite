@@ -69,16 +69,19 @@ static void updateSingleController(void* tCaller, void* tData) {
 	if (!caller->mRegisteredState->mIsInStoryMode && caller->mRegisteredState->mPlayer && isPlayerDestroyed(caller->mRegisteredState->mPlayer)) return;
 	if (caller->mHasChangedState) return;
 	if (caller->mIsHitPaused && !controller->mIgnoreHitPause) return;
+	// Persistence as in MUGEN (and Ikemen): persistent = n lets a controller
+	// run at most once every n ticks (counted every tick it is reached,
+	// whether its triggers hold or not); persistent = 0, once per state.
+	// mAccessAmount is the ticks left before it may run again. Counted
+	// as "once every n times the triggers held", New Kyouki's Y (a
+	// projectile on every third tick, persistent = 2) threw half of them.
+	if (controller->mAccessAmount != INT16_MAX) {
+		if (controller->mAccessAmount > INT16_MIN) controller->mAccessAmount--;
+		if (controller->mAccessAmount > 0) return;
+	}
+	else return;
 	if (!evaluateTrigger(&controller->mTrigger, caller->mRegisteredState->mPlayer)) return;
-
-	controller->mAccessAmount++;
-	int testValue = controller->mAccessAmount - 1;
-	if (controller->mPersistence) {
-		if (testValue % controller->mPersistence != 0) return;
-	}
-	else {
-		if (testValue) return;
-	}
+	controller->mAccessAmount = controller->mPersistence ? controller->mPersistence : INT16_MAX;
 
 	DreamPlayer* target;
 	switch (controller->mTarget)
@@ -258,6 +261,12 @@ static void updateSingleStateMachineByReference(RegisteredMugenStateMachine* tRe
 	}
 }
 
+// Its player moves now that its states have run (see updatePlayerPhysicsAfterStates).
+static void moveStateMachinePlayer(RegisteredMugenStateMachine* e) {
+	if (e->mIsInStoryMode || !e->mPlayer) return;
+	updatePlayerPhysicsAfterStates(e->mPlayer);
+}
+
 static void updateSingleStateMachine(void* tCaller, RegisteredMugenStateMachine& tData) {
 	(void)tCaller;
 	setProfilingSectionMarkerCurrentFunction();
@@ -273,6 +282,7 @@ static void updateSingleStateMachine(void* tCaller, RegisteredMugenStateMachine&
 			registeredState->mWasUpdatedOutsideHandler = 0;
 		}
 	}
+	moveStateMachinePlayer(registeredState);
 }
 
 // The order the players and helpers run their states in each tick, as
@@ -318,9 +328,11 @@ static void updateStateHandler(void* tData) {
 		RegisteredMugenStateMachine& e = it->second;
 		if (e.mWasUpdatedOutsideHandler) {
 			e.mWasUpdatedOutsideHandler = 0;
-			continue;
 		}
-		updateSingleStateMachineByReference(&e, 0);
+		else {
+			updateSingleStateMachineByReference(&e, 0);
+		}
+		moveStateMachinePlayer(&e);
 	}
 }
 
