@@ -4841,6 +4841,9 @@ DreamPlayer * clonePlayerAsHelper(DreamPlayer* p)
 
 	resetHelperState(helper);
 	setPlayerExternalDependencies(helper);
+	// Its full-screen images (a super's background drawn by a helper) also
+	// over the 3DS's wider sides; the characters themselves never.
+	setMugenAnimationStretchedToScreenWidth(helper->mAnimationElement, 1);
 	loadPlayerShadow(helper);
 	loadPlayerReflection(helper);
 	loadPlayerDebug(helper);
@@ -4956,6 +4959,9 @@ DreamPlayer * createNewProjectileFromPlayer(DreamPlayer* p)
 
 	resetHelperState(helper);
 	setPlayerExternalDependencies(helper);
+	// Its full-screen images (a super's background drawn by a helper) also
+	// over the 3DS's wider sides; the characters themselves never.
+	setMugenAnimationStretchedToScreenWidth(helper->mAnimationElement, 1);
 	loadPlayerShadow(helper);
 	loadPlayerReflection(helper);
 	loadPlayerDebug(helper);
