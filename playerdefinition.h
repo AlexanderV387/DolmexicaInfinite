@@ -209,6 +209,7 @@ struct DreamPlayer {
 	int mLyingDownTime;
 
 	int mIsHitPaused;
+	int mIsHitPauseOnlyShake;
 	int mHitPauseNow;
 	int mHitPauseDuration;
 
@@ -545,6 +546,7 @@ char* getPlayerAuthorName(DreamPlayer* p);
 int isPlayerPaused(DreamPlayer* p);
 int isPlayerHitPaused(DreamPlayer* p);
 void setPlayerHitPaused(DreamPlayer* p, int tDuration);
+int isPlayerStateMachineHitPaused(DreamPlayer* p);
 void setPlayerUnHitPaused(DreamPlayer* p);
 
 float getPlayerDeathVelAddY(DreamPlayer* p, int tCoordinateP);

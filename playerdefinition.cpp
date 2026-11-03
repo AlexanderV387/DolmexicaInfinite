@@ -378,6 +378,7 @@ static void resetHelperState(DreamPlayer* p) {
 	p->mIsLyingDown = 0;
 	p->mLyingDownTime = 0;
 	p->mIsHitPaused = 0;
+	p->mIsHitPauseOnlyShake = 0;
 	p->mHitPauseNow = 0;
 	p->mHitPauseDuration = 0;
 	p->mMoveContactCounter = 0;
@@ -1770,7 +1771,14 @@ static void setPlayerHitStates(DreamPlayer* p, DreamPlayer* tOtherPlayer, int tH
 
 	int enemyStateBefore = getPlayerState(p);
 	if (getActiveHitDataPlayer1StateNumber(p) != -1) {
-		changePlayerState(tOtherPlayer, getActiveHitDataPlayer1StateNumber(p));
+		// A projectile's p1stateno is for the player that fired it (New
+		// Kyouki's Inferno: its projectile takes him into the move's
+		// finish); the projectile itself runs no states.
+		DreamPlayer* stateReceiver = tOtherPlayer;
+		if (isPlayerProjectile(stateReceiver)) stateReceiver = stateReceiver->mParent;
+		if (stateReceiver && isPlayer(stateReceiver) && !isPlayerDestroyed(stateReceiver)) {
+			changePlayerState(stateReceiver, getActiveHitDataPlayer1StateNumber(p));
+		}
 	}
 	int enemyStateAfter = getPlayerState(p);
 
@@ -1922,8 +1930,17 @@ static void handlePlayerCornerPush(DreamPlayer* p, DreamPlayer* tOtherPlayer) {
 	addPlayerVelocityX(tOtherPlayer, pushOffsetX, getPlayerCoordinateP(p));
 }
 
+static void setPlayerHitShakePaused(DreamPlayer* p, int tDuration);
+
 static void addPlayerAsActiveTarget(DreamPlayer* p, DreamPlayer* tNewTarget) {
 	if (isPlayerProjectile(tNewTarget)) return;
+	// As in MUGEN: whoever a projectile hits becomes a target of the player
+	// that fired it (New Kyouki's siren super drags its targets into his
+	// own state with TargetState and drains them with TargetLifeAdd).
+	if (isPlayerProjectile(p)) {
+		p = p->mParent;
+		if (!p || !isPlayer(p)) return;
+	}
 
 	p->mActiveTargets.insert(std::make_pair(getActiveHitDataHitID(tNewTarget), tNewTarget));
 }
@@ -2105,7 +2122,7 @@ static void setPlayerHit(DreamPlayer* p, DreamPlayer* tOtherPlayer, void* tHitDa
 	addPlayerPower(tOtherPlayer, powerUp2);
 
 	if (hitShakeDuration && isPlayerAlive(p)) {
-		setPlayerHitPaused(p, hitShakeDuration);
+		setPlayerHitShakePaused(p, hitShakeDuration);
 	}
 
 	if (hitPauseDuration) {
@@ -3701,6 +3718,7 @@ static void forceUnpausePlayer(DreamPlayer* p) {
 	unpauseMugenAnimation(p->mShadow.mAnimationElement);
 	unpauseMugenAnimation(p->mReflection.mAnimationElement);
 	p->mIsHitPaused = 0;
+	p->mIsHitPauseOnlyShake = 0;
 }
 
 static void unpausePlayer(DreamPlayer* p) {
@@ -3714,13 +3732,32 @@ void setPlayerHitPaused(DreamPlayer* p, int tDuration)
 	pausePlayer(p);
 
 	p->mIsHitPaused = 1;
+	p->mIsHitPauseOnlyShake = 0;
 	p->mHitPauseNow = 0;
 	p->mHitPauseDuration = tDuration;
+}
+
+// The one hit freezes in place (hit shake). As in MUGEN and Ikemen, its
+// states keep running meanwhile (common1's 5000 freezes its own animation
+// with "ChangeAnim value = anim" while Time > 0): only its animation and
+// movement wait. New Kyouki's siren super moves its target into a state
+// that makes it unhittable each tick; frozen, it was hit again every tick.
+static void setPlayerHitShakePaused(DreamPlayer* p, int tDuration)
+{
+	const auto wasPausedFully = p->mIsHitPaused && !p->mIsHitPauseOnlyShake;
+	setPlayerHitPaused(p, tDuration);
+	p->mIsHitPauseOnlyShake = !wasPausedFully;
+}
+
+int isPlayerStateMachineHitPaused(DreamPlayer* p)
+{
+	return p->mIsHitPaused && !p->mIsHitPauseOnlyShake;
 }
 
 void setPlayerUnHitPaused(DreamPlayer* p)
 {
 	p->mIsHitPaused = 0;
+	p->mIsHitPauseOnlyShake = 0;
 
 	unpausePlayer(p);
 }
@@ -3756,9 +3793,20 @@ float getPlayerDeathVelAddY(DreamPlayer* p, int tCoordinateP)
 	}
 }
 
+static int clampLifeChange(double tValue)
+{
+	if (tValue != tValue) return 0;
+	if (tValue > 2147483647.0) return 2147483647;
+	if (tValue < -2147483647.0) return -2147483647;
+	return int(tValue);
+}
+
 void addPlayerDamage(DreamPlayer* p, DreamPlayer* tDamagingPlayer, int tDamage)
 {
-	p->mLife -= tDamage;
+	long long newLife = (long long)p->mLife - (long long)tDamage;
+	if (newLife > 2147483647LL) newLife = 2147483647LL;
+	if (newLife < -2147483647LL) newLife = -2147483647LL;
+	p->mLife = int(newLife);
 	if (p->mLife <= 0) {
 		p->mCheeseWinFlag = isPlayerGuarding(p);
 		p->mSuicideWinFlag = (p->mRootID == tDamagingPlayer->mRootID);
@@ -4525,7 +4573,7 @@ void setPlayerLife(DreamPlayer* p, DreamPlayer* tLifeGivingPlayer, int tLife)
 
 void addPlayerLife(DreamPlayer* p, DreamPlayer* tLifeGivingPlayer, int tLife)
 {
-	addPlayerDamage(p, tLifeGivingPlayer, -tLife);
+	addPlayerDamage(p, tLifeGivingPlayer, -clampLifeChange(tLife));
 }
 
 int getPlayerLife(DreamPlayer* p)
@@ -5012,12 +5060,13 @@ void addPlayerTargetLife(DreamPlayer* p, DreamPlayer* tLifeGivingPlayer, int tID
 		if (!tIsAbsolute) {
 			const auto attackMultiplier = getPlayerAttackMultiplier(p);
 			const auto defenseMultiplier = getInvertedPlayerDefenseMultiplier(tPlayer);
-			if (attackMultiplier != 1.0) tLife = int(tLife * attackMultiplier);
-			if (defenseMultiplier != 1.0) tLife = int(tLife * defenseMultiplier);
+			if (attackMultiplier != 1.0) tLife = clampLifeChange(tLife * (double)attackMultiplier);
+			if (defenseMultiplier != 1.0) tLife = clampLifeChange(tLife * (double)defenseMultiplier);
 		}
+		tLife = clampLifeChange(tLife);
 
 		int playerLife = getPlayerLife(tPlayer);
-		if (!tCanKill && playerLife + tLife <= 0) {
+		if (!tCanKill && (long long)playerLife + tLife <= 0) {
 			tLife = -(playerLife - 1);
 		}
 

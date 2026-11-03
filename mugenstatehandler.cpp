@@ -51,7 +51,7 @@ typedef struct {
 } MugenStateControllerCaller;
 
 static int isStateMachineInHitPause(RegisteredMugenStateMachine* tRegisteredState) {
-	return !tRegisteredState->mIsInStoryMode && tRegisteredState->mPlayer && isPlayer(tRegisteredState->mPlayer) && isPlayerHitPaused(tRegisteredState->mPlayer);
+	return !tRegisteredState->mIsInStoryMode && tRegisteredState->mPlayer && isPlayer(tRegisteredState->mPlayer) && isPlayerStateMachineHitPaused(tRegisteredState->mPlayer);
 }
 
 static int evaluateTrigger(DreamMugenStateControllerTrigger* tTrigger, DreamPlayer* tPlayer) {
@@ -240,12 +240,15 @@ static void updateSingleStateMachineByReference(RegisteredMugenStateMachine* tRe
 	// have, standing or crouching: nothing there takes it out (in MUGEN it
 	// plays its move again until hit), so once the animation is over it is
 	// back to standing or crouching, with control. Lei-lei's normal moves end
-	// in state 59, which she does not have.
+	// in state 59, which she does not have; her flips land in state 53, in
+	// the air on the ground, also missing.
 	DreamPlayer* p = tRegisteredState->mPlayer;
 	if (!isHitPaused && !tRegisteredState->mIsInStoryMode && p && !tRegisteredState->mIsUsingTemporaryOtherStateMachine
 		&& isPlayer(p) && !isPlayerDestroyed(p) && !isPlayerHelper(p) && !isPlayerProjectile(p)
 		&& !stl_map_contains(tRegisteredState->mStates->mStates, tRegisteredState->mState)
-		&& (getPlayerStateType(p) == MUGEN_STATE_TYPE_STANDING || getPlayerStateType(p) == MUGEN_STATE_TYPE_CROUCHING) && getPlayerAnimationTimeDeltaUntilFinished(p) >= 0) {
+		&& (getPlayerStateType(p) == MUGEN_STATE_TYPE_STANDING || getPlayerStateType(p) == MUGEN_STATE_TYPE_CROUCHING
+			|| (getPlayerStateType(p) == MUGEN_STATE_TYPE_AIR && getPlayerPositionY(p, getPlayerCoordinateP(p)) >= 0))
+		&& getPlayerAnimationTimeDeltaUntilFinished(p) >= 0) {
 		const int crouching = getPlayerStateType(p) == MUGEN_STATE_TYPE_CROUCHING;
 		logWarningFormat("Player %d left in nonexistant state %d at the end of its animation: back to %s, with control.", p->mRootID, tRegisteredState->mState, crouching ? "crouching" : "standing");
 		setPlayerControl(p, 1);

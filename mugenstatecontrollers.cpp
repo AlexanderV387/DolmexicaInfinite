@@ -4516,13 +4516,17 @@ static int handleAddingLife(DreamMugenStateController* tController, DreamPlayer*
 	evaluateDreamAssignmentAndReturnAsOneIntegerWithDefaultValue(&e->mCanKill, tPlayer, &canKill, 1);
 	evaluateDreamAssignmentAndReturnAsOneIntegerWithDefaultValue(&e->mIsAbsolute, tPlayer, &isAbsolute, 0);
 
+	if (val < -2147483647) val = -2147483647;
 	if (!isAbsolute) {
 		const auto defenseMultiplier = getInvertedPlayerDefenseMultiplier(tPlayer);
-		if (defenseMultiplier != 1.0) val = int(val * defenseMultiplier);
+		if (defenseMultiplier != 1.0) {
+			double scaled = val * (double)defenseMultiplier;
+			val = scaled > 2147483647.0 ? 2147483647 : (scaled < -2147483647.0 ? -2147483647 : int(scaled));
+		}
 	}
 
 	int playerLife = getPlayerLife(tPlayer);
-	if (!canKill && playerLife + val <= 0) {
+	if (!canKill && (long long)playerLife + val <= 0) {
 		val = -(playerLife - 1);
 	}
 

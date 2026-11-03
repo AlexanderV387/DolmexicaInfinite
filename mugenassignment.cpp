@@ -1,6 +1,7 @@
 #include "mugenassignment.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <math.h>
@@ -852,7 +853,14 @@ static int isNumericalConstant(char* tText) {
 }
 
 static DreamMugenAssignment* parseNumericalConstantFromString(char* tText) {
-	int val = atoi(tText);
+	// Characters write huge literals such as -999999999999 to mean "kill
+	// whatever the life is". atoi wraps or saturates differently per
+	// platform (and can turn the value positive), so clamp it to a value
+	// that stays negative even when negated.
+	long long parsed = strtoll(tText, NULL, 10);
+	if (parsed > 2147483647LL) parsed = 2147483647LL;
+	if (parsed < -2147483647LL) parsed = -2147483647LL;
+	int val = int(parsed);
 
 	return makeDreamNumberMugenAssignment(val);
 }

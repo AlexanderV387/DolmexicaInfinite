@@ -157,7 +157,9 @@ static void updateSingleProjectile(void* tCaller, void* tData) {
 		updateProjectileMissTime(e);
 		updateProjectileShadow(e);
 		const auto parent = getPlayerParent(e->mPlayer);
-		if (isGeneralPlayer(parent) && getPlayerDoesScaleProjectiles(parent)) {
+		// The parent can be a helper already gone (and freed): looked up
+		// before anything of it is read.
+		if (isValidPlayerOrProjectile(parent) && isGeneralPlayer(parent) && getPlayerDoesScaleProjectiles(parent)) {
 			setPlayerTempScaleActive(e->mPlayer, e->mScale);
 		}
 		if (updateProjectileDurationAndReturnIfOver(e)) return;
