@@ -48,6 +48,11 @@ extern "C" {
 	extern uint32_t __ctru_heap_size;
 }
 #endif
+#ifdef __3DS__
+namespace prism {
+	void setN3DSSoundFileShare(float tShare);   // 3ds/soundeffect_3ds.cpp
+}
+#endif
 
 using namespace std;
 
@@ -291,6 +296,11 @@ static void loadPlayerFiles(char* tPath, DreamPlayer* tPlayer, MugenDefScript* t
 	sprintf(scriptPath, "%s%s", path, file);
 	LoadProfileStep sndStep("snd");
 	if (isFile(scriptPath)) {
+#ifdef __3DS__
+		// [3DS] The first fighter's sounds take at most half of the linear
+		// memory left for sounds, the other half the second's.
+		setN3DSSoundFileShare(tPlayer->mRootID == 0 ? 0.5f : 1.0f);
+#endif
 		tPlayer->mHeader->mFiles.mSounds = loadMugenSoundFile(scriptPath);
 	}
 	else {
