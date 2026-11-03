@@ -18,6 +18,7 @@
 #include "playerdefinition.h"
 #include "mugenexplod.h"
 #include "gamelogic.h"
+#include "mugenstatehandler.h"
 
 namespace prism {
 	uint32_t getN3DSKeysHeld();
@@ -39,7 +40,9 @@ typedef struct {
 	int32_t mTime;
 	int32_t mLife;
 	int16_t mX, mY;
+	int16_t mVelocityX10, mVelocityY10;   // tenths of a pixel a frame
 	uint8_t mControl, mStateType, mMoveType, mIsHitPaused;
+	uint8_t mIsInOthersStates, mIsBound;
 } TraceEntry;
 
 typedef struct {
@@ -95,6 +98,10 @@ static void recordFrame() {
 		e.mStateType = (uint8_t)getPlayerStateType(p);
 		e.mMoveType = (uint8_t)getPlayerStateMoveType(p);
 		e.mIsHitPaused = (uint8_t)isPlayerHitPaused(p);
+		e.mVelocityX10 = (int16_t)(getPlayerVelocityX(p, coordinateP) * 10);
+		e.mVelocityY10 = (int16_t)(getPlayerVelocityY(p, coordinateP) * 10);
+		e.mIsInOthersStates = (uint8_t)!isInOwnStateMachine(p->mRegisteredStateMachine);
+		e.mIsBound = (uint8_t)isPlayerBound(p);
 	}
 	gFightTrace.mNext = (gFightTrace.mNext + 1) % TRACE_FRAMES;
 	if (gFightTrace.mAmount < TRACE_FRAMES) gFightTrace.mAmount++;
@@ -144,10 +151,10 @@ static const TraceEntry* findEntry(const TraceFrame& tFrame, const TraceEntry& t
 }
 
 static void writeEntry(FILE* tFile, int tAge, const TraceEntry& e, const char* tWhat) {
-	fprintf(tFile, "  -%3d P%d %s%-6d %s state %d (time %d) anim %d step %d pos %d,%d life %d ctrl %d %s/%s%s\n",
+	fprintf(tFile, "  -%3d P%d %s%-6d %s state %d%s (time %d) anim %d step %d pos %d,%d vel %.1f,%.1f life %d ctrl %d %s/%s%s%s\n",
 		tAge, e.mRoot + 1, e.mIsHelper ? "helper " : "", e.mIsHelper ? e.mID : 0, tWhat,
-		e.mState, e.mTime, e.mAnimation, e.mStep, e.mX, e.mY, e.mLife, e.mControl,
-		describeStateType(e.mStateType), describeMoveType(e.mMoveType), e.mIsHitPaused ? " hit-paused" : "");
+		e.mState, e.mIsInOthersStates ? " (the other's)" : "", e.mTime, e.mAnimation, e.mStep, e.mX, e.mY, e.mVelocityX10 / 10.0, e.mVelocityY10 / 10.0, e.mLife, e.mControl,
+		describeStateType(e.mStateType), describeMoveType(e.mMoveType), e.mIsHitPaused ? " hit-paused" : "", e.mIsBound ? " bound" : "");
 }
 
 // What changed from one frame to the next, oldest first (the number is how
