@@ -196,6 +196,30 @@ static void updateSingleStateMachineSpecialStates(RegisteredMugenStateMachine* t
 	}
 }
 
+// The engine's walking, jumping or crouching from this tick's inputs: as in
+// MUGEN (and Ikemen) a change of state the -3, -2 or -1 states made
+// meanwhile wins over it. New Kyouki's -1 sends him back to standing while
+// up or down is held (he has no jump nor crouch): jumping at once instead,
+// he was jumping and landing over and over, flickering.
+static void applyHardcodedPendingState(RegisteredMugenStateMachine* e, int tChangesBefore) {
+	const int state = e->mHardcodedPendingState;
+	e->mHardcodedPendingState = -1;
+	if (state < 0) return;
+	if (e->mStateChangeCount != tChangesBefore || e->mHasPendingStateChange) return;
+	if (e->mIsInStoryMode || !e->mPlayer || !isPlayer(e->mPlayer) || isPlayerDestroyed(e->mPlayer)) return;
+	changePlayerState(e->mPlayer, state);
+}
+
+void setDreamHandledStateMachineHardcodedState(RegisteredMugenStateMachine* e, int tState)
+{
+	e->mHardcodedPendingState = tState;
+}
+
+int hasDreamHandledStateMachineHardcodedState(RegisteredMugenStateMachine* e)
+{
+	return e->mHardcodedPendingState >= 0;
+}
+
 static void updateSingleStateMachineByReference(RegisteredMugenStateMachine* tRegisteredState, int tDoesIncrementTimeInState) {
 	setProfilingSectionMarkerCurrentFunction();
 	if (tRegisteredState->mIsPaused) return;
@@ -230,13 +254,17 @@ static void updateSingleStateMachineByReference(RegisteredMugenStateMachine* tRe
 		}
 	}
 	uint64_t partStart = getN3DSLogicPartTicks();
+	const int changesBefore = tRegisteredState->mStateChangeCount;
 	updateSingleStateMachineSpecialStates(tRegisteredState, isHitPaused);
+	applyHardcodedPendingState(tRegisteredState, changesBefore);
 	uint64_t partEnd = getN3DSLogicPartTicks();
 	addN3DSLogicPartTicks(specialPart, partEnd - partStart);
 	updateSingleState(tRegisteredState, tRegisteredState->mState, 0, isHitPaused);
 	addN3DSLogicPartTicks(currentPart, getN3DSLogicPartTicks() - partEnd);
 #else
+	const int changesBefore = tRegisteredState->mStateChangeCount;
 	updateSingleStateMachineSpecialStates(tRegisteredState, isHitPaused);
+	applyHardcodedPendingState(tRegisteredState, changesBefore);
 	updateSingleState(tRegisteredState, tRegisteredState->mState, 0, isHitPaused);
 #endif
 	tRegisteredState->mIsBeingProcessed = 0;
@@ -363,6 +391,8 @@ RegisteredMugenStateMachine* registerDreamMugenStateMachine(DreamMugenStates * t
 	e.mPendingStateChange = 0;
 	e.mIsPendingStateChangeToOwnStates = 0;
 	e.mCurrentJugglePoints = 0;
+	e.mHardcodedPendingState = -1;
+	e.mStateChangeCount = 0;
 	e.mTimeDilatationNow = 0.0;
 	e.mTimeDilatation = 1.0;
 	return &e;
@@ -500,6 +530,7 @@ static void resetStateControllers(DreamMugenState* e) {
 static void applyRegisteredStateMachineStateChange(RegisteredMugenStateMachine* e, int tNewState)
 {
 	setProfilingSectionMarkerCurrentFunction();
+	e->mStateChangeCount++;
 	assert(stl_map_contains(gMugenStateHandlerData.mRegisteredStates, e->mID));
 	{
 		// this hangs on Dreamcast if we don't init it delayed

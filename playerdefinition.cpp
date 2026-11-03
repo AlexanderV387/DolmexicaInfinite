@@ -770,6 +770,15 @@ void resetPlayerPosition(DreamPlayer* p)
 
 static int isPlayerGuarding(DreamPlayer* p);
 
+// The engine's own moves from the inputs (walk, jump, crouch, stand up)
+// wait for the -3, -2 and -1 states, which may change state instead; the
+// first one asked for in a tick is the one (jumping before crouching before
+// walking, as in MUGEN).
+static void changePlayerStateHardcoded(DreamPlayer* p, int tState) {
+	if (hasDreamHandledStateMachineHardcodedState(p->mRegisteredStateMachine)) return;
+	setDreamHandledStateMachineHardcodedState(p->mRegisteredStateMachine, tState);
+}
+
 static void updateWalking(DreamPlayer* p) {
 	if (p->mIsHelper) return;
 	if (p->mNoWalkFlag) {
@@ -784,11 +793,11 @@ static void updateWalking(DreamPlayer* p) {
 
 	if (isPlayerCommandActive(p, "holdfwd") || isPlayerCommandActive(p, "holdback")) {
 		if (getPlayerState(p) != 20) {
-			changePlayerState(p, 20);
+			changePlayerStateHardcoded(p, 20);
 		}
 	}
 	else if (getPlayerState(p) == 20) {
-		changePlayerState(p, 0);
+		changePlayerStateHardcoded(p, 0);
 	}
 }
 
@@ -803,7 +812,7 @@ static void updateAirJumping(DreamPlayer* p) {
 	if (isPlayerCommandActive(p, "holdup") && p->mJumpFlank && hasJumpLeft && hasMinimumHeight) {
 		p->mJumpFlank = 0;
 		p->mAirJumpCounter++;
-		changePlayerState(p, 45);
+		changePlayerStateHardcoded(p, 45);
 	}
 }
 
@@ -818,8 +827,8 @@ static void updateJumping(DreamPlayer* p) {
 	if (getPlayerStateType(p) != MUGEN_STATE_TYPE_STANDING) return;
 
 
-	if (isPlayerCommandActive(p, "holdup")) {
-		changePlayerState(p, 40);
+	if (isPlayerCommandActive(p, "holdup") && getPlayerState(p) != 40) {
+		changePlayerStateHardcoded(p, 40);
 	}
 }
 
@@ -848,8 +857,8 @@ static void updateCrouchingDown(DreamPlayer* p) {
 	if (getPlayerStateType(p) != MUGEN_STATE_TYPE_STANDING) return;
 
 
-	if (isPlayerCommandActive(p, "holddown")) {
-		changePlayerState(p, 10);
+	if (isPlayerCommandActive(p, "holddown") && getPlayerState(p) != 10) {
+		changePlayerStateHardcoded(p, 10);
 	}
 }
 
@@ -859,8 +868,8 @@ static void updateStandingUp(DreamPlayer* p) {
 	if (getPlayerStateType(p) != MUGEN_STATE_TYPE_CROUCHING) return;
 
 
-	if (!isPlayerCommandActive(p, "holddown")) {
-		changePlayerState(p, 12);
+	if (!isPlayerCommandActive(p, "holddown") && getPlayerState(p) != 12) {
+		changePlayerStateHardcoded(p, 12);
 	}
 }
 
@@ -1583,12 +1592,13 @@ static int updateSinglePlayerPreStateMachine(DreamPlayer* p) {
 		updateNoJuggleCheckFlag(p);
 		updatePlayerDrawOffset(p);
 
-		updateWalking(p);
+		setDreamHandledStateMachineHardcodedState(p->mRegisteredStateMachine, -1);
 		updateAirJumping(p);
 		updateJumpFlank(p);
 		updateJumping(p);
 		updateCrouchingDown(p);
 		updateStandingUp(p);
+		updateWalking(p);
 		updatePositionFreeze(p);
 		updateGettingUp(p);
 		updateFall(p);

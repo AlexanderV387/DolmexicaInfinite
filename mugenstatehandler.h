@@ -34,11 +34,19 @@ struct RegisteredMugenStateMachine {
 
 	int mCurrentJugglePoints;
 
+	// The engine's own walking, jumping and crouching (from the inputs,
+	// before the states run) waits until the -3, -2 and -1 states have run:
+	// a state change there comes instead (see updateSingleStateMachineByReference).
+	int mHardcodedPendingState;
+	int mStateChangeCount;
+
 	float mTimeDilatationNow;
 	float mTimeDilatation;
 };
 
 ActorBlueprint getDreamMugenStateHandler();
+void setDreamHandledStateMachineHardcodedState(RegisteredMugenStateMachine* e, int tState);
+int hasDreamHandledStateMachineHardcodedState(RegisteredMugenStateMachine* e);
 
 RegisteredMugenStateMachine* registerDreamMugenStateMachine(DreamMugenStates* tStates, DreamPlayer* tPlayer, int tIsInSotryMode = 0);
 RegisteredMugenStateMachine* registerDreamMugenStoryStateMachine(DreamMugenStates * tStates, StoryInstance* tInstance);

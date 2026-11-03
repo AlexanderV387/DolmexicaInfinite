@@ -630,6 +630,18 @@ static AssignmentReturnValue* helperFunction(DreamMugenAssignment** tIndexAssign
 static AssignmentReturnValue* enemyNearFunction(DreamMugenAssignment** tIndexAssignment, DreamPlayer* tPlayer, int* tIsStatic);
 static AssignmentReturnValue* playerIDFunction(DreamMugenAssignment** tIndexAssignment, DreamPlayer* tPlayer, int* tIsStatic);
 
+// A player that is no one (an invalid redirection): not NULL (which reads
+// as no redirection at all), but never a valid target, so what is read
+// through it is the bottom value.
+static DreamPlayer* getInvalidRedirectionPlayer() {
+	static DreamPlayer* invalid = NULL;
+	if (!invalid) {
+		invalid = new DreamPlayer();
+		invalid->mIsDestroyed = 1;
+	}
+	return invalid;
+}
+
 static DreamPlayer* getRegularPlayerFromFirstVectorPartOrNullIfNonexistant(DreamMugenAssignment** a, DreamPlayer* tPlayer, int* tIsStatic) {
 	static const size_t PLAYER_TEXT_BUFFER_SIZE = 100;
 	char text[PLAYER_TEXT_BUFFER_SIZE];
@@ -688,6 +700,11 @@ static DreamPlayer* getRegularPlayerFromFirstVectorPartOrNullIfNonexistant(Dream
 		return getPlayerRoot(tPlayer);
 	}
 	else if (!strcmp("parent", text)) {
+		// A character itself has no parent: in MUGEN the redirection is
+		// invalid ("has no parent") and what it reads is 0. New Kyouki's
+		// lying-dead state sets himself to parent,pos x - 1, meant for his
+		// helpers: read from himself instead, he slid back a pixel a tick.
+		if (!isPlayerHelper(tPlayer)) return getInvalidRedirectionPlayer();
 		return getPlayerParent(tPlayer);
 	}
 	else if (!strcmp("helper", text)) {
