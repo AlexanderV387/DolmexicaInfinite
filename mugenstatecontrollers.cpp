@@ -1572,7 +1572,7 @@ static void parseHelperController(DreamMugenStateController* tController, MugenD
 	HelperController* e = (HelperController*)allocMemoryOnMemoryStackOrMemory(sizeof(HelperController));
 
 	fetchAssignmentFromGroupAndReturnWhetherItExistsDefaultString("helpertype", tGroup, &e->mType, "normal");
-	fetchAssignmentFromGroupAndReturnWhetherItExistsDefaultString("name", tGroup, &e->mType, "normal");
+	fetchAssignmentFromGroupAndReturnWhetherItExistsDefaultString("name", tGroup, &e->mName, "");
 	fetchAssignmentFromGroupAndReturnWhetherItExistsDefaultString("id", tGroup, &e->mID);
 	fetchAssignmentFromGroupAndReturnWhetherItExistsDefaultString("pos", tGroup, &e->mPosition);
 	fetchAssignmentFromGroupAndReturnWhetherItExistsDefaultString("postype", tGroup, &e->mPositionType, "p1");
@@ -1602,7 +1602,7 @@ static void unloadHelperController(DreamMugenStateController* tController) {
 	HelperController* e = (HelperController*)tController->mData;
 
 	destroyDreamMugenAssignment(e->mType);
-	freeMemory(&e->mName);
+	destroyDreamMugenAssignment(e->mName);
 	destroyDreamMugenAssignment(e->mID);
 	destroyDreamMugenAssignment(e->mPosition);
 	destroyDreamMugenAssignment(e->mPositionType);
@@ -4488,8 +4488,10 @@ static int handleHelper(DreamMugenStateController* tController, DreamPlayer* tPl
 
 	string type;
 	evaluateDreamAssignmentAndReturnAsString(type, &e->mType, tPlayer);
+	turnStringLowercase(type);
 	if ("player" == type) {
 		setPlayerScreenBoundForever(helper, 1);
+		setDreamRegisteredStateToPlayerHelperMode(helper->mRegisteredStateMachine);
 	}
 	else {
 		setPlayerScreenBoundForever(helper, 0);

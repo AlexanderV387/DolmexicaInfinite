@@ -886,6 +886,10 @@ static void updateGettingUp(DreamPlayer* p) {
 	}
 
 	if (p->mIsLyingDown && getPlayerState(p) != 5110) {
+		// Hit while lying down (5080, 5081: still on the ground): the time
+		// lying down goes on from where it was, as in MUGEN and Ikemen, not
+		// from 0 again (Modern Kitana's stomp kept the other down for good).
+		if (getPlayerStateType(p) == MUGEN_STATE_TYPE_LYING) return;
 		p->mIsLyingDown = 0;
 		return;
 	}
@@ -1382,6 +1386,9 @@ static void removeDestroyedPlayerReferencesFromSinglePlayer(DreamPlayer* tPlayer
 	if (tPlayer == tDestroyedPlayer) return;
 
 	tPlayer->mReceivedReversalDefPlayers.erase(tDestroyedPlayer);
+	// The hit got from a helper now gone (a fan, blood): its root stands in
+	// for it (GetHitVar(HitShakeTime) read the freed helper, Modern Kitana).
+	if (tPlayer->mActiveHitData.mPlayer == tDestroyedPlayer) tPlayer->mActiveHitData.mPlayer = tDestroyedPlayer->mRoot;
 
 	auto it = tPlayer->mActiveTargets.begin();
 	while (it != tPlayer->mActiveTargets.end()) {

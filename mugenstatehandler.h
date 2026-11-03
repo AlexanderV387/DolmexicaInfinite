@@ -56,6 +56,7 @@ int getDreamRegisteredStateJugglePoints(RegisteredMugenStateMachine* tRegistered
 int getDreamRegisteredStateTimeInState(RegisteredMugenStateMachine* tRegisteredState);
 void setDreamRegisteredStateTimeInState(RegisteredMugenStateMachine* tRegisteredState, int tTime);
 void setDreamRegisteredStateToHelperMode(RegisteredMugenStateMachine* tRegisteredState);
+void setDreamRegisteredStateToPlayerHelperMode(RegisteredMugenStateMachine* tRegisteredState);   // runs -3 and -2 (helpertype = player)
 void setDreamRegisteredStateDisableCommandState(RegisteredMugenStateMachine* tRegisteredState);
 
 int hasDreamHandledStateMachineState(RegisteredMugenStateMachine* tRegisteredState, int tNewState);

@@ -156,6 +156,10 @@ static void updateSingleState(RegisteredMugenStateMachine* tRegisteredState, int
 
 static void updateSingleStateMachineSpecialStates(RegisteredMugenStateMachine* tRegisteredState, int tIsHitPaused)
 {
+	// Helpers of helpertype = player run their root's states -3 and -2 too,
+	// as in Ikemen: New Kyouki's helper that takes his hits is brought back
+	// by his -2 (left in a state it does not have, he was frozen and took no
+	// damage). The others do not (all of them did: helpers making helpers).
 	if (!tRegisteredState->mIsInHelperMode)
 	{
 		if (!tRegisteredState->mIsUsingTemporaryOtherStateMachine)
@@ -373,6 +377,12 @@ void setDreamRegisteredStateToHelperMode(RegisteredMugenStateMachine* e)
 {
 	assert(stl_map_contains(gMugenStateHandlerData.mRegisteredStates, e->mID));
 	e->mIsInHelperMode = 1;
+}
+
+void setDreamRegisteredStateToPlayerHelperMode(RegisteredMugenStateMachine* e)
+{
+	assert(stl_map_contains(gMugenStateHandlerData.mRegisteredStates, e->mID));
+	e->mIsInHelperMode = 0;
 }
 
 void setDreamRegisteredStateDisableCommandState(RegisteredMugenStateMachine* e)
