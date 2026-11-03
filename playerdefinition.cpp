@@ -1,5 +1,6 @@
 #include "playerdefinition.h"
 
+#include <vector>
 #include <assert.h>
 #include <string.h>
 #include <algorithm>
@@ -688,6 +689,23 @@ static void removePlayerHelpers(DreamPlayer* p) {
 	list_map(&p->mHelpers, removeSingleHelperCB, NULL);
 }
 
+void removeProjectile(DreamPlayer* p);
+
+static void collectSingleProjectileCB(void* tCaller, void* tData) {
+	((std::vector<DreamPlayer*>*)tCaller)->push_back((DreamPlayer*)tData);
+}
+
+// Its projectiles too, when a round or the fight starts over: New Kyouki's
+// "babies" (projectiles made when he loses) stayed on the stage after a
+// restart.
+static void removePlayerProjectiles(DreamPlayer* p) {
+	std::vector<DreamPlayer*> projectiles;
+	int_map_map(&p->mProjectiles, collectSingleProjectileCB, &projectiles);
+	for (const auto projectile : projectiles) {
+		if (stl_set_contains(gPlayerDefinition.mAllProjectiles, projectile)) removeProjectile(projectile);
+	}
+}
+
 static void resetPlayerVariables(DreamPlayer* p) {
 	for (int i = 0; i < getPlayerDataIntPersistIndex(p); i++) {
 		setPlayerVariable(p, i, 0);
@@ -717,6 +735,7 @@ static void resetSinglePlayer(DreamPlayer* p) {
 	}
 
 	removePlayerHelpers(p);
+	removePlayerProjectiles(p);
 	resetPlayerVariables(p);
 	resetDreamRegisteredStateMachineControllerPersistence(p->mRegisteredStateMachine);
 }
