@@ -4521,7 +4521,7 @@ static int handleHelper(DreamMugenStateController* tController, DreamPlayer* tPl
 	}
 
 	setPlayerPosition(helper, position, getActiveStateMachineCoordinateP());
-	handleHelperSetOneIntegerElement(&e->mStateNumber, tPlayer, helper, changePlayerState, 0);
+	handleHelperSetOneIntegerElement(&e->mStateNumber, tPlayer, helper, changeNewHelperState, 0);
 
 	return 0;
 }

@@ -467,6 +467,7 @@ int isPlayerCommandActiveWithLookup(DreamPlayer* p, int tCommandLookupIndex);
 int hasPlayerState(DreamPlayer* p, int mNewState);
 int hasPlayerStateSelf(DreamPlayer* p, int mNewState);
 void changePlayerState(DreamPlayer* p, int mNewState);
+void changeNewHelperState(DreamPlayer* p, int mNewState);
 void changePlayerStateToSelf(DreamPlayer* p, int mNewState);
 void changePlayerStateToOtherPlayerStateMachine(DreamPlayer* p, DreamPlayer* tOtherPlayer, int mNewState);
 void changePlayerStateToOtherPlayerStateMachineBeforeImmediatelyEvaluatingIt(DreamPlayer* p, DreamPlayer* tOtherPlayer, int mNewState);

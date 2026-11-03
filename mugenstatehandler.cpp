@@ -1,5 +1,7 @@
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
+#include <algorithm>
 #include "mugenstatehandler.h"
 
 #include <assert.h>
@@ -273,10 +275,53 @@ static void updateSingleStateMachine(void* tCaller, RegisteredMugenStateMachine&
 	}
 }
 
+// The order the players and helpers run their states in each tick, as
+// MUGEN's (and Ikemen's): those attacking first, then the players idle, the
+// other players, the helpers idle and the other helpers; the ones made
+// first first within each. New Kyouki's attacking helper reads his
+// animation's step as it changes to another the same tick: run after him,
+// it never saw it, and his teleport's drop hit nothing.
+static int getStateMachineRunPriority(RegisteredMugenStateMachine& e) {
+	if (e.mIsInStoryMode || !e.mPlayer) return 10;
+	DreamPlayer* p = e.mPlayer;
+	if (!isPlayer(p)) return 0;   // projectiles (not run) and the like
+	const auto moveType = getPlayerStateMoveType(p);
+	if (moveType == MUGEN_STATE_MOVE_TYPE_ATTACK) return 5;
+	if (!isPlayerHelper(p)) return moveType == MUGEN_STATE_MOVE_TYPE_IDLE ? 4 : 3;
+	return moveType == MUGEN_STATE_MOVE_TYPE_IDLE ? 2 : 1;
+}
+
 static void updateStateHandler(void* tData) {
 	(void)tData;
 	setProfilingSectionMarkerCurrentFunction();
-	stl_int_map_map(gMugenStateHandlerData.mRegisteredStates, updateSingleStateMachine);
+	auto& machines = gMugenStateHandlerData.mRegisteredStates;
+	if (machines.empty()) return;
+
+	static std::vector<std::pair<int, int>> order;   // (priority, id)
+	order.clear();
+	for (auto& entry : machines) order.push_back(std::make_pair(getStateMachineRunPriority(entry.second), entry.first));
+	std::stable_sort(order.begin(), order.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) { return a.first > b.first; });
+	const int lastKnownID = machines.rbegin()->first;
+
+	for (const auto& entry : order) {
+		const auto it = machines.find(entry.second);
+		if (it == machines.end()) continue;   // gone meanwhile (a helper destroyed)
+		updateSingleStateMachine(NULL, it->second);
+	}
+	// The ones made meanwhile (new helpers) run this tick too, in order,
+	// their first tick at time 0.
+	int lastRunID = lastKnownID;
+	for (;;) {
+		const auto it = machines.upper_bound(lastRunID);
+		if (it == machines.end()) break;
+		lastRunID = it->first;
+		RegisteredMugenStateMachine& e = it->second;
+		if (e.mWasUpdatedOutsideHandler) {
+			e.mWasUpdatedOutsideHandler = 0;
+			continue;
+		}
+		updateSingleStateMachineByReference(&e, 0);
+	}
 }
 
 ActorBlueprint getDreamMugenStateHandler() {

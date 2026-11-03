@@ -1548,6 +1548,11 @@ static int updateSinglePlayerPreStateMachine(DreamPlayer* p) {
 		updatePlayerHitShake(p);
 		updateHitPause(p);
 		updatePlayerReceivedHits(p);
+		// Destroyed in the state a hit put it in (a helper): gone now.
+		if (p->mIsDestroyed) {
+			updatePlayerDestruction(p);
+			return 1;
+		}
 		updatePlayerHitData(p);
 		updateCameraFollowingFlags(p);
 		updateStageBorderPre(p);
@@ -1791,6 +1796,10 @@ static void setPlayerHitStates(DreamPlayer* p, DreamPlayer* tOtherPlayer, int tH
 	}
 	const auto stateTypeAtHitTime = getPlayerStateType(p);
 	setPlayerHitStatesForPlayerOrNonPlayer(p, tOtherPlayer, tHasMatchingHitOverride);
+	// A helper can destroy itself in the state it was just put in (New
+	// Kyouki's hit-taking helper leaves its state 5150 that way): nothing
+	// more of it then.
+	if (!isGeneralPlayer(p) || !isGeneralPlayer(tOtherPlayer)) return;
 
 	int enemyStateBefore = getPlayerState(p);
 	if (getActiveHitDataPlayer1StateNumber(p) != -1) {
@@ -2139,7 +2148,24 @@ static void setPlayerHit(DreamPlayer* p, DreamPlayer* tOtherPlayer, void* tHitDa
 	// A new hit ends any hitpause still active from a previous hit, so the hit states are processed unpaused before the new hitpause is applied
 	setPlayerUnHitPaused(p);
 	setPlayerUnHitPaused(tOtherPlayer);
+	const int wasGuarding = isPlayerGuarding(p);
+	DreamPlayer* const root = getPlayerRoot(p);
+	const int isProjectileHit = isPlayerProjectile(p);
 	setPlayerHitStates(p, tOtherPlayer, hasPlayerMatchingHitOverride);
+	// Gone in its new state (a helper destroying itself): the attacker's
+	// side of the hit and the damage still count, nothing more of it.
+	if (!isGeneralPlayer(p)) {
+		if (isGeneralPlayer(tOtherPlayer)) {
+			if (wasGuarding) setPlayerMoveGuarded(tOtherPlayer);
+			else setPlayerMoveHit(tOtherPlayer);
+			setPlayerMoveContactCounterActive(tOtherPlayer);
+			addPlayerPower(tOtherPlayer, powerUp2);
+			if (hitPauseDuration) setPlayerHitPaused(tOtherPlayer, hitPauseDuration);
+		}
+		if (!isProjectileHit) addPlayerDamage(root, isGeneralPlayer(tOtherPlayer) ? tOtherPlayer : root, damage);
+		addPlayerPower(root, powerUp1);
+		return;
+	}
 
 	if (isPlayerGuarding(p)) {
 		setPlayerMoveGuarded(tOtherPlayer);
@@ -2408,6 +2434,7 @@ static void playerHitEval(DreamPlayer* p, PlayerHitData& tHitDataReference) {
 	}
 
 	setPlayerHit(p, otherPlayer, hitData);
+	if (!isGeneralPlayer(p) || !isValidPlayerOrProjectile(otherPlayer)) return;   // gone in its new state
 
 	const auto playerGuarding = isPlayerGuarding(p);
 	if (playerGuarding) {
@@ -3319,6 +3346,15 @@ void changePlayerState(DreamPlayer* p, int mNewState)
 	// controllers), as in MUGEN: see applyRegisteredStateMachineStateChange.
 	changeDreamHandledStateMachineState(p->mRegisteredStateMachine, mNewState);
 	updateDreamSingleStateMachineByID(p->mRegisteredStateMachine, 0);
+}
+
+// A new helper's first state: run with the others this tick, after them
+// (as MUGEN and Ikemen do), not at once in its maker's turn. New Kyouki's
+// helpers, which make helpers too, made his attacking helper before he
+// could: its parent his other helper, its "parent,stateno" never his.
+void changeNewHelperState(DreamPlayer* p, int mNewState)
+{
+	changeDreamHandledStateMachineState(p->mRegisteredStateMachine, mNewState);
 }
 
 void changePlayerStateToSelf(DreamPlayer* p, int mNewState)
