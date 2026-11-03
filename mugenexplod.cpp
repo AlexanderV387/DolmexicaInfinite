@@ -91,6 +91,11 @@ static void unloadExplods(void* tData) {
 	gMugenExplod.mExplods.clear();
 }
 
+int getExplodAmount()
+{
+	return int(gMugenExplod.mExplods.size());
+}
+
 int addExplod(DreamPlayer* tPlayer)
 {
 	int id = stl_int_map_push_back(gMugenExplod.mExplods, Explod());

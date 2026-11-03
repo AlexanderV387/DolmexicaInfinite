@@ -4013,9 +4013,27 @@ static void handleExplodTransparencyTypeUpdate(DreamMugenAssignment** tAssignmen
 	updateExplodTransparencyType(tPlayer, tID, type);
 }
 
+// MUGEN 1.1's limits (its data/mugen.cfg): once reached, a new explod,
+// helper or projectile is not made, as there. Without them a character that
+// keeps making long explods (New Kyouki's supers) made far more than MUGEN.
+#define DOLMEXICA_EXPLOD_MAX 256
+#define DOLMEXICA_HELPER_MAX 56
+#define DOLMEXICA_PLAYER_PROJECTILE_MAX 32
+
+static void logLimitReachedOnce(int* tWasLogged, const char* tWhat, int tLimit) {
+	if (*tWasLogged) return;
+	*tWasLogged = 1;
+	logWarningFormat("MUGEN limit reached: %d %s at once; more are not made (as in MUGEN 1.1).", tLimit, tWhat);
+}
+
 static int handleExplod(DreamMugenStateController* tController, DreamPlayer* tPlayer) {
 	ExplodController* e = (ExplodController*)tController->mData;
 
+	if (getExplodAmount() >= DOLMEXICA_EXPLOD_MAX) {
+		static int wasLogged = 0;
+		logLimitReachedOnce(&wasLogged, "explods", DOLMEXICA_EXPLOD_MAX);
+		return 0;
+	}
 	int id = addExplod(tPlayer);
 	handleExplodAnimationSet(&e->mAnim, tPlayer, id);
 	handleIDSetOneIntegerElement(&e->mID, tPlayer, id, setExplodID, -1);
@@ -4458,6 +4476,11 @@ static void handleHelperScale(DreamMugenAssignment** tAssignment, DreamPlayer* t
 
 static int handleHelper(DreamMugenStateController* tController, DreamPlayer* tPlayer) {
 	HelperController* e = (HelperController*)tController->mData;
+	if (getDreamHelperAmount() >= DOLMEXICA_HELPER_MAX) {
+		static int wasLogged = 0;
+		logLimitReachedOnce(&wasLogged, "helpers", DOLMEXICA_HELPER_MAX);
+		return 0;
+	}
 	DreamPlayer* helper = clonePlayerAsHelper(tPlayer);
 
 	handleHelperSetOneIntegerElement(&e->mID, tPlayer, helper, setPlayerID, 0);
@@ -4996,6 +5019,11 @@ static int handleAfterImageGeneral(AfterImageController* e, DreamPlayer* tPlayer
 static int handleProjectile(DreamMugenStateController* tController, DreamPlayer* tPlayer) {
 	ProjectileController* e = (ProjectileController*)tController->mData;
 
+	if (getPlayerRootProjectileAmount(tPlayer) >= DOLMEXICA_PLAYER_PROJECTILE_MAX) {
+		static int wasLogged = 0;
+		logLimitReachedOnce(&wasLogged, "projectiles of one player", DOLMEXICA_PLAYER_PROJECTILE_MAX);
+		return 0;
+	}
 	DreamPlayer* p = createNewProjectileFromPlayer(tPlayer);
 	if (!getPlayerDoesScaleProjectiles(tPlayer)) {
 		setPlayerScaleX(p, 1);

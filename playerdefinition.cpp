@@ -4775,6 +4775,17 @@ void setPlayerDoesScaleProjectiles(DreamPlayer* p, int tDoesScaleProjectiles)
 	p->mCustomSizeData.mDoesScaleProjectiles = tDoesScaleProjectiles;
 }
 
+int getDreamHelperAmount()
+{
+	// Every player in the list but the two roots (projectiles are not in it).
+	return list_size(&gPlayerDefinition.mAllPlayers) - 2;
+}
+
+int getPlayerRootProjectileAmount(DreamPlayer* p)
+{
+	return int_map_size(&p->mRoot->mProjectiles);
+}
+
 DreamPlayer * clonePlayerAsHelper(DreamPlayer* p)
 {
 	int helperIDInStore = stl_int_map_get_id();

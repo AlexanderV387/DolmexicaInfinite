@@ -28,6 +28,7 @@ typedef enum {
 } DreamExplodSpace;
 
 int addExplod(DreamPlayer* tPlayer);
+int getExplodAmount();
 void setExplodAnimation(int tID, int tIsInFightDefFile, int tAnimationNumber);
 void setExplodID(int tID, int tExternalID);
 void setExplodSpace(int tID, DreamExplodSpace tSpace);

@@ -710,6 +710,8 @@ int getPlayerDoesScaleProjectiles(DreamPlayer* p);
 void setPlayerDoesScaleProjectiles(DreamPlayer* p, int tDoesScaleProjectiles);
 
 DreamPlayer* clonePlayerAsHelper(DreamPlayer* p);
+int getDreamHelperAmount();
+int getPlayerRootProjectileAmount(DreamPlayer* p);
 int destroyPlayer(DreamPlayer* tPlayer);
 int getPlayerID(DreamPlayer* p);
 void setPlayerID(DreamPlayer* p, int tID);
