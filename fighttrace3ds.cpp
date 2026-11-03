@@ -46,6 +46,7 @@ typedef struct {
 	uint32_t mFrame;
 	uint32_t mKeys;
 	int32_t mExplods;
+	int32_t mProjectiles;
 	int32_t mPlayers;
 	TraceEntry mEntries[TRACE_ENTRIES];
 } TraceFrame;
@@ -69,6 +70,7 @@ static void recordFrame() {
 	f.mFrame = gFightTrace.mFrame;
 	f.mKeys = getN3DSKeysHeld();
 	f.mExplods = getExplodAmount();
+	f.mProjectiles = getPlayerRootProjectileAmount(getRootPlayer(0)) + getPlayerRootProjectileAmount(getRootPlayer(1));
 	const int amount = getTotalPlayerAmount();
 	f.mPlayers = amount;
 	for (int i = 0; i < TRACE_ENTRIES; i++) {
@@ -172,7 +174,9 @@ static void writeMark() {
 			describeKeys(f.mKeys, keys, sizeof(keys));
 			fprintf(file, "  -%3d buttons: %s\n", age, keys);
 		}
-		if (previous && f.mExplods / 8 != previous->mExplods / 8) fprintf(file, "  -%3d explods: %d\n", age, (int)f.mExplods);
+		if (!previous || f.mExplods != previous->mExplods || f.mProjectiles != previous->mProjectiles) {
+			fprintf(file, "  -%3d explods %d, projectiles %d\n", age, (int)f.mExplods, (int)f.mProjectiles);
+		}
 		for (int i = 0; i < TRACE_ENTRIES; i++) {
 			const TraceEntry& e = f.mEntries[i];
 			if (e.mRoot < 0) break;
@@ -184,14 +188,12 @@ static void writeMark() {
 			const int moved = abs(e.mX - before->mX) > 24 || abs(e.mY - before->mY) > 24;
 			if (before->mState != e.mState || before->mAnimation != e.mAnimation || before->mControl != e.mControl
 				|| before->mStateType != e.mStateType || before->mMoveType != e.mMoveType || before->mIsHitPaused != e.mIsHitPaused
-				|| (before->mLife != e.mLife && !e.mIsHelper) || moved || before->mStep != e.mStep) {
-				// Only a new step of the same animation: written shorter.
-				if (before->mState == e.mState && before->mAnimation == e.mAnimation && before->mControl == e.mControl && !moved
+				|| (before->mLife != e.mLife && !e.mIsHelper) || moved) {
+				// Only a new step of the same animation: not written (most of
+				// the lines, telling little).
+				if (!(before->mState == e.mState && before->mAnimation == e.mAnimation && before->mControl == e.mControl && !moved
 					&& before->mStateType == e.mStateType && before->mMoveType == e.mMoveType && before->mIsHitPaused == e.mIsHitPaused
-					&& (before->mLife == e.mLife || e.mIsHelper)) {
-					fprintf(file, "  -%3d P%d %s%d step %d\n", age, e.mRoot + 1, e.mIsHelper ? "helper " : "", e.mIsHelper ? e.mID : 0, e.mStep);
-				}
-				else {
+					&& (before->mLife == e.mLife || e.mIsHelper))) {
 					writeEntry(file, age, e, moved ? "jumps:" : "");
 				}
 			}
