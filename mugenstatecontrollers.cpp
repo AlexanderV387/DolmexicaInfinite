@@ -4527,6 +4527,7 @@ static int handleHelper(DreamMugenStateController* tController, DreamPlayer* tPl
 }
 
 static int handleDestroySelf(DreamPlayer* tPlayer) {
+	if (!isPlayerHelper(tPlayer)) return 0;
 	logFormat("%d %d destroying self\n", tPlayer->mRootID, tPlayer->mID);
 	return destroyPlayer(tPlayer);
 }

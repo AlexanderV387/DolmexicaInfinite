@@ -189,8 +189,8 @@ static void loadFightScreen() {
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 	// [3DS] The heap left over after loading: streamed sprites read now and
 	// kept, the biggest first (a full-screen X-ray image read from the card
-	// in the fight came in flashes), 6 MB still left for the fight.
-	pinN3DSStreamedTextures(6 * 1024 * 1024, NULL);
+	// in the fight came in flashes), 7 MB still left for the fight.
+	pinN3DSStreamedTextures(7 * 1024 * 1024, NULL);
 #endif
 
 	

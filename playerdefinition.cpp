@@ -585,16 +585,19 @@ static void loadSinglePlayerSprites(DreamPlayer* tPlayer) {
 	const int compatTextureStart = getCompatTextureFreeKB();
 	setMugenSpriteFileReaderToUsePalette(tPlayer->mRootID);
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
-	// [3DS] The heap left when sprites do not fit (those are streamed): 6 MB
+	// [3DS] The heap left when sprites do not fit (those are streamed): 7 MB
 	// for the fight (helpers, explods, the streamed sprites read when
-	// drawn); for the first player, also about the other's sprites (they
-	// take about their file's size), at most half of what is free.
-	size_t heapReserve = 6 * 1024 * 1024;
+	// drawn; with 6, New Kyouki's fight reached 45 of the 48 MB and the
+	// next one ran out); for the first player, also about the other's
+	// sprites (one and a half times their file: with about their file,
+	// 2002 Rugal after New Kyouki had none left, all read when drawn), at
+	// most half of what is free.
+	size_t heapReserve = 7 * 1024 * 1024;
 	if (tPlayer->mRootID == 0) {
 		const size_t otherSize = (size_t)getFileSize(gPlayerDefinition.mPlayers[1].mHeader->mFiles.mSpritePath);
 		const size_t heapUsed = mallinfo().uordblks;
 		const size_t heapFree = __ctru_heap_size > heapUsed ? __ctru_heap_size - heapUsed : 0;
-		heapReserve += std::min(otherSize + otherSize / 10, heapFree / 2);
+		heapReserve += std::min(otherSize + otherSize / 2, heapFree / 2);
 	}
 	setMugenSpriteFileReaderHeapReserve(heapReserve);
 #endif
@@ -4856,10 +4859,9 @@ static void destroyGeneralPlayer(DreamPlayer* p) {
 
 int destroyPlayer(DreamPlayer* p)
 {
-	if (!p->mIsHelper) {
-		logWarningFormat("Warning: trying to destroy player %d %d who is not a helper. Ignoring.\n", p->mRootID, p->mID);
-		return 0;
-	}
+	// DestroySelf on a character itself does nothing, as in MUGEN, without
+	// a word: New Kyouki's states ask for it thousands of times a fight.
+	if (!p->mIsHelper) return 0;
 	if (p->mIsDestroyed) {
 		logWarningFormat("Warning: trying to destroy destroyed player %d %d. Ignoring.\n", p->mRootID, p->mID);
 		return 0;
