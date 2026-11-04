@@ -286,6 +286,32 @@ static void loadPlayerFiles(char* tPath, DreamPlayer* tPlayer, MugenDefScript* t
 		logWarningFormat("Unable to find palette file %s. Ignoring.", palettePath);
 		hasPalettePath = 0;
 	}
+	// The palette asked for missing (Harley Quinn has only pal1, Cammy no
+	// pal3): one it has, the first of pal.defaults' then of pal1 to pal12,
+	// as in MUGEN; not none (her first sprite shares it: a crash).
+	if (!hasPalettePath) {
+		std::vector<int> candidates;
+		char defaults[200];
+		getMugenDefStringOrDefault(defaults, tScript, "info", "pal.defaults", "");
+		for (const char* q = defaults; *q;) {
+			char* end;
+			const long value = strtol(q, &end, 10);
+			if (end == q) { q++; continue; }
+			if (value >= 1 && value <= 12) candidates.push_back(int(value));
+			q = end;
+		}
+		for (int i = 1; i <= 12; i++) candidates.push_back(i);
+		for (const int candidate : candidates) {
+			sprintf(name, "pal%d", candidate);
+			getMugenDefStringOrDefault(file, tScript, "files", name, "");
+			if (!strcmp("", file)) continue;
+			sprintf(palettePath, "%s%s", path, file);
+			if (!isFile(palettePath)) continue;
+			hasPalettePath = 1;
+			tPlayer->mPaletteNumber = candidate;
+			break;
+		}
+	}
 	getMugenDefStringOrDefault(file, tScript, "files", "sprite", "");
 	assert(strcmp("", file));
 	sprintf(scriptPath, "%s%s", path, file);
