@@ -119,9 +119,13 @@ static void fightAnimationFinishedCB() {
 	// there. Modern Kitana's -2 takes hers away all through the intro
 	// (CtrlSet while RoundState = 1); never given back, she could not walk
 	// or do anything that needs control (her X-rays among them).
+	// As MUGEN (and Ikemen) do it: every one alive gets control, and one not
+	// standing in state 0 is put there, in his own states.
 	for (int i = 0; i < 2; i++) {
 		DreamPlayer* p = getRootPlayer(i);
-		if (getPlayerState(p) == 0) setPlayerControl(p, 1);
+		if (!isPlayerAlive(p)) continue;
+		if (getPlayerState(p) != 0) changePlayerStateToSelf(p, 0);
+		setPlayerControl(p, 1);
 	}
 	enableDreamTimer();
 }
