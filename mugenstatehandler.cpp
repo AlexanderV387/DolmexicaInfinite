@@ -234,6 +234,9 @@ static void updateSingleStateMachineByReference(RegisteredMugenStateMachine* tRe
 		else if (tDoesIncrementTimeInState) {
 			tRegisteredState->mTimeInState++;
 		}
+		if (!tRegisteredState->mIsInStoryMode && tRegisteredState->mPlayer && isPlayer(tRegisteredState->mPlayer)) {
+			updatePlayerHitByTimesBeforeStates(tRegisteredState->mPlayer);
+		}
 	}
 
 	tRegisteredState->mIsBeingProcessed = 1;

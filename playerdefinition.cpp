@@ -1119,6 +1119,16 @@ static void updateHitAttributeSlots(DreamPlayer* p) {
 	}
 }
 
+// The NotHitBy and HitBy times count down right before the player's states
+// run (not in a tick its states do not), as in MUGEN and Ikemen: one of time
+// 1, set by a state every tick, is on for the hits until it runs again.
+// Apocalypse's body, NotHitBy SCA each tick, was hit (when it had run its
+// states early, guarding) and knocked down, left lying for good.
+void updatePlayerHitByTimesBeforeStates(DreamPlayer* p)
+{
+	updateHitAttributeSlots(p);
+}
+
 static void updateProjectileTimeSinceContact(DreamPlayer* p) {
 	if (!p->mHasLastContactProjectile) return;
 
@@ -1500,7 +1510,6 @@ static int updateSinglePlayer(DreamPlayer* p) {
 		if (updatePlayerSuperPauseStopAndReturnIfStopped(p)) break;
 		if (updatePlayerPauseStopAndReturnIfStopped(p)) break;
 		updateLanding(p);
-		updateHitAttributeSlots(p);
 		updateProjectileTimeSinceContact(p);
 		updateGuarding(p);
 		updateGuardingOver(p);
@@ -4973,6 +4982,12 @@ DreamPlayer * clonePlayerAsHelper(DreamPlayer* p)
 	// Its full-screen images (a super's background drawn by a helper) also
 	// over the 3DS's wider sides; the characters themselves never.
 	setMugenAnimationStretchedToScreenWidth(helper->mAnimationElement, 1);
+	// A new helper has no animation (nothing drawn, no boxes) until its
+	// state gives it one, as in MUGEN and Ikemen: Cammy's helper in a state
+	// she lacks (90900) was a second Cammy standing there.
+	if (hasMugenAnimation(&helper->mHeader->mFiles.mAnimations, -1)) {
+		changeMugenAnimation(helper->mAnimationElement, getMugenAnimation(&helper->mHeader->mFiles.mAnimations, -1));
+	}
 	loadPlayerShadow(helper);
 	loadPlayerReflection(helper);
 	loadPlayerDebug(helper);

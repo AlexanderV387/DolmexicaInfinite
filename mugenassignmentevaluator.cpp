@@ -1,5 +1,6 @@
 #define HAVE_M_PI 
 
+#include <strings.h>
 #include <map>
 #include <algorithm>
 #include "mugenassignmentevaluator.h"
@@ -1323,7 +1324,9 @@ static AssignmentReturnValue* evaluateComparisonAssignmentInternal(DreamMugenAss
 		string val1, val2;
 		convertAssignmentReturnToString(val1, a);
 		convertAssignmentReturnToString(val2, b);
-		int value = val1 == val2;
+		// MUGEN compares strings without case: Apocalypse ("APOCALYPSE")
+		// asks for p1name = "apocalypse" before making his head and arms.
+		int value = val1.size() == val2.size() && !strcasecmp(val1.c_str(), val2.c_str());
 		return makeBooleanAssignmentReturn(value);
 	}
 }
