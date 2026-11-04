@@ -1092,6 +1092,8 @@ static void updateGuardingFlags(DreamPlayer* p) {
 }
 
 static int updateSinglePlayer(DreamPlayer* p);
+static void setPlayerDead(DreamPlayer* p);
+static int isDreamKOPossible();
 
 static int updateSinglePlayerCB(void* tCaller, void* tData) {
 	(void)tCaller;
@@ -1493,6 +1495,7 @@ static int updateSinglePlayer(DreamPlayer* p) {
 
 			return 1;
 		}
+		if (!p->mIsHelper && !p->mIsProjectile && p->mIsAlive && p->mLife <= 0 && !isDreamNoKOActive() && isDreamKOPossible()) setPlayerDead(p);
 
 		if (updatePlayerSuperPauseStopAndReturnIfStopped(p)) break;
 		if (updatePlayerPauseStopAndReturnIfStopped(p)) break;
@@ -3891,6 +3894,30 @@ void setPlayerUnHitPaused(DreamPlayer* p)
 	unpausePlayer(p);
 }
 
+// AssertSpecial NoKO, as in MUGEN: for everyone, while asserted (this
+// tick or the one before, whichever order the states and this run in), a
+// character at life 0 is not KOed; KOed once it is not asserted anymore.
+// Onslaught asserts it in his first form: at 0 he turns into the second,
+// his life back. Without it he was KOed there, and stayed so in the second.
+static int gNoKOGameTime = -100;
+
+void setDreamNoKOFlag() {
+	gNoKOGameTime = getDreamGameTime();
+}
+
+// No one is KOed before the fight starts (the round's intro): Onslaught's
+// second form starts the round at life 0 until his intro gives it back.
+// KOed then, he could not come back: in MUGEN he does. One still at 0 when
+// the fight starts is KOed then.
+static int isDreamKOPossible() {
+	return getDreamRoundStateNumber() >= 2;
+}
+
+int isDreamNoKOActive() {
+	const int now = getDreamGameTime();
+	return now >= gNoKOGameTime && now - gNoKOGameTime <= 1;
+}
+
 static void setPlayerDead(DreamPlayer* p) {
 	// In training the characters cannot be KOed; helpers can (in MUGEN a
 	// helper at life 0 is !Alive, which New Kyouki's helpers rely on).
@@ -3952,7 +3979,7 @@ void addPlayerDamage(DreamPlayer* p, DreamPlayer* tDamagingPlayer, int tDamage)
 	if (p->mLife <= 0) {
 		p->mCheeseWinFlag = isPlayerGuarding(p);
 		p->mSuicideWinFlag = (p->mRootID == tDamagingPlayer->mRootID);
-		setPlayerDead(p);
+		if (isPlayerHelper(p) || (!isDreamNoKOActive() && isDreamKOPossible())) setPlayerDead(p);
 		p->mLife = 0;
 	}
 	p->mLife = min(p->mLife, getPlayerLifeMax(p));

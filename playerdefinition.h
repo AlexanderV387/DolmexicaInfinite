@@ -789,6 +789,8 @@ void setPlayersToRealFightMode();
 
 int isPlayer(DreamPlayer* p);
 void updatePlayerPhysicsAfterStates(DreamPlayer* p);
+void setDreamNoKOFlag();
+int isDreamNoKOActive();
 int isValidPlayerOrProjectile(DreamPlayer* p);
 int isGeneralPlayer(DreamPlayer* p);
 int isPlayerTargetValid(DreamPlayer* p);

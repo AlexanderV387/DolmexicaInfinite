@@ -3537,6 +3537,9 @@ static void handleSingleSpecialAssert(DreamMugenAssignment** tAssignment, DreamP
 	else if ("nojugglecheck" == flag) {
 		setPlayerNoJuggleCheckFlag(tPlayer);
 	}
+	else if ("noko" == flag) {
+		setDreamNoKOFlag();
+	}
 	else if ("nokosnd" == flag) {
 		setPlayerNoKOSoundFlag(tPlayer);
 	}

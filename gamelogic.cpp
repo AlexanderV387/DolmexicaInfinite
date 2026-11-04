@@ -524,6 +524,11 @@ static void updateWinPose()
 static void resetRoundData(void* /*tCaller*/) {
 	enableDrawing();
 	stopAllWaits();
+	// The new round's state from here on, as in MUGEN: the characters'
+	// states run while they are reset see RoundState 0, not the last
+	// round's win poses (Onslaught's second form set his life from a
+	// variable reset only while RoundState < 2: at 0, and KOed).
+	gGameLogicData.mRoundStateNumber = ROUND_STATE_FADE_IN;
 	resetPlayers();
 	resetDreamMugenStageHandlerCameraPosition();
 	resetStageForRound();
