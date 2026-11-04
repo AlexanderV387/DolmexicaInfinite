@@ -1268,12 +1268,12 @@ static int isPlayerInCorner(DreamPlayer* p, int tIsCheckingRightCorner) {
 	float front = getPlayerFrontXStage(p, getPlayerCoordinateP(p));
 
 	if (tIsCheckingRightCorner) {
-		float right = getDreamStageRightOfScreenBasedOnPlayer(getPlayerCoordinateP(p)) - getDreamStageRightEdgeMinimumPlayerDistance(getPlayerCoordinateP(p));
+		float right = getDreamStageRightOfPlayfield(getPlayerCoordinateP(p)) - getDreamStageRightEdgeMinimumPlayerDistance(getPlayerCoordinateP(p));
 		float maxX = max(back, front);
 		return (maxX > right - CORNER_CHECK_EPSILON);
 	}
 	else {
-		float left = getDreamStageLeftOfScreenBasedOnPlayer(getPlayerCoordinateP(p)) + getDreamStageLeftEdgeMinimumPlayerDistance(getPlayerCoordinateP(p));
+		float left = getDreamStageLeftOfPlayfield(getPlayerCoordinateP(p)) + getDreamStageLeftEdgeMinimumPlayerDistance(getPlayerCoordinateP(p));
 		float minX = min(back, front);
 		return (minX < left + CORNER_CHECK_EPSILON);
 	}
@@ -1285,8 +1285,8 @@ static void updateStageBorderPost(DreamPlayer* p) {
 	// As far as the stage's screenleft and screenright from the screen's
 	// sides (15 in most stages): the sprites, wider than the players' bodies,
 	// were cut at the sides.
-	float left = getDreamStageLeftOfScreenBasedOnPlayer(getPlayerCoordinateP(p)) + getDreamStageLeftEdgeMinimumPlayerDistance(getPlayerCoordinateP(p));
-	float right = getDreamStageRightOfScreenBasedOnPlayer(getPlayerCoordinateP(p)) - getDreamStageRightEdgeMinimumPlayerDistance(getPlayerCoordinateP(p));
+	float left = getDreamStageLeftOfPlayfield(getPlayerCoordinateP(p)) + getDreamStageLeftEdgeMinimumPlayerDistance(getPlayerCoordinateP(p));
+	float right = getDreamStageRightOfPlayfield(getPlayerCoordinateP(p)) - getDreamStageRightEdgeMinimumPlayerDistance(getPlayerCoordinateP(p));
 
 	float back = getPlayerBackXStage(p, getPlayerCoordinateP(p));
 	float front = getPlayerFrontXStage(p, getPlayerCoordinateP(p));
@@ -1582,7 +1582,6 @@ static int updateSinglePlayer(DreamPlayer* p) {
 		updatePush(p);
 		updateStageBorderPost(p);
 		updateKOFlags(p);
-		updateTransparencyFlag(p);
 		updateShadow(p);
 		updateReflection(p);
 		updateAfterImage(p);
@@ -1674,6 +1673,10 @@ static int updateSinglePlayerPreStateMachine(DreamPlayer* p) {
 		updateStageBorderPre(p);
 		updatePush(p);
 		updateWidthFlag(p);
+		// A Trans of one tick, before the states set it again, as the
+		// other one-tick flags: reset after them it was never drawn (Galactus'
+		// eye beams opaque red, not see-through).
+		updateTransparencyFlag(p);
 		updateInvisibilityFlag(p);
 		updateNoJuggleCheckFlag(p);
 		updatePlayerDrawOffset(p);
@@ -4480,9 +4483,10 @@ float getPlayerScreenEdgeInFrontX(DreamPlayer* p, int tCoordinateP)
 {
 	const auto x = getDreamCameraPositionX(getPlayerCoordinateP(p));
 
+	// MUGEN's screen's sides: past the camera where it stops (getDreamPlayfieldSideMargin).
 	float ret;
-	if (p->mFaceDirection == FACE_DIRECTION_RIGHT) ret = x + p->mHeader->mConstants.mLocalCoordinates.x;
-	else ret = x;
+	if (p->mFaceDirection == FACE_DIRECTION_RIGHT) ret = x + p->mHeader->mConstants.mLocalCoordinates.x + getDreamPlayfieldRightMargin(getPlayerCoordinateP(p));
+	else ret = x - getDreamPlayfieldLeftMargin(getPlayerCoordinateP(p));
 
 	return transformDreamCoordinates(ret, getPlayerCoordinateP(p), tCoordinateP);
 }
@@ -4492,8 +4496,8 @@ float getPlayerScreenEdgeInBackX(DreamPlayer* p, int tCoordinateP)
 	const auto x = getDreamCameraPositionX(getPlayerCoordinateP(p));
 
 	float ret;
-	if (p->mFaceDirection == FACE_DIRECTION_RIGHT) ret = x;
-	else ret = x + p->mHeader->mConstants.mLocalCoordinates.x;
+	if (p->mFaceDirection == FACE_DIRECTION_RIGHT) ret = x - getDreamPlayfieldLeftMargin(getPlayerCoordinateP(p));
+	else ret = x + p->mHeader->mConstants.mLocalCoordinates.x + getDreamPlayfieldRightMargin(getPlayerCoordinateP(p));
 
 	return transformDreamCoordinates(ret, getPlayerCoordinateP(p), tCoordinateP);
 }

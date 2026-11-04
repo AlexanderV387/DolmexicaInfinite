@@ -57,6 +57,10 @@ float getDreamStageLeftOfScreenBasedOnPlayer(int tCoordinateP);
 // [3DS] How far the screen shows past each side of the game's 4:3 screen (the
 // top screen's full width), in tCoordinateP's coordinates; 0 elsewhere.
 float getDreamScreenSideMargin(int tCoordinateP);
+float getDreamPlayfieldLeftMargin(int tCoordinateP);
+float getDreamPlayfieldRightMargin(int tCoordinateP);
+float getDreamStageLeftOfPlayfield(int tCoordinateP);
+float getDreamStageRightOfPlayfield(int tCoordinateP);
 float getDreamStageRightOfScreenBasedOnPlayer(int tCoordinateP);
 Position2D getDreamStageCenterOfScreenBasedOnPlayer(int tCoordinateP);
 

@@ -596,9 +596,10 @@ static void updateCameraMovementX() {
 	minX -= gStageData.mStageInfo.mLocalCoordinates.x / 2;
 	maxX -= gStageData.mStageInfo.mLocalCoordinates.x / 2;
 
-	const float margin = getDreamScreenSideMargin(gStageData.mStageInfo.mLocalCoordinates.x);
-	float right = getDreamCameraTargetPositionX(gStageData.mStageInfo.mLocalCoordinates.x) + gStageData.mStageInfo.mLocalCoordinates.x / 2 + margin;
-	float left = getDreamCameraTargetPositionX(gStageData.mStageInfo.mLocalCoordinates.x) - gStageData.mStageInfo.mLocalCoordinates.x / 2 - margin;
+	// The camera follows the players at MUGEN's screen's sides (see getDreamPlayfieldSideMargin).
+	const int camCoord = gStageData.mStageInfo.mLocalCoordinates.x;
+	float right = getDreamCameraTargetPositionX(camCoord) + camCoord / 2 + getDreamPlayfieldRightMargin(camCoord);
+	float left = getDreamCameraTargetPositionX(camCoord) - camCoord / 2 - getDreamPlayfieldLeftMargin(camCoord);
 
 	float lx = (left + gStageData.mCamera.mTension) - minX;
 	float rx = maxX - (right - gStageData.mCamera.mTension);
@@ -869,6 +870,34 @@ float getDreamScreenSideMargin(int tCoordinateP)
 	(void)tCoordinateP;
 	return 0;
 #endif
+}
+
+// [3DS] The playfield's sides past the game's screen, in full width: none,
+// as in MUGEN (the wider screen only shows more of the stage), except on a
+// side where the camera stops, where MUGEN's own camera would have gone on
+// to the stage's edge. The players went out to the wider screen's sides:
+// Apocalypse, against a side, put his head where no one could reach it.
+static float getDreamPlayfieldSideMargin(int tCoordinateP, int tIsRight)
+{
+	const float margin = getDreamScreenSideMargin(tCoordinateP);
+	if (margin <= 0) return 0;
+	const auto range = getDreamMugenStageHandlerCameraRange();
+	const float x = getDreamMugenStageHandlerCameraPositionReference()->x;
+	const int isPinned = tIsRight ? (x >= range.mBottomRight.x - 0.5f) : (x <= range.mTopLeft.x + 0.5f);
+	return isPinned ? margin : 0;
+}
+
+float getDreamPlayfieldLeftMargin(int tCoordinateP) { return getDreamPlayfieldSideMargin(tCoordinateP, 0); }
+float getDreamPlayfieldRightMargin(int tCoordinateP) { return getDreamPlayfieldSideMargin(tCoordinateP, 1); }
+
+float getDreamStageLeftOfPlayfield(int tCoordinateP)
+{
+	return getDreamStageLeftOfScreenBasedOnPlayer(tCoordinateP) + getDreamScreenSideMargin(tCoordinateP) - getDreamPlayfieldLeftMargin(tCoordinateP);
+}
+
+float getDreamStageRightOfPlayfield(int tCoordinateP)
+{
+	return getDreamStageRightOfScreenBasedOnPlayer(tCoordinateP) - getDreamScreenSideMargin(tCoordinateP) + getDreamPlayfieldRightMargin(tCoordinateP);
 }
 
 float getDreamStageRightOfScreenBasedOnPlayer(int tCoordinateP)
