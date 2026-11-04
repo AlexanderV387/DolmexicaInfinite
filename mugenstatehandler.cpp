@@ -533,6 +533,7 @@ static void resetStateControllers(DreamMugenState* e) {
 static void applyRegisteredStateMachineStateChange(RegisteredMugenStateMachine* e, int tNewState)
 {
 	setProfilingSectionMarkerCurrentFunction();
+	if (!e->mIsInStoryMode && e->mPlayer && isPlayer(e->mPlayer)) autoTurnPlayerOnStateChange(e->mPlayer);
 	e->mStateChangeCount++;
 	assert(stl_map_contains(gMugenStateHandlerData.mRegisteredStates, e->mID));
 	{

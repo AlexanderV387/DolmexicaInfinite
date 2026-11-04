@@ -764,6 +764,7 @@ void setPlayerNotHitByFlag1(DreamPlayer* p, int tSlot, const char* tFlag);
 void addPlayerNotHitByFlag2(DreamPlayer* p, int tSlot, const char* tFlag);
 void setPlayerNotHitByTime(DreamPlayer* p, int tSlot, int tTime);
 void updatePlayerHitByTimesBeforeStates(DreamPlayer* p);
+void autoTurnPlayerOnStateChange(DreamPlayer* p);
 
 int getDefaultPlayerSparkNumberIsInPlayerFile(DreamPlayer* p);
 int getDefaultPlayerSparkNumber(DreamPlayer* p);

@@ -931,17 +931,51 @@ static void setPlayerFaceDirection(DreamPlayer* p, FaceDirection tDirection) {
 	p->mFaceDirection = tDirection;
 }
 
+// Turning to face the other player as MUGEN (and Ikemen) do it: the root
+// alone, with its turning animation (5 standing, 6 crouching).
+static void autoTurnPlayer(DreamPlayer* p) {
+	DreamPlayer* p2 = getPlayerOtherPlayer(p);
+	const float x1 = getHandledPhysicsPositionReference(p->mPhysicsElement)->x;
+	const float x2 = getHandledPhysicsPositionReference(p2->mPhysicsElement)->x;
+	const int isFacingRight = getPlayerIsFacingRight(p);
+	const float distX = isFacingRight ? x2 - x1 : x1 - x2;
+	if (distX >= 0) return;
+	const auto type = getPlayerStateType(p);
+	const int turnAnimation = type == MUGEN_STATE_TYPE_STANDING ? 5 : (type == MUGEN_STATE_TYPE_CROUCHING ? 6 : -1);
+	if (turnAnimation >= 0 && getPlayerAnimationNumber(p) != turnAnimation && hasMugenAnimation(&p->mHeader->mFiles.mAnimations, turnAnimation)) {
+		changePlayerAnimation(p, turnAnimation);
+	}
+	setPlayerFaceDirection(p, isFacingRight ? FACE_DIRECTION_LEFT : FACE_DIRECTION_RIGHT);
+}
+
+// Each tick only in states 0, 11, 20 and 52 (at its animation's end), with
+// control or once the round is over, as in MUGEN: in any state with control
+// Apocalypse turned in his own standing state when jumped over, his body's
+// parts mirrored around him.
 static void updateAutoTurn(DreamPlayer* p) {
 	if (p->mNoAutoTurnFlag) {
 		p->mNoAutoTurnFlag = 0;
 		return;
 	}
+	if (p->mIsHelper) return;
+	if (!p->mIsInControl && getDreamRoundStateNumber() <= 2) return;
 
-	if (!p->mIsInControl) return;
+	const int state = getPlayerState(p);
+	const int isTurningState = state == 0 || state == 11 || state == 20 || (state == 52 && !getPlayerAnimationTimeDeltaUntilFinished(p));
+	if (!isTurningState) return;
 
-	if (getPlayerStateType(p) == MUGEN_STATE_TYPE_AIR) return;
+	autoTurnPlayer(p);
+}
 
-	turnPlayerTowardsOtherPlayer(p);
+// And when a state change starts with control, standing or crouching, while
+// the round is on (MUGEN's own, see Ikemen's changeStateEx).
+void autoTurnPlayerOnStateChange(DreamPlayer* p)
+{
+	if (p->mIsHelper || p->mIsProjectile || p->mNoAutoTurnFlag) return;
+	if (!p->mIsInControl || getDreamRoundStateNumber() > 2) return;
+	const auto type = getPlayerStateType(p);
+	if (type != MUGEN_STATE_TYPE_STANDING && type != MUGEN_STATE_TYPE_CROUCHING) return;
+	autoTurnPlayer(p);
 }
 
 static void updatePositionFreeze(DreamPlayer* p) {
@@ -1045,7 +1079,9 @@ static void updateBinding(DreamPlayer* p) {
 	if (isPlayerPaused(p)) return;
 
 	p->mBoundNow++;
-	if (!isPlayer(p->mBoundTarget) || p->mBoundNow >= p->mBoundDuration) {
+	// Time -1 binds for good, as in MUGEN: it was let go at once (Onslaught's
+	// head, bound to his body with time -1, left behind as he moved).
+	if (!isPlayer(p->mBoundTarget) || (p->mBoundDuration >= 0 && p->mBoundNow >= p->mBoundDuration)) {
 		removePlayerBindingInternal(p);
 		return;
 	}
@@ -3613,10 +3649,21 @@ int getPlayerAnimationTimeWhenStepStarts(DreamPlayer* p, int tStep) {
 	return getMugenAnimationTimeWhenStepStarts(p->mAnimationElement, tStep);
 }
 
+// The priorities from -10 to 10 as always; past them in order still (MUGEN
+// and Ikemen do not cut them), squeezed so as to stay between the stage's
+// layers: Onslaught's head (-51) and body (-53), both cut to -10, the body
+// made later drawn over the head.
+static float getSpritePriorityOffset(int tPriority)
+{
+	if (tPriority >= SPRITE_PRIORITY_MIN && tPriority <= SPRITE_PRIORITY_MAX) return tPriority * PLAYER_Z_PRIORITY_DELTA;
+	const float past = (float)(std::abs(tPriority) - SPRITE_PRIORITY_MAX);
+	const float offset = SPRITE_PRIORITY_MAX * PLAYER_Z_PRIORITY_DELTA + 5.0f * past / (past + 100.0f);
+	return tPriority < 0 ? -offset : offset;
+}
+
 float calculateSpriteZFromSpritePriority(int tPriority, int tRootID, int tIsExplod)
 {
-	tPriority = clamp(tPriority, SPRITE_PRIORITY_MIN, SPRITE_PRIORITY_MAX);
-	return (float)(PLAYER_Z + tPriority * PLAYER_Z_PRIORITY_DELTA + tRootID * PLAYER_Z_PLAYER_2_OFFSET - tIsExplod * EXPLOD_SPRITE_Z_OFFSET);
+	return (float)(PLAYER_Z + getSpritePriorityOffset(tPriority) + tRootID * PLAYER_Z_PLAYER_2_OFFSET - tIsExplod * EXPLOD_SPRITE_Z_OFFSET);
 }
 
 void setPlayerSpritePriority(DreamPlayer* p, int tPriority)
