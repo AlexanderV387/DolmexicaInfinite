@@ -51,8 +51,10 @@ extern "C" {
 }
 #endif
 #ifdef __3DS__
+#include <3ds.h>
 namespace prism {
 	void setN3DSSoundFileShare(float tShare);   // 3ds/soundeffect_3ds.cpp
+	void setN3DSTextureLoadReserve(size_t tReserve);   // 3ds/texture_3ds.cpp
 }
 #endif
 
@@ -638,10 +640,18 @@ static void loadSinglePlayerSprites(DreamPlayer* tPlayer) {
 	}
 	setMugenSpriteFileReaderHeapReserve(heapReserve);
 #endif
+#ifdef __3DS__
+	// The texture memory too: the first fighter's textures made at load
+	// take at most half of what is free, the second its share.
+	setN3DSTextureLoadReserve(tPlayer->mRootID == 0 ? linearSpaceFree() / 2 : 0);
+#endif
 	tPlayer->mHeader->mFiles.mSprites = loadMugenSpriteFile(tPlayer->mHeader->mFiles.mSpritePath, tPlayer->mHeader->mFiles.mHasPalettePath, tPlayer->mHeader->mFiles.mPalettePath);
 	setMugenSpriteFileReaderToNotUsePalette();
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 	setMugenSpriteFileReaderHeapReserve(4 * 1024 * 1024);
+#endif
+#ifdef __3DS__
+	setN3DSTextureLoadReserve(0);
 #endif
 	addCompatLine("P%d sprites %s: %d, %.0f ms, textures %d KB",
 		tPlayer->mRootID + 1, tPlayer->mHeader->mFiles.mSpritePath, (int)tPlayer->mHeader->mFiles.mSprites.mAllSprites.size(),
@@ -4114,6 +4124,10 @@ typedef struct {
 static void countHelperByIDCB(void* tCaller, void* tData) {
 	PlayerHelperCountCaller* caller = (PlayerHelperCountCaller*)tCaller;
 	DreamPlayer* helper = (DreamPlayer*)tData;
+	// One destroyed (gone at the end of the tick, or a round's start) is
+	// not counted, as in Ikemen: Apocalypse, his head and arms still
+	// counted when round 2 began, never made them again then.
+	if (helper->mIsDestroyed) return;
 
 	if (helper->mID == caller->mSearchID || caller->mSearchID <= 0) {
 		caller->mFoundAmount++;
@@ -4143,6 +4157,7 @@ typedef struct {
 static void findHelperByIDCB(void* tCaller, void* tData) {
 	PlayerHelperFindCaller* caller = (PlayerHelperFindCaller*)tCaller;
 	DreamPlayer* helper = (DreamPlayer*)tData;
+	if (helper->mIsDestroyed) return;
 
 	if (helper->mID == caller->mSearchID) {
 		caller->mFoundHelper = helper;
