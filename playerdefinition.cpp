@@ -335,6 +335,7 @@ static void clearPlayerHelperStore() {
 }
 
 static void resetHelperState(DreamPlayer* p) {
+	p->mFallDefenseMultiplier = 1;
 	p->mHelpers = new_list();
 	p->mProjectiles = new_int_map();
 
@@ -381,6 +382,7 @@ static void resetHelperState(DreamPlayer* p) {
 
 	p->mDefenseMultiplier = 1;
 	p->mSuperDefenseMultiplier = 1;
+	p->mFallDefenseMultiplier = 1;
 
 	p->mIsFrozen = 0;
 
@@ -1110,6 +1112,22 @@ static void updateSingleHitAttributeSlot(DreamHitDefAttributeSlot* tSlot) {
 	}
 }
 
+// The defense going up each time the player hits the ground in a fall
+// (fall.defence_up, in states 5070 and 5100), back to normal once out of
+// the hit, as in MUGEN and Ikemen: juggles with knockdowns took their full
+// damage every time.
+static void updateFallDefense(DreamPlayer* p) {
+	if (isPlayerPaused(p)) return;
+	if (getPlayerStateMoveType(p) != MUGEN_STATE_MOVE_TYPE_BEING_HIT) {
+		p->mFallDefenseMultiplier = 1;
+		return;
+	}
+	const int state = getPlayerState(p);
+	if ((state == 5070 || state == 5100) && getPlayerTimeInState(p) == 1) {
+		p->mFallDefenseMultiplier *= (p->mHeader->mFiles.mConstants.mHeader.mFallDefenseUp + 100) / 100.0f;
+	}
+}
+
 static void updateHitAttributeSlots(DreamPlayer* p) {
 	if (isPlayerPaused(p)) return;
 
@@ -1510,6 +1528,7 @@ static int updateSinglePlayer(DreamPlayer* p) {
 		if (updatePlayerSuperPauseStopAndReturnIfStopped(p)) break;
 		if (updatePlayerPauseStopAndReturnIfStopped(p)) break;
 		updateLanding(p);
+		updateFallDefense(p);
 		updateProjectileTimeSinceContact(p);
 		updateGuarding(p);
 		updateGuardingOver(p);
@@ -3758,7 +3777,7 @@ int getPlayerSlideTime(DreamPlayer* p)
  
 float getPlayerDefenseMultiplier(DreamPlayer* p)
 {
-	return p->mDefenseMultiplier * p->mSuperDefenseMultiplier * getPlayerDataDefenseFactor(p);
+	return p->mDefenseMultiplier * p->mSuperDefenseMultiplier * p->mFallDefenseMultiplier * getPlayerDataDefenseFactor(p);
 }
 
 float getInvertedPlayerDefenseMultiplier(DreamPlayer* p)

@@ -201,6 +201,7 @@ struct DreamPlayer {
 
 	float mDefenseMultiplier;
 	float mSuperDefenseMultiplier;
+	float mFallDefenseMultiplier;
 
 	int mIsFrozen;
 	Position mFreezePosition;
