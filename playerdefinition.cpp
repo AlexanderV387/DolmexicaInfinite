@@ -328,6 +328,12 @@ static void initHitDefAttributeSlot(DreamHitDefAttributeSlot* tSlot) {
 	tSlot->mFlag2.clear();
 }
 
+// The helpers and projectiles left, all gone at once: their own maps too.
+static void clearPlayerHelperStore() {
+	for (auto& entry : gPlayerDefinition.mHelperStore) delete_int_map(&entry.second.mProjectiles);
+	gPlayerDefinition.mHelperStore.clear();
+}
+
 static void resetHelperState(DreamPlayer* p) {
 	p->mHelpers = new_list();
 	p->mProjectiles = new_int_map();
@@ -561,7 +567,7 @@ void loadPlayers(MemoryStack* tMemoryStack) {
 
 	gPlayerDefinition.mIsLoading = 1;
 
-	gPlayerDefinition.mHelperStore.clear();
+	clearPlayerHelperStore();
 	gPlayerDefinition.mAllPlayers = new_list();
 	gPlayerDefinition.mAllProjectiles.clear();
 	list_push_back(&gPlayerDefinition.mAllPlayers, &gPlayerDefinition.mPlayers[0]);
@@ -677,7 +683,7 @@ void unloadPlayers() {
 	}
 	destroyAllDreamTriggerPrograms();
 
-	gPlayerDefinition.mHelperStore.clear();
+	clearPlayerHelperStore();
 	gPlayerDefinition.mAllProjectiles.clear();
 }
 
@@ -1472,6 +1478,11 @@ static void updatePlayerDestruction(DreamPlayer* p) {
 		return;
 	}
 	removeDreamRegisteredStateMachine(p->mRegisteredStateMachine);
+	// A helper's own (empty) projectile map, made when it was: kept, it was
+	// lost with each helper (New Kyouki remakes his hit-taking one at every
+	// hit: some 3 MB in half a minute against Abyss, and the heap ran out).
+	// A projectile's was let go already.
+	if (!isPlayerProjectile(p)) delete_int_map(&p->mProjectiles);
 	gPlayerDefinition.mHelperStore.erase(p->mHelperIDInStore);
 }
 
@@ -4232,7 +4243,11 @@ float getPlayerFrontBodyDistanceToScreen(DreamPlayer* p, int tCoordinateP)
 	float x = getPlayerFrontXStage(p, tCoordinateP);
 	float screenX = getPlayerScreenEdgeInFrontX(p, tCoordinateP);
 
-	return std::fabs(screenX - x);
+	// Negative once past the screen's edge, as in MUGEN: Abyss's beams,
+	// helpers that destroy themselves at frontedgebodydist <= -15, were
+	// never destroyed (never below 0 here), piling up until the heap ran out.
+	if (getPlayerIsFacingRight(p)) return screenX - x;
+	else return x - screenX;
 }
 
 float getPlayerBackBodyDistanceToScreen(DreamPlayer* p, int tCoordinateP)
@@ -4240,7 +4255,8 @@ float getPlayerBackBodyDistanceToScreen(DreamPlayer* p, int tCoordinateP)
 	float x = getPlayerBackXStage(p, tCoordinateP);
 	float screenX = getPlayerScreenEdgeInBackX(p, tCoordinateP);
 
-	return std::fabs(screenX - x);
+	if (getPlayerIsFacingRight(p)) return x - screenX;
+	else return screenX - x;
 }
 
 float getPlayerFrontWidth(DreamPlayer* p, int tCoordinateP) {

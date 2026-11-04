@@ -19,6 +19,7 @@
 static struct {
 	int mHasSearched = 0;
 	std::vector<std::string> mFound;   // as select.def would list them
+	std::set<std::string> mFoundFolders;   // lowercase: the folders a character was found in
 } gCharacterAutoDetectData;
 
 static std::string lowercase(std::string tText) {
@@ -114,6 +115,7 @@ static void searchCharacters() {
 		// As select.def lists it: the folder alone if its .def is named so.
 		const auto entry = (definition == folder + ".def") ? folder : folder + "/" + definition;
 		gCharacterAutoDetectData.mFound.push_back(entry);
+		gCharacterAutoDetectData.mFoundFolders.insert(lowercase(folder));
 		addCompatLine("%s: %s", folder.c_str(), definition.c_str());
 	}
 	addLoadProfileLine("  characters in chars/: %d folders, %d characters, %.0f ms", (int)folders.size(), (int)gCharacterAutoDetectData.mFound.size(), getLoadProfileMilliseconds(getLoadProfileTicks() - start));
@@ -146,6 +148,22 @@ static void addListedFolder(void* tCaller, void* tData) {
 	}
 }
 
+static int isListedCharacterMissing(void* /*tCaller*/, void* tData) {
+	auto element = (MugenDefScriptGroupElement*)tData;
+	const char* name = NULL;
+	if (element->mType == MUGEN_DEF_SCRIPT_GROUP_VECTOR_ELEMENT) {
+		auto vector = (MugenDefScriptVectorElement*)element->mData;
+		if (vector->mVector.mSize) name = vector->mVector.mElement[0];
+	}
+	else if (element->mType == MUGEN_DEF_SCRIPT_GROUP_STRING_ELEMENT) {
+		name = ((MugenDefScriptStringElement*)element->mData)->mString;
+	}
+	if (!name) return 0;
+	const auto folder = getListedFolder(name);
+	if (folder.empty() || folder == "randomselect" || folder == "empty" || folder == "blank") return 0;
+	return !gCharacterAutoDetectData.mFoundFolders.count(folder);
+}
+
 void addAutoDetectedCharactersToSelectScript(MugenDefScript* tSelectScript)
 {
 	if (!isAutoDetectingCharactersConfig()) return;
@@ -153,6 +171,10 @@ void addAutoDetectedCharactersToSelectScript(MugenDefScript* tSelectScript)
 	if (!gCharacterAutoDetectData.mHasSearched) {
 		searchCharacters();
 	}
+
+	// select.def's characters no longer in chars/ (deleted from the card)
+	// left out, rather than empty boxes in the select screen.
+	list_remove_predicate(&tSelectScript->mGroups["characters"].mOrderedElementList, isListedCharacterMissing, NULL);
 
 	std::set<std::string> listed;
 	list_map(&tSelectScript->mGroups["characters"].mOrderedElementList, addListedFolder, &listed);
