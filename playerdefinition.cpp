@@ -1119,6 +1119,10 @@ static int isPlayerGuardingInternally(DreamPlayer* p) {
 }
 
 static void updateGuardingFlags(DreamPlayer* p) {
+	// Out of the guard states another way (New Kyouki's walk into his state
+	// 100001): no longer guarding. Left set, the "guard not allowed" below
+	// later sent him to state 0 without control, frozen for good.
+	if (isPlayerGuardingInternally(p) && !isPlayerGuarding(p)) p->mIsGuardingInternally = 0;
 	if (isPlayerGuardingInternally(p) && doesFlagPreventGuarding(p)) {
 		setPlayerUnguarding(p);
 	}
@@ -1515,9 +1519,6 @@ static void removeDestroyedPlayerReferencesFromSinglePlayer(DreamPlayer* tPlayer
 	// The hit got from a helper now gone (a fan, blood): its root stands in
 	// for it (GetHitVar(HitShakeTime) read the freed helper, Modern Kitana).
 	if (tPlayer->mActiveHitData.mPlayer == tDestroyedPlayer) tPlayer->mActiveHitData.mPlayer = tDestroyedPlayer->mRoot;
-	for (auto& hit : tPlayer->mReceivedHitData) {
-		if (hit.mPlayer == tDestroyedPlayer) hit.mPlayer = tDestroyedPlayer->mRoot;
-	}
 	// A projectile of a helper now gone: its root's from now on (Onslaught's
 	// helpers fire and go; the hit then wrote into the freed helper, and the
 	// 3DS heap was broken).
