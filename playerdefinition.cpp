@@ -5037,18 +5037,26 @@ int getPlayerLifeMax(DreamPlayer* p)
 	return p->mHeader->mFiles.mConstants.mHeader.mLife;
 }
 
+// The power is the root's, as in MUGEN (Ikemen's powerOwner): a helper's
+// Power, PowerAdd, PowerSet and the power its hits give and take are its
+// player's. Each helper had its own, written to its player's bar: the
+// level went down and up again at each hit, the level sound with it.
 int getPlayerPower(DreamPlayer* p)
 {
-	return p->mPower;
+	return getPlayerRoot(p)->mPower;
 }
 
 int getPlayerPowerMax(DreamPlayer* p)
 {
-	return p->mHeader->mFiles.mConstants.mHeader.mPower;
+	return getPlayerRoot(p)->mHeader->mFiles.mConstants.mHeader.mPower;
 }
 
 void setPlayerPower(DreamPlayer* p, int tPower)
 {
+	p = getPlayerRoot(p);
+	// Once the round is over it stays as it is, as in MUGEN (see Ikemen's
+	// setPower).
+	if (getDreamRoundStateNumber() >= 3) return;
 	p->mPower = max(0, min(getPlayerPowerMax(p), tPower));
 
 	float perc = p->mPower / (float)p->mHeader->mFiles.mConstants.mHeader.mPower;
@@ -5057,7 +5065,7 @@ void setPlayerPower(DreamPlayer* p, int tPower)
 
 void addPlayerPower(DreamPlayer* p, int tPower)
 {
-	setPlayerPower(p, p->mPower + tPower);
+	setPlayerPower(p, getPlayerPower(p) + tPower);
 }
 
 typedef struct {
