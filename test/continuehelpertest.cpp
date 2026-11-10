@@ -13,6 +13,8 @@
 #include "config.h"
 #include "playerdefinition.h"
 #include "mugenstagehandler.h"
+#include "mugenassignment.h"
+#include "mugenassignmentevaluator.h"
 #include "stage.h"
 #include "gamelogic.h"
 #include "fightscreen.h"
@@ -232,8 +234,28 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 			printf("frame %d: first player put behind the second\n", frame);
 		}
 		updatePrismWrapperScreenForDebugWithIterationsAndRender(1);
+		// DOLMEXICA_EVAL="id|expression|expression...": each expression
+		// evaluated on that helper of the first player (id 0: the player)
+		// every frame from DOLMEXICA_EVAL_FROM on.
+		if (const char* eval = getenv("DOLMEXICA_EVAL")) {
+			if (frame >= getContinueIntegerSetting("DOLMEXICA_EVAL_FROM", 0)) {
+				std::string all(eval);
+				const int id = atoi(all.c_str());
+				DreamPlayer* target = id ? getPlayerHelperOrNullIfNonexistant(getRootPlayer(0), id) : getRootPlayer(0);
+				std::string line;
+				size_t start = all.find('|');
+				while (target && start != std::string::npos) {
+					size_t end = all.find('|', start + 1);
+					std::string expression = all.substr(start + 1, end == std::string::npos ? std::string::npos : end - start - 1);
+					DreamMugenAssignment* assignment = parseDreamMugenAssignmentFromString(expression.c_str());
+					line += " [" + expression + "] = " + std::to_string(evaluateDreamAssignmentAndReturnAsInteger(&assignment, target));
+					start = end;
+				}
+				if (target) printf("frame %d: eval%s\n", frame, line.c_str());
+			}
+		}
 		if (frame % every) continue;
-		DreamPlayer* root = getRootPlayer(1);
+		DreamPlayer* root = getRootPlayer(getenv("DOLMEXICA_TREE_P1") ? 0 : 1);
 		DreamPlayer* first = getRootPlayer(0);
 		printf("frame %d: root state %d, anim %d, facing %s, x %.0f; first player state %d, facing %s, x %.0f, y %.0f\n", frame, getPlayerState(root), getPlayerAnimationNumber(root), getPlayerIsFacingRight(root) ? "right" : "left", getPlayerPositionX(root, getPlayerCoordinateP(root)), getPlayerState(first), getPlayerIsFacingRight(first) ? "right" : "left", getPlayerPositionX(first, getPlayerCoordinateP(first)), getPlayerPositionY(first, getPlayerCoordinateP(first)));
 		int depth = 1;

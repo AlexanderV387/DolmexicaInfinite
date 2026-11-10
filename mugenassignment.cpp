@@ -1056,11 +1056,16 @@ static int isVectorAssignment(char* tText, int tPotentialCommaPosition) {
 		endPosition--;
 	}
 	if (endPosition <= 0) return 0;
+	// The word before the "=": back to a space or to a redirection's comma.
+	// The .def reader hands lines with commas back without their spaces
+	// ("Helper(4),AnimElem = 3,>= 25"): taken whole, the word was not seen
+	// as AnimElem and the line read as a list, always true (Galactus' arm
+	// kept its raised pose all through his ground pound, its wrist gone).
 	int startPosition = endPosition;
-	while (startPosition > 0 && !isEmptyCharacter(tText[startPosition])) {
+	while (startPosition > 0 && !isEmptyCharacter(tText[startPosition]) && tText[startPosition] != ',') {
 		startPosition--;
 	}
-	if (isEmptyCharacter(tText[startPosition])) startPosition++;
+	if (isEmptyCharacter(tText[startPosition]) || tText[startPosition] == ',') startPosition++;
 
 	const char* textArea = tText + startPosition;
 	char* text = (char*)allocMemory(int(strlen(textArea)) + 2);
