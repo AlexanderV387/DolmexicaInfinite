@@ -84,3 +84,7 @@ build_linux/
 build_sim/
 DolmexicaInfiniteTest
 DolmexicaInfiniteSim
+
+# Simulator build with allocation tracking (prism bin_n3dssim_track)
+build_sim_track/
+DolmexicaInfiniteSimTrack
