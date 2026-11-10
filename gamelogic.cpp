@@ -747,6 +747,11 @@ void reloadFight()
 	reloadFightScreen();
 }
 
+void restartFightAsContinueForTesting()
+{
+	resetGameLogic(NULL);
+}
+
 void skipFightIntroWithoutFading()
 {
 	skipFadeIn();

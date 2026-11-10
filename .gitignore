@@ -80,3 +80,7 @@ build_3ds/
 dolmexica.elf
 dolmexica.3dsx
 dolmexica.smdh
+build_linux/
+build_sim/
+DolmexicaInfiniteTest
+DolmexicaInfiniteSim

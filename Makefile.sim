@@ -1,0 +1,39 @@
+# Headless Linux build of the Dolmexica Infinite test suite on prism's 3DS
+# simulation (prism's Makefile.n3dssim): the 3DS texture code (streamed
+# sprites, their eviction, the linear memory) on a simulated GPU, with
+# AddressSanitizer. Build prism first: make -f Makefile.n3dssim -j in ../prism.
+# Usage: make -f Makefile.sim -j$(nproc)
+# Settings of the simulation: N3DS_SIM_HEAP, N3DS_SIM_LINEAR, N3DS_SIM_SHOT,
+# N3DS_SIM_SHOT_DIR, N3DS_SIM_SHOT_LIST (see prism's linux/n3dssim/n3dssim.cpp).
+
+include Makefile.common
+
+PRISM_PATH ?= ../prism
+
+GAME_OBJS = $(filter-out main.o,$(OBJS))
+TEST_OBJS = test/main.o test/commontestfunctionality.o test/censuscommon.o test/crashtest.o \
+	test/mugenassignmentevaluatortest.o test/entitycensustest.o test/determinismtest.o test/assets_test.o test/hitoverridetest.o \
+	test/mediacapturetest.o test/continuehelpertest.o
+
+OBJDIR = build_sim
+ALL_OBJS = $(addprefix $(OBJDIR)/,$(GAME_OBJS) $(TEST_OBJS))
+
+CXX ?= g++
+CXXFLAGS = -std=c++17 -fpermissive -O1 -g -fsanitize=address -fno-omit-frame-pointer -Wno-write-strings \
+	-DN3DS_TEXTURE_SIM -I$(PRISM_PATH)/include -I$(PRISM_PATH)/linux/n3dssim -I$(PRISM_PATH)/linux/shim -Itest/gtest-shim -I. \
+	$(shell pkg-config --cflags libpng zlib) -include cstdint -include cstring
+LDFLAGS = -fsanitize=address -L$(PRISM_PATH)/bin_n3dssim -lprism -lpng -lz -l:libzstd.so.1 -lpthread
+
+all: DolmexicaInfiniteSim
+
+$(OBJDIR)/%.o: %.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+DolmexicaInfiniteSim: $(ALL_OBJS) $(PRISM_PATH)/bin_n3dssim/libprism.a
+	$(CXX) $(ALL_OBJS) $(LDFLAGS) -o $@
+
+clean:
+	rm -rf $(OBJDIR) DolmexicaInfiniteSim
+
+.PHONY: all clean

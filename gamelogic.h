@@ -48,6 +48,8 @@ int getDreamTimeSinceKO();
 
 void resetRound();
 void reloadFight();
+// What pressing start at "Continue?" does, without the fade (for tests).
+void restartFightAsContinueForTesting();
 void skipFightIntroWithoutFading();
 
 void setFightContinueActive();

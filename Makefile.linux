@@ -8,7 +8,7 @@ PRISM_PATH ?= ../prism
 GAME_OBJS = $(filter-out main.o,$(OBJS))
 TEST_OBJS = test/main.o test/commontestfunctionality.o test/censuscommon.o test/crashtest.o \
 	test/mugenassignmentevaluatortest.o test/entitycensustest.o test/determinismtest.o test/assets_test.o test/hitoverridetest.o \
-	test/mediacapturetest.o
+	test/mediacapturetest.o test/continuehelpertest.o
 
 OBJDIR = build_linux
 ALL_OBJS = $(addprefix $(OBJDIR)/,$(GAME_OBJS) $(TEST_OBJS))

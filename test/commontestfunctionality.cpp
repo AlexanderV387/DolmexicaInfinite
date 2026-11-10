@@ -38,7 +38,9 @@ void setupTestForScreenTestInAssetsFolder()
 	setPrismDebugUserScriptEnabled(0);
 	setupTestEngineLikeTheGame();
 	disableWrapperErrorRecovery();
-	setDebugMinusCheckEnabled(1);
+	// The Dreamcast cannot open paths with '-'; other characters' files may
+	// have them (Galactus-s.cns, Onslaught's -2.st), so it can be switched off.
+	setDebugMinusCheckEnabled(getenv("DOLMEXICA_ALLOW_MINUS") ? 0 : 1);
 	initDolmexicaDebug();
 	setUnscaledGameWavVolume(0);
 	setUnscaledGameMidiVolume(0);
