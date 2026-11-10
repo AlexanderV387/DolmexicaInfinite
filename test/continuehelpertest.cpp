@@ -163,3 +163,51 @@ TEST_F(ContinueHelperTest, MissingHelpers) {
 	fflush(stdout);
 	unloadPrismWrapperScreenForDebug();
 }
+
+static void printFacingTreeCB(void* tCaller, void* tData) {
+	const int depth = *(int*)tCaller;
+	DreamPlayer* helper = (DreamPlayer*)tData;
+	if (helper->mIsDestroyed) return;
+	printf("%*shelper %d: state %d, anim %d, facing %s, x %.0f\n", 2 * depth, "", helper->mID, getPlayerState(helper), getPlayerAnimationNumber(helper), getPlayerIsFacingRight(helper) ? "right" : "left", getPlayerPositionX(helper, getPlayerCoordinateP(helper)));
+	int childDepth = depth + 1;
+	list_map(&helper->mHelpers, printFacingTreeCB, &childDepth);
+}
+
+/* Jumped over: in the arcade (no one at the first player's controls), the
+ * first player put behind the second at frame DOLMEXICA_BEHIND_AT (default
+ * 420), and every DOLMEXICA_EVERY frames (default 30) the second player's
+ * facing and its helpers' written, for DOLMEXICA_FRAMES frames (default 1200). */
+TEST_F(ContinueHelperTest, JumpedOver) {
+	const int frames = getContinueIntegerSetting("DOLMEXICA_FRAMES", 1200);
+	const int behindAt = getContinueIntegerSetting("DOLMEXICA_BEHIND_AT", 420);
+	const int every = getContinueIntegerSetting("DOLMEXICA_EVERY", 30);
+	const char* stageEnv = getenv("DOLMEXICA_STAGE");
+
+	initForAutomatedFightScreenTest();
+	setPlayerDefinitionPath(0, getContinueCharDefPath("DOLMEXICA_CHAR1").c_str());
+	setPlayerDefinitionPath(1, getContinueCharDefPath("DOLMEXICA_CHAR").c_str());
+	setDreamStageMugenDefinition((getDolmexicaAssetFolder() + (stageEnv ? stageEnv : "stages/kfm.def")).c_str(), "");
+	setGameModeArcade();
+	const auto screen = getDreamFightScreenForTesting();
+	initPrismWrapperScreenForDebug(screen);
+
+	for (int frame = 0; frame < frames; frame++) {
+		if (frame == behindAt) {
+			DreamPlayer* first = getRootPlayer(0);
+			DreamPlayer* second = getRootPlayer(1);
+			const int coordinateP = getPlayerCoordinateP(first);
+			const float x2 = getPlayerPositionX(second, getPlayerCoordinateP(second)) * coordinateP / getPlayerCoordinateP(second);
+			const float behind = getPlayerIsFacingRight(second) ? -60.0f : 60.0f;
+			setPlayerPositionX(first, x2 + behind, coordinateP);
+			printf("frame %d: first player put behind the second\n", frame);
+		}
+		updatePrismWrapperScreenForDebugWithIterationsAndRender(1);
+		if (frame % every) continue;
+		DreamPlayer* root = getRootPlayer(1);
+		printf("frame %d: root state %d, anim %d, facing %s, x %.0f; first player x %.0f\n", frame, getPlayerState(root), getPlayerAnimationNumber(root), getPlayerIsFacingRight(root) ? "right" : "left", getPlayerPositionX(root, getPlayerCoordinateP(root)), getPlayerPositionX(getRootPlayer(0), getPlayerCoordinateP(getRootPlayer(0))));
+		int depth = 1;
+		list_map(&root->mHelpers, printFacingTreeCB, &depth);
+	}
+	fflush(stdout);
+	unloadPrismWrapperScreenForDebug();
+}
