@@ -1237,27 +1237,66 @@ static void updatePlayerAirJuggle(DreamPlayer* p) {
 	p->mAirJugglePoints = p->mHeader->mFiles.mConstants.mHeader.mAirJugglePoints;
 }
 
+// Where an animation's boxes are now: its position reference is set only
+// when drawn (a frame late, and never in the tests that do not draw).
+static Vector2D getAnimationBoxesPosition(MugenAnimationHandlerElement* e) {
+	const Position pos = e->mHasBasePositionReference ? *e->mBasePositionReference + e->mOffset : e->mOffset;
+	return pos.xy();
+}
+
+// The Clsn2 boxes of the animations' current steps, where hits are looked
+// for: whether one of each player's touches one of the other's.
+static int havePlayersPassiveBoxesOverlap(DreamPlayer* p, DreamPlayer* tOther) {
+	MugenAnimationHandlerElement* e1 = p->mAnimationElement;
+	MugenAnimationHandlerElement* e2 = tOther->mAnimationElement;
+	CollisionListData* list1 = getDreamPlayerPassiveCollisionList(p);
+	CollisionListData* list2 = getDreamPlayerPassiveCollisionList(tOther);
+	const Vector2D pos1 = getAnimationBoxesPosition(e1);
+	const Vector2D pos2 = getAnimationBoxesPosition(e2);
+	for (const auto& box1 : e1->mActiveHitboxes) {
+		if (box1.mList != list1 || box1.mCollider.mType != COLLISION_RECT) continue;
+		CollisionRect r1 = box1.mCollider.mImpl.mRect;
+		r1.mTopLeft = r1.mTopLeft + pos1;
+		r1.mBottomRight = r1.mBottomRight + pos1;
+		for (const auto& box2 : e2->mActiveHitboxes) {
+			if (box2.mList != list2 || box2.mCollider.mType != COLLISION_RECT) continue;
+			CollisionRect r2 = box2.mCollider.mImpl.mRect;
+			r2.mTopLeft = r2.mTopLeft + pos2;
+			r2.mBottomRight = r2.mBottomRight + pos2;
+			if (checkCollision(r1, r2)) return 1;
+		}
+	}
+	return 0;
+}
+
+// Pushing as in MUGEN (see Ikemen's pushDetection): their sizes overlap in
+// height too, each one's height up from its own feet, and their Clsn2 boxes
+// touch. Only the other one bound to the player (a throw) stops it, not the
+// player's own bound helpers: Apocalypse (height 300, his parts bound to him)
+// was jumped over, then turned with his parts not, and came apart.
 static void updatePush(DreamPlayer* p) {
 	if (isPlayerPaused(p)) return;
 	if (isPlayerHelper(p)) return;
 	if (p->mPushDisabledFlag) return;
 	if (p->mIsBound) return;
-	if (list_size(&p->mBoundHelpers)) return;
 
 	DreamPlayer* otherPlayer = getPlayerOtherPlayer(p);
 	if (otherPlayer->mPushDisabledFlag) return;
+	if (otherPlayer->mIsBound) return;
 
 	float frontX1 = getPlayerFrontXPlayer(p, getPlayerCoordinateP(p));
 	float frontX2 = getPlayerFrontXPlayer(otherPlayer, getPlayerCoordinateP(p));
 
 	float x1 = getPlayerPositionX(p, getPlayerCoordinateP(p));
 	float x2 = getPlayerPositionX(otherPlayer, getPlayerCoordinateP(p));
-	
-	float distX = getPlayerDistanceToFrontOfOtherPlayerX(p, getPlayerCoordinateP(p));
-	float distY = getPlayerAxisDistanceY(p, getPlayerCoordinateP(p));
 
-	if (distY >= 0 && distY >= getPlayerHeight(p, getPlayerCoordinateP(p))) return;
-	if (distY <= 0 && distY <= -getPlayerHeight(p, getPlayerCoordinateP(p))) return;
+	float distX = getPlayerDistanceToFrontOfOtherPlayerX(p, getPlayerCoordinateP(p));
+
+	const float y1 = getPlayerPositionY(p, getPlayerCoordinateP(p));
+	const float y2 = getPlayerPositionY(otherPlayer, getPlayerCoordinateP(p));
+	if (y1 - getPlayerHeight(p, getPlayerCoordinateP(p)) >= y2) return;
+	if (y2 - getPlayerHeight(otherPlayer, getPlayerCoordinateP(p)) >= y1) return;
+	if (!havePlayersPassiveBoxesOverlap(p, otherPlayer)) return;
 
 	if (x1 < x2) {
 		if (frontX1 > frontX2) {

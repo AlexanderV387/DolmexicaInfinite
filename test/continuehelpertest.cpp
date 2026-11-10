@@ -175,7 +175,7 @@ static void printFacingTreeCB(void* tCaller, void* tData) {
 
 /* Jumped over: in the arcade (no one at the first player's controls), the
  * first player put behind the second at frame DOLMEXICA_BEHIND_AT (default
- * 420), and every DOLMEXICA_EVERY frames (default 30) the second player's
+ * 420, -1 never: then DOLMEXICA_VERSUS=1 and PRISM_LINUX_SCRIPT to move it), and every DOLMEXICA_EVERY frames (default 30) the second player's
  * facing and its helpers' written, for DOLMEXICA_FRAMES frames (default 1200). */
 TEST_F(ContinueHelperTest, JumpedOver) {
 	const int frames = getContinueIntegerSetting("DOLMEXICA_FRAMES", 1200);
@@ -187,7 +187,10 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 	setPlayerDefinitionPath(0, getContinueCharDefPath("DOLMEXICA_CHAR1").c_str());
 	setPlayerDefinitionPath(1, getContinueCharDefPath("DOLMEXICA_CHAR").c_str());
 	setDreamStageMugenDefinition((getDolmexicaAssetFolder() + (stageEnv ? stageEnv : "stages/kfm.def")).c_str(), "");
-	setGameModeArcade();
+	// DOLMEXICA_VERSUS=1: both at the controls, the second idle (the first
+	// one's buttons from PRISM_LINUX_SCRIPT, see prism's linux/input_linux.cpp).
+	if (getContinueIntegerSetting("DOLMEXICA_VERSUS", 0)) setGameModeVersus();
+	else setGameModeArcade();
 	const auto screen = getDreamFightScreenForTesting();
 	initPrismWrapperScreenForDebug(screen);
 
@@ -204,7 +207,8 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 		updatePrismWrapperScreenForDebugWithIterationsAndRender(1);
 		if (frame % every) continue;
 		DreamPlayer* root = getRootPlayer(1);
-		printf("frame %d: root state %d, anim %d, facing %s, x %.0f; first player x %.0f\n", frame, getPlayerState(root), getPlayerAnimationNumber(root), getPlayerIsFacingRight(root) ? "right" : "left", getPlayerPositionX(root, getPlayerCoordinateP(root)), getPlayerPositionX(getRootPlayer(0), getPlayerCoordinateP(getRootPlayer(0))));
+		DreamPlayer* first = getRootPlayer(0);
+		printf("frame %d: root state %d, anim %d, facing %s, x %.0f; first player state %d, facing %s, x %.0f, y %.0f\n", frame, getPlayerState(root), getPlayerAnimationNumber(root), getPlayerIsFacingRight(root) ? "right" : "left", getPlayerPositionX(root, getPlayerCoordinateP(root)), getPlayerState(first), getPlayerIsFacingRight(first) ? "right" : "left", getPlayerPositionX(first, getPlayerCoordinateP(first)), getPlayerPositionY(first, getPlayerCoordinateP(first)));
 		int depth = 1;
 		list_map(&root->mHelpers, printFacingTreeCB, &depth);
 	}
