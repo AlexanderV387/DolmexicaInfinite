@@ -168,7 +168,7 @@ static void printFacingTreeCB(void* tCaller, void* tData) {
 	const int depth = *(int*)tCaller;
 	DreamPlayer* helper = (DreamPlayer*)tData;
 	if (helper->mIsDestroyed) return;
-	printf("%*shelper %d: state %d, anim %d, facing %s, x %.0f\n", 2 * depth, "", helper->mID, getPlayerState(helper), getPlayerAnimationNumber(helper), getPlayerIsFacingRight(helper) ? "right" : "left", getPlayerPositionX(helper, getPlayerCoordinateP(helper)));
+	printf("%*shelper %d: state %d, time %d, hitdef %d, anim %d, animtime %d, facing %s, x %.0f, y %.0f\n", 2 * depth, "", helper->mID, getPlayerState(helper), getPlayerTimeInState(helper), isHitDataActive(helper), getPlayerAnimationNumber(helper), getPlayerAnimationTimeDeltaUntilFinished(helper), getPlayerIsFacingRight(helper) ? "right" : "left", getPlayerPositionX(helper, getPlayerCoordinateP(helper)), getPlayerPositionY(helper, getPlayerCoordinateP(helper)));
 	int childDepth = depth + 1;
 	list_map(&helper->mHelpers, printFacingTreeCB, &childDepth);
 }

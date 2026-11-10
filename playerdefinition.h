@@ -184,6 +184,7 @@ struct DreamPlayer {
 	int mPreviousNoStandGuardFlag; // last tick's, for walking back (see updateWalking)
 	float mCornerPushOffset; // in its own coordinates (see updateCornerPush)
 	int mIsBoundByTargetBind; // held by another's TargetBind (see updateBinding)
+	int mWereMoveCountersJustSet; // MoveContact and the like set this tick (see updateHitPause)
 	std::map<int, int> mJuggleLeftByAttacker; // juggle points left against each attacker's ID (see isIgnoredBecauseOfJuggle)
 	int mJuggleChargedStateChange; // the state change its state's juggle was paid in
 	int mNoKOSoundFlag;

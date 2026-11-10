@@ -440,6 +440,7 @@ static void resetHelperState(DreamPlayer* p) {
 
 	p->mMoveReversed = 0;
 	p->mMoveHit = 0;
+	p->mWereMoveCountersJustSet = 0;
 	p->mMoveGuarded = 0;
 	p->mLastHitGuarded = 0;
 
@@ -1052,8 +1053,18 @@ static void updateFall(DreamPlayer* p) {
 	}
 }
 
+// MoveContact, MoveHit, MoveGuarded and MoveReversed count up from 1, a
+// tick at a time out of the hitpause; as in MUGEN (Ikemen's mctime, raised
+// after the states run) the states see 1 on the tick after the contact.
+// The hits are found before this, in the same tick: raised at once, an
+// attacker without a hitpause (pausetime = 0) saw 2 at once and never 1
+// (Apocalypse's missiles go off on "MoveContact = 1": they hit and stayed
+// on, more each super, until the round was over).
 static void updateHitPause(DreamPlayer* p) {
+	const int wereMoveCountersJustSet = p->mWereMoveCountersJustSet;
+	p->mWereMoveCountersJustSet = 0;
 	if (!p->mIsHitPaused) {
+		if (wereMoveCountersJustSet) return;
 		if (p->mMoveHit) p->mMoveHit++;
 		if (p->mMoveGuarded) p->mMoveGuarded++;
 		if (p->mMoveReversed) p->mMoveReversed++;
@@ -2700,6 +2711,7 @@ static void handleReversalDefHit(DreamPlayer* p, DreamPlayer* tOtherPlayer) {
 	}
 
 	tOtherPlayer->mMoveReversed = 1;
+	tOtherPlayer->mWereMoveCountersJustSet = 1;
 }
 
 static int isPlayerHitStillValidAfterReceive(DreamPlayer* tOtherPlayer) {
@@ -3014,6 +3026,7 @@ void resetPlayerMoveContactCounter(DreamPlayer* p)
 
 void setPlayerMoveContactCounterActive(DreamPlayer* p) {
 	p->mMoveContactCounter = 1;
+	p->mWereMoveCountersJustSet = 1;
 	increaseComboCounter(p, 1);
 }
 
@@ -4902,6 +4915,7 @@ int getPlayerMoveHit(DreamPlayer* p)
 void setPlayerMoveHit(DreamPlayer* p)
 {
 	p->mMoveHit = 1;
+	p->mWereMoveCountersJustSet = 1;
 }
 
 void setPlayerMoveHitReset(DreamPlayer* p)
@@ -4920,6 +4934,7 @@ int getPlayerMoveGuarded(DreamPlayer* p)
 void setPlayerMoveGuarded(DreamPlayer* p)
 {
 	p->mMoveGuarded = 1;
+	p->mWereMoveCountersJustSet = 1;
 }
 
 int getLastPlayerHitGuarded(DreamPlayer* p)
