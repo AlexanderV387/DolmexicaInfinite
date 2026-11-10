@@ -2058,8 +2058,14 @@ static void setPlayerHitStates(DreamPlayer* p, DreamPlayer* tOtherPlayer, int tH
 	// more of it then.
 	if (!isGeneralPlayer(p) || !isGeneralPlayer(tOtherPlayer)) return;
 
+	// The rest only for a p1stateno: the attacker's new state may have put
+	// the one hit somewhere else. Done for every hit, the get-hit state was
+	// entered twice in the tick, all it does at time 0 twice (Galactus' fist
+	// made two "Damage Check" helpers, and his body, asking for one, never
+	// took the damage).
+	if (getActiveHitDataPlayer1StateNumber(p) == -1) return;
 	int enemyStateBefore = getPlayerState(p);
-	if (getActiveHitDataPlayer1StateNumber(p) != -1) {
+	{
 		// A projectile's p1stateno is for the player that fired it (New
 		// Kyouki's Inferno: its projectile takes him into the move's
 		// finish); the projectile itself runs no states.
@@ -2459,7 +2465,6 @@ static void setPlayerHit(DreamPlayer* p, DreamPlayer* tOtherPlayer, void* tHitDa
 			addPlayerPower(tOtherPlayer, powerUp2);
 			if (hitPauseDuration) setPlayerHitPaused(tOtherPlayer, hitPauseDuration);
 		}
-		if (!isProjectileHit) addPlayerDamage(root, isGeneralPlayer(tOtherPlayer) ? tOtherPlayer : root, damage);
 		addPlayerPower(root, powerUp1);
 		return;
 	}
@@ -2473,8 +2478,13 @@ static void setPlayerHit(DreamPlayer* p, DreamPlayer* tOtherPlayer, void* tHitDa
 	}
 	setPlayerMoveContactCounterActive(tOtherPlayer);
 
-	if (!isPlayerProjectile(p)) {
-		addPlayerDamage(getPlayerRoot(p), tOtherPlayer, damage);
+	// The damage is the one hit's own, a helper's too (its own life, as in
+	// MUGEN: Ikemen's lifeAdd on the getter), and only when the hit left it
+	// being hit (a HitOverride into another kind of state takes none). It
+	// went to the root: characters whose parts take the hits and pass it on
+	// themselves (Galactus' fist, with LifeAdd) took it twice.
+	if (!isPlayerProjectile(p) && getPlayerStateMoveType(p) == MUGEN_STATE_MOVE_TYPE_BEING_HIT) {
+		addPlayerDamage(p, tOtherPlayer, damage);
 	}
 	addPlayerPower(getPlayerRoot(p), powerUp1);
 	addPlayerPower(tOtherPlayer, powerUp2);

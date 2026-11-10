@@ -213,7 +213,7 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 			DreamPlayer* first = getRootPlayer(0);
 			DreamPlayer* second = getRootPlayer(1);
 			setPlayerPositionX(second, 0, getPlayerCoordinateP(second));
-			setPlayerPositionX(first, -100.0f * getPlayerCoordinateP(first) / 320, getPlayerCoordinateP(first));
+			setPlayerPositionX(first, -(float)getContinueIntegerSetting("DOLMEXICA_CENTER_GAP", 100) * getPlayerCoordinateP(first) / 320, getPlayerCoordinateP(first));
 		}
 		// DOLMEXICA_P2_CHANGE=frame:state: the second player changes into that
 		// state at that frame (as a ChangeState of its -1 would).

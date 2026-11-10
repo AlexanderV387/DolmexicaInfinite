@@ -4547,7 +4547,12 @@ static int handleAddingLife(DreamMugenStateController* tController, DreamPlayer*
 	if (!isAbsolute) {
 		const auto defenseMultiplier = getInvertedPlayerDefenseMultiplier(tPlayer);
 		if (defenseMultiplier != 1.0) {
+			// Rounded, at least one point of damage, as in MUGEN (Ikemen's
+			// lifeAdd): cut, Galactus took 66 of his parts' -200 at defence
+			// 300, MUGEN 67.
 			double scaled = val * (double)defenseMultiplier;
+			if (scaled < 0 && scaled > -1) scaled = -1;
+			scaled = scaled < 0 ? -floor(-scaled + 0.5) : floor(scaled + 0.5);
 			val = scaled > 2147483647.0 ? 2147483647 : (scaled < -2147483647.0 ? -2147483647 : int(scaled));
 		}
 	}
