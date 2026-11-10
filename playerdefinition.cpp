@@ -364,6 +364,7 @@ static void clearPlayerHelperStore() {
 
 static void resetHelperState(DreamPlayer* p) {
 	p->mFallDefenseMultiplier = 1;
+	p->mCornerPushOffset = 0;
 	p->mHelpers = new_list();
 	p->mProjectiles = new_int_map();
 
@@ -783,6 +784,7 @@ static void resetSinglePlayer(DreamPlayer* p) {
 	removePlayerHelpers(p);
 	removePlayerProjectiles(p);
 	resetPlayerVariables(p);
+	p->mCornerPushOffset = 0;
 	resetDreamRegisteredStateMachineControllerPersistence(p->mRegisteredStateMachine);
 }
 
@@ -1280,6 +1282,8 @@ static int havePlayersPassiveBoxesOverlap(DreamPlayer* p, DreamPlayer* tOther) {
 // touch. Only the other one bound to the player (a throw) stops it, not the
 // player's own bound helpers: Apocalypse (height 300, his parts bound to him)
 // was jumped over, then turned with his parts not, and came apart.
+static void updateCornerPush(DreamPlayer* p);
+
 static void updatePush(DreamPlayer* p) {
 	if (isPlayerPaused(p)) return;
 	if (isPlayerHelper(p)) return;
@@ -1661,6 +1665,7 @@ static int updateSinglePlayer(DreamPlayer* p) {
 		updatePlayerAirJuggle(p);
 		updatePlayerDisplayedCombo(p);
 		updatePush(p);
+		updateCornerPush(p);
 		updateStageBorderPost(p);
 		updateKOFlags(p);
 		updateShadow(p);
@@ -2137,15 +2142,19 @@ static void setPlayerUnguarding(DreamPlayer* p);
 
 static int isPlayerInCorner(DreamPlayer* p, int tIsCheckingRightCorner);
 
+// Corner push as in MUGEN (see Ikemen's checkCornerPush, its legacy mode):
+// set on the attacker (not a projectile) only when the one hit, or guarding,
+// is already in the corner, with the HitDef's offset for that one's state
+// (ground, air, lying, guarding, guarding in the air); updateCornerPush then
+// moves the attacker by it. Any attack, any attacker state: specials, supers,
+// throws and air attackers were left out, and the hit's velocity was added
+// twice over as a velocity, pushing about three times as far.
 static void handlePlayerCornerPush(DreamPlayer* p, DreamPlayer* tOtherPlayer) {
-	if (isPlayerHelper(tOtherPlayer) || isPlayerProjectile(tOtherPlayer)) return;
-	if (getPlayerStateType(tOtherPlayer) == MUGEN_STATE_TYPE_AIR) return;
+	if (isPlayerProjectile(tOtherPlayer)) return;
 	if (!isPlayerInCorner(p, getActiveHitDataIsFacingRight(p))) return;
-	if (getActiveHitDataAttackClass(p) == MUGEN_ATTACK_CLASS_HYPER || getActiveHitDataAttackClass(p) == MUGEN_ATTACK_CLASS_SPECIAL || getActiveHitDataAttackType(p) == MUGEN_ATTACK_TYPE_THROW) return;
 
 	float pushOffsetX;
 	if (isPlayerGuarding(p)) {
-
 		if (getPlayerStateType(p) == MUGEN_STATE_TYPE_AIR) {
 			pushOffsetX = getActiveAirGuardCornerPushVelocityOffset(p);
 		}
@@ -2163,10 +2172,29 @@ static void handlePlayerCornerPush(DreamPlayer* p, DreamPlayer* tOtherPlayer) {
 		pushOffsetX = getActiveGroundCornerPushVelocityOffset(p);
 	}
 
-	static const float PUSH_VELOCITY_SCALE = 2.0;
-	pushOffsetX += getActiveHitDataVelocityX(p)*PUSH_VELOCITY_SCALE;
+	tOtherPlayer->mCornerPushOffset = transformDreamCoordinates(pushOffsetX, getPlayerCoordinateP(p), getPlayerCoordinateP(tOtherPlayer));
+}
 
-	addPlayerVelocityX(tOtherPlayer, pushOffsetX, getPlayerCoordinateP(p));
+// Each tick the attacker moves back by its corner push while the other one
+// is being hit and still in the corner, and the push shrinks to 0.7 of
+// itself (gone under a pixel); none in a super pause, as in MUGEN.
+static void updateCornerPush(DreamPlayer* p) {
+	if (!p->mCornerPushOffset) return;
+	if (isPlayerPaused(p) || isDreamSuperPauseActive()) return;
+
+	DreamPlayer* otherPlayer = getPlayerOtherPlayer(getPlayerRoot(p));
+	if (getPlayerStateMoveType(otherPlayer) != MUGEN_STATE_MOVE_TYPE_BEING_HIT) {
+		p->mCornerPushOffset = 0;
+		return;
+	}
+
+	const int coordinateP = getPlayerCoordinateP(p);
+	if (isPlayerInCorner(otherPlayer, getPlayerIsFacingRight(p))) {
+		const float direction = getPlayerIsFacingRight(p) ? 1.0f : -1.0f;
+		setPlayerPositionX(p, getPlayerPositionX(p, coordinateP) + p->mCornerPushOffset * direction, coordinateP);
+	}
+	p->mCornerPushOffset *= 0.7f;
+	if (std::abs(p->mCornerPushOffset) < transformDreamCoordinates(1.0f, 320, coordinateP)) p->mCornerPushOffset = 0;
 }
 
 static void setPlayerHitShakePaused(DreamPlayer* p, int tDuration);

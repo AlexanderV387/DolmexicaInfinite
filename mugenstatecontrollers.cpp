@@ -3353,7 +3353,7 @@ static void handleHitDefinitionWithController(HitDefinitionController* e, DreamP
 	handleHelperSetTwoFloatElements(&e->mAirVelocity, tPlayer, tHelper, setHitDataAirVelocity, 0, 0);
 	handleHelperSetTwoFloatElements(&e->mAirGuardVelocity, tPlayer, tHelper, setHitDataAirGuardVelocity, getHitDataAirVelocityX(tHelper) * 1.5f, getHitDataAirVelocityY(tHelper) / 2);
 
-	handleHelperSetOneFloatElement(&e->mGroundCornerPushVelocityOffset, tPlayer, tHelper, setGroundCornerPushVelocityOffset, getHitDataAttackType(tHelper) == MUGEN_ATTACK_TYPE_ATTACK ? 0.0f : 1.3f*getHitDataGuardVelocity(tHelper));
+	handleHelperSetOneFloatElement(&e->mGroundCornerPushVelocityOffset, tPlayer, tHelper, setGroundCornerPushVelocityOffset, getHitDataType(tHelper) == MUGEN_STATE_TYPE_AIR ? 0.0f : 1.3f*getHitDataGuardVelocity(tHelper));
 	handleHelperSetOneFloatElement(&e->mAirCornerPushVelocityOffset, tPlayer, tHelper, setAirCornerPushVelocityOffset, getGroundCornerPushVelocityOffset(tHelper));
 	handleHelperSetOneFloatElement(&e->mDownCornerPushVelocityOffset, tPlayer, tHelper, setDownCornerPushVelocityOffset, getGroundCornerPushVelocityOffset(tHelper));
 	handleHelperSetOneFloatElement(&e->mGuardCornerPushVelocityOffset, tPlayer, tHelper, setGuardCornerPushVelocityOffset, getGroundCornerPushVelocityOffset(tHelper));

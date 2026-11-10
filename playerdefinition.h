@@ -179,6 +179,7 @@ struct DreamPlayer {
 	int mNoCrouchGuardFlag;
 	int mNoStandGuardFlag;
 	int mPreviousNoStandGuardFlag; // last tick's, for walking back (see updateWalking)
+	float mCornerPushOffset; // in its own coordinates (see updateCornerPush)
 	int mNoKOSoundFlag;
 	int mNoKOSlowdownFlag;
 	int mUnguardableFlag;
