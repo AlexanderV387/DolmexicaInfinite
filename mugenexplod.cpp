@@ -550,6 +550,17 @@ static void updateExplodPositionAfterUpdate(Explod* e) {
 	updateActiveExplodShadow(e);
 }
 
+// Only the drawing order changed (sprpriority, ontop): the explod stays
+// where it is, as in MUGEN (Ikemen's ModifyExplod). Placed again by its
+// postype, Galactus' floor, its priority set each tick of his intro while
+// he rose out of the ground, rose with him and stayed 22 lower than in
+// later rounds (no intro there): "the floor rises in round 2".
+static void updateExplodDepthAfterUpdate(Explod* e) {
+	auto pos = getMugenAnimationPosition(e->mAnimationElement);
+	pos.z = getExplodPosition(e).z;
+	setMugenAnimationPosition(e->mAnimationElement, pos);
+}
+
 static void flipExplodPhysicsHorizontal(Explod* e) {
 	auto physicsObjectReference = getPhysicsFromHandler(e->mPhysicsElement);
 	physicsObjectReference->mVelocity.x *= -1;
@@ -852,7 +863,7 @@ static void updateExplodSpritePriorityForSingleExplod(IntegerSetterForIDCaller* 
 	if (tCaller->mID != -1 && e->mExternalID != tCaller->mID) return;
 
 	e->mSpritePriority = tCaller->mValue.x;
-	updateExplodPositionAfterUpdate(e);
+	updateExplodDepthAfterUpdate(e);
 }
 
 void updateExplodSpritePriority(DreamPlayer* tPlayer, int tID, int tSpritePriority)
@@ -871,7 +882,6 @@ static void updateExplodOnTopForSingleExplod(IntegerSetterForIDCaller* tCaller, 
 	if (tCaller->mID != -1 && e->mExternalID != tCaller->mID) return;
 
 	e->mIsOnTop = tCaller->mValue.x;
-	updateExplodPositionAfterUpdate(e);
 }
 
 void updateExplodOnTop(DreamPlayer* tPlayer, int tID, int tIsOnTop)

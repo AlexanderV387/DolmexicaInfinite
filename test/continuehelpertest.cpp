@@ -12,6 +12,7 @@
 
 #include "config.h"
 #include "playerdefinition.h"
+#include "mugenstagehandler.h"
 #include "stage.h"
 #include "gamelogic.h"
 #include "fightscreen.h"
@@ -151,7 +152,15 @@ TEST_F(ContinueHelperTest, MissingHelpers) {
 			round = getDreamRoundNumber();
 			printf("frame %d: round %d\n", frame, round);
 		}
+		if (getenv("DOLMEXICA_PRINT_CAMERA") && frame % 50 == 0) printf("frame %d: camera %.1f,%.1f, round state %d, players y %.1f %.1f\n", frame, getDreamMugenStageHandlerCameraPositionReference()->x, getDreamMugenStageHandlerCameraPositionReference()->y, getDreamRoundStateNumber(), getPlayerPositionY(getRootPlayer(0), getDreamMugenStageHandlerCameraCoordinateP()), getPlayerPositionY(getRootPlayer(1), getDreamMugenStageHandlerCameraCoordinateP()));
 		if (getDreamRoundStateNumber() != 2) continue;
+		// DOLMEXICA_P1_LIFE: the first player's life set to it as each round's fight starts.
+		static int lifeSetRound = -1;
+		if (getenv("DOLMEXICA_P1_LIFE") && lifeSetRound != round) {
+			lifeSetRound = round;
+			setPlayerLife(getRootPlayer(0), getRootPlayer(0), atoi(getenv("DOLMEXICA_P1_LIFE")));
+			printf("frame %d: first player's life set to %s\n", frame, getenv("DOLMEXICA_P1_LIFE"));
+		}
 		DreamPlayer* root = getRootPlayer(1);
 		for (size_t i = 0; i < ids.size(); i++) {
 			const int isThere = getPlayerHelperAmountWithID(root, ids[i]) > 0;
@@ -195,6 +204,24 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 	initPrismWrapperScreenForDebug(screen);
 
 	for (int frame = 0; frame < frames; frame++) {
+		// DOLMEXICA_CENTER_AT: the second player put in the middle and the
+		// first one 100 to its left at that frame (the training's dummy, not
+		// in a corner).
+		if (frame == getContinueIntegerSetting("DOLMEXICA_CENTER_AT", -1)) {
+			DreamPlayer* first = getRootPlayer(0);
+			DreamPlayer* second = getRootPlayer(1);
+			setPlayerPositionX(second, 0, getPlayerCoordinateP(second));
+			setPlayerPositionX(first, -100.0f * getPlayerCoordinateP(first) / 320, getPlayerCoordinateP(first));
+		}
+		// DOLMEXICA_P2_CHANGE=frame:state: the second player changes into that
+		// state at that frame (as a ChangeState of its -1 would).
+		if (const char* change = getenv("DOLMEXICA_P2_CHANGE")) {
+			if (frame == atoi(change) && strchr(change, ':')) {
+				DreamPlayer* second = getRootPlayer(1);
+				printf("frame %d: second player from state %d (ctrl %d, facing %s) into %d\n", frame, getPlayerState(second), getPlayerControl(second), getPlayerIsFacingRight(second) ? "right" : "left", atoi(strchr(change, ':') + 1));
+				changePlayerState(second, atoi(strchr(change, ':') + 1));
+			}
+		}
 		if (frame == behindAt) {
 			DreamPlayer* first = getRootPlayer(0);
 			DreamPlayer* second = getRootPlayer(1);

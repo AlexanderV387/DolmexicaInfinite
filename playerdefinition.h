@@ -41,7 +41,12 @@ typedef enum {
 #define PLAYER_Z 40
 #define PLAYER_Z_PRIORITY_DELTA 0.1
 #define PLAYER_Z_PLAYER_2_OFFSET 0.01
-#define EXPLOD_SPRITE_Z_OFFSET 0.001
+// At the same sprite priority every player (and helper) is drawn over every
+// explod, the other player's too, as in MUGEN (Ikemen queues the explods
+// after the characters): more than the second player's offset. Under it,
+// Galactus' floor (an explod of priority -3) covered the first player lying
+// KOed (state 5150, priority -3).
+#define EXPLOD_SPRITE_Z_OFFSET 0.015
 
 typedef struct {
 	char mDefinitionPath[1024];
