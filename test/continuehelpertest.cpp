@@ -255,3 +255,104 @@ TEST_F(ContinueHelperTest, UniqueIDs) {
 	fflush(stdout);
 	unloadPrismWrapperScreenForDebug();
 }
+
+#ifdef N3DS_TEXTURE_SIM
+extern "C" void n3dssimMarkAllocations();
+extern "C" void n3dssimDumpAllocations(size_t tMinimumTotal);
+namespace prism {
+	void getN3DSTextureCountsForTesting(size_t* oResident, size_t* oStreamed, int* oOwnPaletteReferences, size_t* oOwnPalettes);
+	extern int gN3DSTexturesAlive;
+}
+static void printN3DSTextureCounts(const char* tMoment) {
+	size_t resident, streamed, ownPalettes;
+	int ownPaletteReferences;
+	prism::getN3DSTextureCountsForTesting(&resident, &streamed, &ownPaletteReferences, &ownPalettes);
+	printf("%s: %d textures, %zu with texels, %zu streamed, own palettes %zu with %d references\n", tMoment, prism::gN3DSTexturesAlive, resident, streamed, ownPalettes, ownPaletteReferences);
+}
+#endif
+
+/* Fights one after another in one run, as when playing (only the select
+ * screen between them left out): DOLMEXICA_FIGHTS="p1/p2,p1/p2,...",
+ * DOLMEXICA_FRAMES frames each (default 1800). On the 3DS simulation with
+ * N3DS_SIM_TRACK=1, the blocks each fight leaves on the heap are written:
+ * what is left in its middle breaks the 3DS's heap into pieces. */
+TEST_F(ContinueHelperTest, SeveralFights) {
+	const int frames = getContinueIntegerSetting("DOLMEXICA_FRAMES", 1800);
+	const char* fightsEnv = getenv("DOLMEXICA_FIGHTS");
+	std::string fights = fightsEnv ? fightsEnv : "kfm/kfm";
+	size_t start = 0;
+	while (start < fights.size()) {
+		size_t end = fights.find(',', start);
+		if (end == std::string::npos) end = fights.size();
+		const std::string fight = fights.substr(start, end - start);
+		start = end + 1;
+		const size_t slash = fight.find('/');
+		const std::string first = fight.substr(0, slash), second = fight.substr(slash + 1);
+		printf("== %s vs %s\n", first.c_str(), second.c_str());
+		fflush(stdout);
+#ifdef N3DS_TEXTURE_SIM
+		printN3DSTextureCounts("before the fight");
+		n3dssimMarkAllocations();
+#endif
+		initForAutomatedFightScreenTest();
+		setPlayerDefinitionPath(0, (getDolmexicaAssetFolder() + "chars/" + first + "/" + first + ".def").c_str());
+		setPlayerDefinitionPath(1, (getDolmexicaAssetFolder() + "chars/" + second + "/" + second + ".def").c_str());
+		setDreamStageMugenDefinition((getDolmexicaAssetFolder() + "stages/kfm.def").c_str(), "");
+		setGameModeSuperWatch();
+		const auto screen = getDreamFightScreenForTesting();
+		initPrismWrapperScreenForDebug(screen);
+		updatePrismWrapperScreenForDebugWithIterationsAndRender(frames);
+		unloadPrismWrapperScreenForDebug();
+#ifdef N3DS_TEXTURE_SIM
+		printN3DSTextureCounts("after the fight");
+		n3dssimDumpAllocations(4096);
+#endif
+		fflush(stderr);
+	}
+}
+
+/* Juggling: the first player (DOLMEXICA_CHAR1, the second one idle) put next
+ * to the second at frame 300, its airjuggle set to DOLMEXICA_AIRJUGGLE
+ * (default 5), its buttons from PRISM_LINUX_SCRIPT; each frame the second's
+ * state changes, it is written with the points left against the first. */
+TEST_F(ContinueHelperTest, Juggle) {
+	const int frames = getContinueIntegerSetting("DOLMEXICA_FRAMES", 700);
+	const int airjuggle = getContinueIntegerSetting("DOLMEXICA_AIRJUGGLE", 5);
+	initForAutomatedFightScreenTest();
+	setPlayerDefinitionPath(0, getContinueCharDefPath("DOLMEXICA_CHAR1").c_str());
+	setPlayerDefinitionPath(1, getContinueCharDefPath("DOLMEXICA_CHAR").c_str());
+	setDreamStageMugenDefinition((getDolmexicaAssetFolder() + "stages/kfm.def").c_str(), "");
+	setGameModeVersus();
+	const auto screen = getDreamFightScreenForTesting();
+	initPrismWrapperScreenForDebug(screen);
+	int lastState = -1, lastFirstState = -1;
+	for (int frame = 0; frame < frames; frame++) {
+		DreamPlayer* first = getRootPlayer(0);
+		DreamPlayer* second = getRootPlayer(1);
+		if (frame == 300) {
+			first->mHeader->mFiles.mConstants.mHeader.mAirJugglePoints = airjuggle;
+			const int coordinateP = getPlayerCoordinateP(first);
+			const float x2 = getPlayerPositionX(second, getPlayerCoordinateP(second)) * coordinateP / getPlayerCoordinateP(second);
+			setPlayerPositionX(first, x2 - 50.0f, coordinateP);
+		}
+		updatePrismWrapperScreenForDebugWithIterationsAndRender(1);
+		if (frame < 300) continue;
+		// DOLMEXICA_COMMANDS ("y,QCF_y"): the first player's commands active each frame.
+		if (const char* commands = getenv("DOLMEXICA_COMMANDS")) {
+			std::string line;
+			for (const char* q = commands; *q; ) {
+				const char* end = strchr(q, ',');
+				const std::string name = end ? std::string(q, end - q) : std::string(q);
+				if (isPlayerCommandActive(first, name.c_str())) line += " " + name;
+				q = end ? end + 1 : q + strlen(q);
+			}
+			if (!line.empty()) printf("frame %d: state %d, type %d, time %d, ctrl %d, paused %d, commands%s\n", frame, getPlayerState(first), (int)getPlayerStateType(first), getPlayerTimeInState(first), getPlayerControl(first), isPlayerPaused(first), line.c_str());
+		}
+		if (getPlayerState(second) == lastState && getPlayerState(first) == lastFirstState) continue;
+		lastState = getPlayerState(second);
+		lastFirstState = getPlayerState(first);
+		printf("frame %d: first state %d, second state %d, y %.0f, life %d, juggle left %d\n", frame, lastFirstState, lastState, getPlayerPositionY(second, getPlayerCoordinateP(second)), getPlayerLife(second), getPlayerJuggleLeftForTesting(second, first));
+	}
+	fflush(stdout);
+	unloadPrismWrapperScreenForDebug();
+}

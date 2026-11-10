@@ -1,5 +1,7 @@
 #pragma once
 
+#include <map>
+
 #include <prism/datastructures.h>
 
 #include <prism/mugenspritefilereader.h>
@@ -182,6 +184,8 @@ struct DreamPlayer {
 	int mPreviousNoStandGuardFlag; // last tick's, for walking back (see updateWalking)
 	float mCornerPushOffset; // in its own coordinates (see updateCornerPush)
 	int mIsBoundByTargetBind; // held by another's TargetBind (see updateBinding)
+	std::map<int, int> mJuggleLeftByAttacker; // juggle points left against each attacker's ID (see isIgnoredBecauseOfJuggle)
+	int mJuggleChargedStateChange; // the state change its state's juggle was paid in
 	int mNoKOSoundFlag;
 	int mNoKOSlowdownFlag;
 	int mUnguardableFlag;
@@ -384,6 +388,7 @@ int getPlayerDataDefense(DreamPlayer* p);
 float getPlayerDataDefenseFactor(DreamPlayer* p); 
 int getPlayerDataLiedownTime(DreamPlayer* p);
 int getPlayerDataAirjuggle(DreamPlayer* p);
+int getPlayerJuggleLeftForTesting(DreamPlayer* p, DreamPlayer* tAttacker);
 int getPlayerDataSparkNo(DreamPlayer* p);
 int getPlayerDataGuardSparkNo(DreamPlayer* p);
 int getPlayerDataKOEcho(DreamPlayer* p);

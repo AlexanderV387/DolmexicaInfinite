@@ -907,6 +907,13 @@ void setHitDataAirJuggle(DreamPlayer* tPlayer, int tJuggle)
 	e->mAirJugglePoints = tJuggle;
 }
 
+int getHitDataAirJuggle(DreamPlayer* tPlayer)
+{
+	assert(isGeneralPlayer(tPlayer));
+	PlayerHitData* e = &tPlayer->mPassiveHitData;
+	return e->mAirJugglePoints;
+}
+
 int getActiveHitDataHasMinimumDistance(DreamPlayer* tPlayer)
 {
 	assert(isGeneralPlayer(tPlayer));

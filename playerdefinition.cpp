@@ -365,6 +365,8 @@ static void clearPlayerHelperStore() {
 static void resetHelperState(DreamPlayer* p) {
 	p->mFallDefenseMultiplier = 1;
 	p->mCornerPushOffset = 0;
+	p->mJuggleLeftByAttacker.clear();
+	p->mJuggleChargedStateChange = -1;
 	p->mHelpers = new_list();
 	p->mProjectiles = new_int_map();
 
@@ -459,6 +461,8 @@ static void resetHelperState(DreamPlayer* p) {
 
 	p->mIsBeingJuggled = 0;
 	p->mAirJugglePoints = 0;
+	p->mJuggleLeftByAttacker.clear();
+	p->mJuggleChargedStateChange = -1;
 	p->mRecoverTime = 0;
 	p->mRecoverTimeSinceHitPause = 0;
 	p->mComboCounter = 0;
@@ -1269,12 +1273,12 @@ static void updateProjectileTimeSinceContact(DreamPlayer* p) {
 	p->mLastContactProjectileTime++;
 }
 
+// The juggle points against each attacker let go once no longer being hit
+// (or once KOed down), as MUGEN removes it from the attackers' targets.
 static void updatePlayerAirJuggle(DreamPlayer* p) {
-	if (!p->mIsBeingJuggled) return;
-	if (!getPlayerControl(p)) return;
-
-	p->mIsBeingJuggled = 0;
-	p->mAirJugglePoints = p->mHeader->mFiles.mConstants.mHeader.mAirJugglePoints;
+	if (p->mJuggleLeftByAttacker.empty()) return;
+	if (getPlayerStateMoveType(p) == MUGEN_STATE_MOVE_TYPE_BEING_HIT && getPlayerState(p) != 5150) return;
+	p->mJuggleLeftByAttacker.clear();
 }
 
 // Where an animation's boxes are now: its position reference is set only
@@ -2321,8 +2325,11 @@ static void setPlayerHitPaletteEffects(DreamPlayer* p) {
 	setPlayerPaletteEffect(p, duration, getActiveHitDataPaletteEffectAddition(p), getActiveHitDataPaletteEffectMultiplication(p), Vector3D(0, 0, 0), 1, 0, 1.0, 0);
 }
 
+static void payJuggleCost(DreamPlayer* p, DreamPlayer* tOtherPlayer);
+
 static void setPlayerHit(DreamPlayer* p, DreamPlayer* tOtherPlayer, void* tHitData) {
 	setProfilingSectionMarkerCurrentFunction();
+	const int wasFalling = p->mIsFalling;
 	setPlayerControl(p, 0);
 	stopSoundEffect(parsePlayerSoundEffectChannel(0, p));
 	removeExplodsForPlayerAfterHit(p);
@@ -2376,6 +2383,7 @@ static void setPlayerHit(DreamPlayer* p, DreamPlayer* tOtherPlayer, void* tHitDa
 		setPlayerHitPaletteEffects(p);
 	}
 	handlePlayerCornerPush(p, tOtherPlayer);
+	if (wasFalling || p->mIsFalling) payJuggleCost(p, tOtherPlayer);
 
 	int hitShakeDuration, hitPauseDuration;
 	int damage;
@@ -2586,26 +2594,54 @@ static int checkActiveHitDefAttributeSlots(DreamPlayer* p, DreamPlayer* p2) {
 	return 1;
 }
 
-static int isIgnoredBecauseOfJuggle(DreamPlayer* p, DreamPlayer* tOtherPlayer, PlayerHitData* tReceivedHitData) {
-	int isJuggableState;
+// Juggling as in MUGEN (see Ikemen's hitPrecheck, its projectile hits and
+// the hit's juggle points): the one hit keeps, for each attacker, the points
+// it has left against it (that attacker's airjuggle at first). A hit may land
+// when the attacker's cost fits in them, or when it is not yet the attacker's
+// target (a projectile's always checked); the cost is the state's juggle,
+// paid once in that state, or a projectile's air.juggle at each hit, and is
+// taken off only when the hit lands on one falling before or after it. The
+// points went down at each hit looked at, landed or not, only on one in the
+// air or lying, and were one count for every attacker.
+static DreamPlayer* getJuggleAttacker(DreamPlayer* tAttacker) {
+	return isPlayerProjectile(tAttacker) ? tAttacker->mParent : tAttacker;
+}
 
-	if (isPlayerGuarding(p)) {
-		isJuggableState = 0;
+static int getJuggleCost(DreamPlayer* tAttacker) {
+	if (isPlayerProjectile(tAttacker)) return getHitDataAirJuggle(tAttacker);
+	if (tAttacker->mJuggleChargedStateChange == tAttacker->mRegisteredStateMachine->mStateChangeCount) return 0;
+	return getPlayerStateJugglePoints(tAttacker);
+}
+
+static int getJuggleLeft(DreamPlayer* p, DreamPlayer* tAttacker) {
+	DreamPlayer* attacker = getJuggleAttacker(tAttacker);
+	const auto it = p->mJuggleLeftByAttacker.find(getPlayerUniqueID(attacker));
+	return it == p->mJuggleLeftByAttacker.end() ? getPlayerDataAirjuggle(attacker) : it->second;
+}
+
+// For tests: the juggle points p has left against tAttacker.
+int getPlayerJuggleLeftForTesting(DreamPlayer* p, DreamPlayer* tAttacker) {
+	return getJuggleLeft(p, tAttacker);
+}
+
+static int hasPlayerAsTarget(DreamPlayer* tAttacker, DreamPlayer* p) {
+	for (const auto& target : tAttacker->mActiveTargets) {
+		if (target.second == p) return 1;
 	}
-	else if (getPlayerStateType(p) == MUGEN_STATE_TYPE_AIR) {
-		isJuggableState = isPlayerFalling(p) || tReceivedHitData->mAirFall;
+	return 0;
+}
+
+static int isIgnoredBecauseOfJuggle(DreamPlayer* p, DreamPlayer* tOtherPlayer, PlayerHitData* /*tReceivedHitData*/) {
+	if (getJuggleAttacker(tOtherPlayer)->mNoJuggleCheckFlag) return 0;
+	if (!isPlayerProjectile(tOtherPlayer) && !hasPlayerAsTarget(tOtherPlayer, p)) return 0;
+	return getJuggleCost(tOtherPlayer) > getJuggleLeft(p, tOtherPlayer);
+}
+
+static void payJuggleCost(DreamPlayer* p, DreamPlayer* tOtherPlayer) {
+	if (!getJuggleAttacker(tOtherPlayer)->mNoJuggleCheckFlag) {
+		p->mJuggleLeftByAttacker[getPlayerUniqueID(getJuggleAttacker(tOtherPlayer))] = getJuggleLeft(p, tOtherPlayer) - getJuggleCost(tOtherPlayer);
 	}
-	else {
-		isJuggableState = getPlayerStateType(p) == MUGEN_STATE_TYPE_LYING;
-	}
-
-	if (!isJuggableState) return 0;
-	if (tOtherPlayer->mNoJuggleCheckFlag) return 0;
-
-	p->mIsBeingJuggled = 1;
-	p->mAirJugglePoints -= getPlayerStateJugglePoints(tOtherPlayer);
-
-	return p->mAirJugglePoints < 0;
+	if (!isPlayerProjectile(tOtherPlayer)) tOtherPlayer->mJuggleChargedStateChange = tOtherPlayer->mRegisteredStateMachine->mStateChangeCount;
 }
 
 static void playPlayerHitSound(DreamPlayer* p, void(*tFunc)(DreamPlayer*,int*,Vector2DI*)) {

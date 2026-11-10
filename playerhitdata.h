@@ -396,6 +396,7 @@ void setAirGuardCornerPushVelocityOffset(DreamPlayer* tPlayer, float tX);
 int getActiveHitDataAirGuardControlTime(DreamPlayer* tPlayer);
 void setHitDataAirGuardControlTime(DreamPlayer* tPlayer, int tControlTime);
 void setHitDataAirJuggle(DreamPlayer* tPlayer, int tJuggle);
+int getHitDataAirJuggle(DreamPlayer* tPlayer);
 
 int getActiveHitDataHasMinimumDistance(DreamPlayer* tPlayer);
 Vector2DI getActiveHitDataMinimumDistance(DreamPlayer* tPlayer);
