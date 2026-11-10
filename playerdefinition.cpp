@@ -1083,7 +1083,22 @@ static void removePlayerBindingInternal(DreamPlayer* tPlayer) {
 
 static void updateBinding(DreamPlayer* p) {
 	if (!p->mIsBound) return;
-	if (isPlayerPaused(p)) return;
+	// Held by another's TargetBind, as in MUGEN (see Ikemen's update): it
+	// falls on its own (state 5050) when the one holding it is gone or is
+	// being hit, and the hold's time runs while that one is not paused.
+	if (p->mIsBoundByTargetBind) {
+		DreamPlayer* holder = p->mBoundTarget;
+		if (!isPlayer(holder) || holder->mIsDestroyed || getPlayerStateMoveType(holder) == MUGEN_STATE_MOVE_TYPE_BEING_HIT) {
+			removePlayerBindingInternal(p);
+			changePlayerStateToSelf(p, 5050);
+			return;
+		}
+		if (isPlayerPaused(holder)) {
+			updateBindingPosition(p);
+			return;
+		}
+	}
+	else if (isPlayerPaused(p)) return;
 
 	p->mBoundNow++;
 	// Time -1 binds for good, as in MUGEN: it was let go at once (Onslaught's
@@ -1366,6 +1381,9 @@ static int isPlayerInCorner(DreamPlayer* p, int tIsCheckingRightCorner) {
 
 static void updateStageBorderPost(DreamPlayer* p) {
 	if (!p->mIsBoundToScreenForTick || !p->mIsBoundToScreenForever) return;
+	// Bound to the other player (held or holding on), it may leave the
+	// screen, as in MUGEN: its binding comes after the screen's bounds.
+	if (!p->mIsHelper && p->mIsBound) return;
 
 	// As far as the stage's screenleft and screenright from the screen's
 	// sides (15 in most stages): the sprites, wider than the players' bodies,
@@ -5381,6 +5399,7 @@ static int isHelperBoundToPlayer(DreamPlayer* tHelper, DreamPlayer* tTestBind) {
 static void bindHelperToPlayer(DreamPlayer* tHelper, DreamPlayer* tBind, int tTime, int tFacing, const Vector2D& tOffsetCameraSpace, DreamPlayerBindPositionType tType) {
 	removePlayerBindingInternal(tHelper);
 	tHelper->mIsBound = 1;
+	tHelper->mIsBoundByTargetBind = 0;
 	tHelper->mBoundNow = 0;
 	tHelper->mBoundDuration = tTime;
 	tHelper->mBoundFaceSet = tFacing;
@@ -5438,6 +5457,7 @@ void bindPlayerTargetToPlayer(DreamPlayer* p, int tTime, const Vector2D& tOffset
 		if (!isPlayer(targetPair.second)) continue;
 		if (tID == -1 || tID == targetPair.first) {
 			bindHelperToPlayer(targetPair.second, p, tTime + 1, 0, offsetCameraSpace, PLAYER_BIND_POSITION_TYPE_AXIS);
+			targetPair.second->mIsBoundByTargetBind = 1;
 		}
 	}
 }

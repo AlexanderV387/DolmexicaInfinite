@@ -180,6 +180,7 @@ struct DreamPlayer {
 	int mNoStandGuardFlag;
 	int mPreviousNoStandGuardFlag; // last tick's, for walking back (see updateWalking)
 	float mCornerPushOffset; // in its own coordinates (see updateCornerPush)
+	int mIsBoundByTargetBind; // held by another's TargetBind (see updateBinding)
 	int mNoKOSoundFlag;
 	int mNoKOSlowdownFlag;
 	int mUnguardableFlag;
