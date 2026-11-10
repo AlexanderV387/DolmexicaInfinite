@@ -215,3 +215,43 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 	fflush(stdout);
 	unloadPrismWrapperScreenForDebug();
 }
+
+static void collectUniqueIDsCB(void* tCaller, void* tData) {
+	auto ids = (std::vector<int>*)tCaller;
+	DreamPlayer* helper = (DreamPlayer*)tData;
+	if (!helper->mIsDestroyed) ids->push_back(getPlayerUniqueID(helper));
+	list_map(&helper->mHelpers, collectUniqueIDsCB, tCaller);
+}
+
+/* MUGEN's player IDs: 56 and 57 for the two players, a new one for each
+ * helper, and PlayerID finding any player, the other one's too. */
+TEST_F(ContinueHelperTest, UniqueIDs) {
+	initForAutomatedFightScreenTest();
+	setPlayerDefinitionPath(0, getContinueCharDefPath("DOLMEXICA_CHAR1").c_str());
+	setPlayerDefinitionPath(1, getContinueCharDefPath("DOLMEXICA_CHAR").c_str());
+	setDreamStageMugenDefinition((getDolmexicaAssetFolder() + "stages/kfm.def").c_str(), "");
+	setGameModeSuperWatch();
+	const auto screen = getDreamFightScreenForTesting();
+	initPrismWrapperScreenForDebug(screen);
+	updatePrismWrapperScreenForDebugWithIterations(getContinueIntegerSetting("DOLMEXICA_FRAMES", 600));
+
+	DreamPlayer* first = getRootPlayer(0);
+	DreamPlayer* second = getRootPlayer(1);
+	EXPECT_EQ(getPlayerUniqueID(first), 56);
+	EXPECT_EQ(getPlayerUniqueID(second), 57);
+	EXPECT_TRUE(getPlayerByIDOrNullIfNonexistant(first, 57) == second);
+	EXPECT_TRUE(getPlayerByIDOrNullIfNonexistant(second, 56) == first);
+	EXPECT_TRUE(getPlayerByIDOrNullIfNonexistant(first, 0) == NULL);
+
+	std::vector<int> ids;
+	list_map(&second->mHelpers, collectUniqueIDsCB, &ids);
+	printf("second player's helpers: %d, their IDs:", (int)ids.size());
+	for (const auto id : ids) {
+		printf(" %d", id);
+		EXPECT_TRUE(id > 57);
+		EXPECT_TRUE(getPlayerByIDOrNullIfNonexistant(first, id) != NULL);
+	}
+	printf("\n");
+	fflush(stdout);
+	unloadPrismWrapperScreenForDebug();
+}

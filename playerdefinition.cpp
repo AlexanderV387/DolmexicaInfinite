@@ -593,6 +593,20 @@ static void loadSinglePlayerFromMugenDefinition(DreamPlayer* p)
 	endCompatSection();
 }
 
+// MUGEN's player IDs (the ID trigger, PlayerID): the two players from
+// HelperMax (56) on, then each helper made the next one, started again for
+// each match and not each round (see Ikemen's initPlayerID). The helper's
+// own id (Helper, IsHelper, NumHelper) is mID. The ID trigger gave that id,
+// 0 for both players, and PlayerID looked only among one's own helpers:
+// PlayerID(an ID kept of the enemy) was the player itself.
+static const int MUGEN_FIRST_PLAYER_ID = 56;
+
+static void resetPlayerUniqueIDs() {
+	gPlayerDefinition.mPlayers[0].mUniqueID = MUGEN_FIRST_PLAYER_ID;
+	gPlayerDefinition.mPlayers[1].mUniqueID = MUGEN_FIRST_PLAYER_ID + 1;
+	gPlayerDefinition.mUniqueIDCounter = MUGEN_FIRST_PLAYER_ID + 1;
+}
+
 void loadPlayers(MemoryStack* tMemoryStack) {
 	setProfilingSectionMarkerCurrentFunction();
 
@@ -614,6 +628,8 @@ void loadPlayers(MemoryStack* tMemoryStack) {
 		gPlayerDefinition.mPlayers[i].mControllerID = i;
 		loadSinglePlayerFromMugenDefinition(&gPlayerDefinition.mPlayers[i]);
 	}
+
+	resetPlayerUniqueIDs();
 
 	gPlayerDefinition.mIsLoading = 0;
 	gPlayerDefinition.mHasLoadedSprites = 0;
@@ -807,6 +823,7 @@ void resetPlayersEntirely()
 	resetPlayers();
 	resetSinglePlayerEntirely(&gPlayerDefinition.mPlayers[0]);
 	resetSinglePlayerEntirely(&gPlayerDefinition.mPlayers[1]);
+	resetPlayerUniqueIDs();
 }
 
 void resetPlayerPosition(DreamPlayer* p)
@@ -5205,6 +5222,7 @@ DreamPlayer * clonePlayerAsHelper(DreamPlayer* p)
 
 	helper->mParent = p;
 	helper->mIsHelper = 1;
+	helper->mUniqueID = ++gPlayerDefinition.mUniqueIDCounter;
 	helper->mHelperIDInParent = list_push_back(&p->mHelpers, helper);
 	helper->mHelperIDInRoot = list_push_back(&gPlayerDefinition.mAllPlayers, helper);
 
@@ -5615,7 +5633,7 @@ static void searchPlayerForIDCB(void* tCaller, void* tData) {
 }
 
 static DreamPlayer* searchSinglePlayerForID(DreamPlayer* p, int tID) {
-	if (getPlayerID(p) == tID) return p;
+	if (!p->mIsDestroyed && p->mUniqueID == tID) return p;
 
 	SearchPlayerIDCaller caller;
 	caller.mSearchID = tID;
@@ -5627,12 +5645,22 @@ static DreamPlayer* searchSinglePlayerForID(DreamPlayer* p, int tID) {
 
 int doesPlayerIDExist(DreamPlayer* p, int tID)
 {
-	return searchSinglePlayerForID(p->mRoot, tID) != NULL;
+	return getPlayerByIDOrNullIfNonexistant(p, tID) != NULL;
 }
 
-DreamPlayer * getPlayerByIDOrNullIfNonexistant(DreamPlayer* p, int tID)
+// Any player with that ID, the other one and its helpers too, as in MUGEN.
+DreamPlayer * getPlayerByIDOrNullIfNonexistant(DreamPlayer* /*p*/, int tID)
 {
-	return searchSinglePlayerForID(p->mRoot, tID);
+	for (int i = 0; i < 2; i++) {
+		DreamPlayer* ret = searchSinglePlayerForID(&gPlayerDefinition.mPlayers[i], tID);
+		if (ret) return ret;
+	}
+	return NULL;
+}
+
+int getPlayerUniqueID(DreamPlayer* p)
+{
+	return p->mUniqueID;
 }
 
 int getPlayerRoundsExisted(DreamPlayer* p)

@@ -117,6 +117,7 @@ struct DreamPlayer {
 	int mRootID;
 	int mControllerID;
 	int mID;
+	int mUniqueID; // MUGEN's ID trigger (see resetPlayerUniqueIDs)
 	int mIsHelper;
 	int mIsProjectile;
 	int mProjectileID;
@@ -753,6 +754,7 @@ void changePlayerTargetState(DreamPlayer* p, int tID, int tNewState);
 
 int doesPlayerIDExist(DreamPlayer* p, int tID);
 DreamPlayer* getPlayerByIDOrNullIfNonexistant(DreamPlayer* p, int tID);
+int getPlayerUniqueID(DreamPlayer* p);
 
 int getPlayerRoundsExisted(DreamPlayer* p);
 

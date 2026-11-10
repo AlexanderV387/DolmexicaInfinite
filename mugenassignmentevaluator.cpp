@@ -1866,7 +1866,7 @@ static AssignmentReturnValue* hitPauseTimeFunction(DreamPlayer* tPlayer) { retur
 static AssignmentReturnValue* hitShakeOverFunction(DreamPlayer* tPlayer) { return makeBooleanAssignmentReturn(isPlayerHitShakeOver(tPlayer));  }
 static AssignmentReturnValue* hitVelXFunction(DreamPlayer* tPlayer) { return makeFloatAssignmentReturn(getPlayerHitVelocityX(tPlayer, getActiveStateMachineCoordinateP())); }
 static AssignmentReturnValue* hitVelYFunction(DreamPlayer* tPlayer) { return makeFloatAssignmentReturn(getPlayerHitVelocityY(tPlayer, getActiveStateMachineCoordinateP())); }
-static AssignmentReturnValue* idFunction(DreamPlayer* tPlayer) { return makeNumberAssignmentReturn(tPlayer->mID); }
+static AssignmentReturnValue* idFunction(DreamPlayer* tPlayer) { return makeNumberAssignmentReturn(getPlayerUniqueID(tPlayer)); }
 static AssignmentReturnValue* inGuardDistFunction(DreamPlayer* tPlayer) { return makeBooleanAssignmentReturn(isPlayerInGuardDistance(tPlayer)); }
 static AssignmentReturnValue* isHelperFunction(DreamPlayer* tPlayer) { return makeBooleanAssignmentReturn(isPlayerHelper(tPlayer)); }
 static AssignmentReturnValue* isHomeTeamFunction(DreamPlayer* tPlayer) { return makeBooleanAssignmentReturn(isPlayerHomeTeam(tPlayer)); }
