@@ -3,6 +3,7 @@
 #include <string>
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
 
 #include <prism/wrapper.h>
 #include <prism/datastructures.h>
@@ -114,5 +115,51 @@ TEST_F(ContinueHelperTest, HelpersAfterContinue) {
 		printHelperTrees("after the restart");
 	}
 
+	unloadPrismWrapperScreenForDebug();
+}
+
+/* Helpers that go missing: the second player's helpers of the given IDs
+ * (DOLMEXICA_WATCH_IDS=111,301,302,303) looked at each frame of the fight,
+ * each time one goes or comes back written with its root's state.
+ * DOLMEXICA_CHAR, DOLMEXICA_CHAR1, DOLMEXICA_STAGE as above; both fight on
+ * their own for DOLMEXICA_FRAMES frames (default 7200), or DOLMEXICA_ARCADE=1. */
+TEST_F(ContinueHelperTest, MissingHelpers) {
+	const int frames = getContinueIntegerSetting("DOLMEXICA_FRAMES", 7200);
+	const char* stageEnv = getenv("DOLMEXICA_STAGE");
+	std::vector<int> ids;
+	for (const char* q = getenv("DOLMEXICA_WATCH_IDS"); q && *q; ) {
+		ids.push_back((int)strtol(q, (char**)&q, 10));
+		while (*q == ',' || *q == ' ') q++;
+	}
+
+	initForAutomatedFightScreenTest();
+	setPlayerDefinitionPath(0, getContinueCharDefPath("DOLMEXICA_CHAR1").c_str());
+	setPlayerDefinitionPath(1, getContinueCharDefPath("DOLMEXICA_CHAR").c_str());
+	setDreamStageMugenDefinition((getDolmexicaAssetFolder() + (stageEnv ? stageEnv : "stages/kfm.def")).c_str(), "");
+	// DOLMEXICA_ARCADE=1: the arcade, no one at the first player's controls
+	// (rounds won and lost, the next ones started).
+	if (getContinueIntegerSetting("DOLMEXICA_ARCADE", 0)) setGameModeArcade();
+	else setGameModeSuperWatch();
+	const auto screen = getDreamFightScreenForTesting();
+	initPrismWrapperScreenForDebug(screen);
+
+	std::vector<int> present(ids.size(), -1);
+	int round = getDreamRoundNumber();
+	for (int frame = 0; frame < frames; frame++) {
+		updatePrismWrapperScreenForDebugWithIterationsAndRender(1);
+		if (getDreamRoundNumber() != round) {
+			round = getDreamRoundNumber();
+			printf("frame %d: round %d\n", frame, round);
+		}
+		if (getDreamRoundStateNumber() != 2) continue;
+		DreamPlayer* root = getRootPlayer(1);
+		for (size_t i = 0; i < ids.size(); i++) {
+			const int isThere = getPlayerHelperAmountWithID(root, ids[i]) > 0;
+			if (isThere == present[i]) continue;
+			present[i] = isThere;
+			printf("frame %d: helper %d %s (root state %d, time %d, previous state %d)\n", frame, ids[i], isThere ? "there" : "MISSING", getPlayerState(root), getPlayerTimeInState(root), getPlayerPreviousState(root));
+		}
+	}
+	fflush(stdout);
 	unloadPrismWrapperScreenForDebug();
 }
