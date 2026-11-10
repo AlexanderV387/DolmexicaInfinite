@@ -2541,36 +2541,40 @@ static void checkSingleFlag2InHitDefAttributeSlot(HitDefAttributeFlag2Caller* tC
 	tCaller->mFound = 1;
 }
 
+// A HitBy or NotHitBy slot against an attack, as MUGEN does it (see Ikemen's
+// checkHitBySlot and attrCheck): the state type is the attacker's own, not
+// its HitDef's S, C or A (a projectile's is the HitDef's); NotHitBy keeps
+// the hit off when the state type or the attack's class and type match,
+// HitBy lets it through only when both do. HitBy took either.
 static int checkSingleNoHitDefSlot(DreamHitDefAttributeSlot* tSlot, DreamPlayer* p2) {
 	if (!tSlot->mIsActive) return 1;
 
-	DreamMugenStateType type = getHitDataType(p2);
-
+	const DreamMugenStateType type = isPlayerProjectile(p2) ? getHitDataType(p2) : getPlayerStateType(p2);
+	int isStateTypeMatching;
 	if (type == MUGEN_STATE_TYPE_STANDING) {
-		if (tSlot->mFlag1.find('s') != tSlot->mFlag1.npos) return tSlot->mIsHitBy;
+		isStateTypeMatching = tSlot->mFlag1.find('s') != tSlot->mFlag1.npos;
 	} 
 	else if (type == MUGEN_STATE_TYPE_CROUCHING) {
-		if (tSlot->mFlag1.find('c') != tSlot->mFlag1.npos) return tSlot->mIsHitBy;
+		isStateTypeMatching = tSlot->mFlag1.find('c') != tSlot->mFlag1.npos;
 	}
 	else if (type == MUGEN_STATE_TYPE_AIR) {
-		if (tSlot->mFlag1.find('a') != tSlot->mFlag1.npos) return tSlot->mIsHitBy;
+		isStateTypeMatching = tSlot->mFlag1.find('a') != tSlot->mFlag1.npos;
 	}
 	else {
-		logWarningFormat("Invalid hitdef type %d. Defaulting to not not hit.", type);
-		return 0;
+		// Lying down: no S, C or A to match.
+		isStateTypeMatching = 0;
 	}
 
 	HitDefAttributeFlag2Caller caller;
 	caller.mFound = 0;
 	caller.mType = getHitDataAttackType(p2);
 	caller.mClass = getHitDataAttackClass(p2);
-
 	for (size_t i = 0; i < tSlot->mFlag2.size(); i++) {
 		checkSingleFlag2InHitDefAttributeSlot(&caller, tSlot->mFlag2[i]);
 	}
 
-	if (caller.mFound) return tSlot->mIsHitBy;
-	else return !tSlot->mIsHitBy;
+	if (tSlot->mIsHitBy) return isStateTypeMatching && caller.mFound;
+	else return !(isStateTypeMatching || caller.mFound);
 }
 
 static int checkActiveHitDefAttributeSlots(DreamPlayer* p, DreamPlayer* p2) {
@@ -5712,11 +5716,20 @@ void setPlayerNotHitByFlag1(DreamPlayer* p, int tSlot, const char* tFlag)
 void addPlayerNotHitByFlag2(DreamPlayer* p, int tSlot, const char* tFlag)
 {
 	std::string nFlag = copyOverCleanHitDefAttributeFlag(tFlag);
+	turnStringLowercase(nFlag);
+	// A class alone is all three of its types, as MUGEN reads it (see
+	// Ikemen's attrMask): N, S, and H or A for hyper.
+	if (nFlag.size() == 1 && (nFlag[0] == 'n' || nFlag[0] == 's' || nFlag[0] == 'h' || nFlag[0] == 'a')) {
+		const char attackClass = nFlag[0] == 'a' ? 'h' : nFlag[0];
+		for (const char attackType : { 'a', 't', 'p' }) {
+			p->mNotHitBy[tSlot].mFlag2.push_back(std::string(1, attackClass) + attackType);
+		}
+		return;
+	}
 	if (nFlag.size() != 2) {
 		logWarningFormat("Unable to parse nothitby flag %s. Ignoring.", tFlag);
 		return;
 	}
-	turnStringLowercase(nFlag);
 
 	p->mNotHitBy[tSlot].mFlag2.push_back(nFlag);
 }
