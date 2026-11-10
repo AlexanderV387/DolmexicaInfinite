@@ -823,25 +823,30 @@ static void changePlayerStateHardcoded(DreamPlayer* p, int tState) {
 	setDreamHandledStateMachineHardcodedState(p->mRegisteredStateMachine, tState);
 }
 
+// Walking as in MUGEN (see Ikemen's actionPrepare): forward or back, not
+// both, and back not within guard distance (it guards there) unless
+// standing guard was off; braking from 20 back to 0 needs no control and
+// comes with both or neither held. NoWalk keeps it from starting only.
 static void updateWalking(DreamPlayer* p) {
 	if (p->mIsHelper) return;
-	if (p->mNoWalkFlag) {
-		p->mNoWalkFlag = 0;
+	const int isWalkPrevented = p->mNoWalkFlag;
+	p->mNoWalkFlag = 0;
+
+	const int isHoldingForward = isPlayerCommandActive(p, "holdfwd");
+	const int isHoldingBack = isPlayerCommandActive(p, "holdback");
+	if (getPlayerState(p) == 20 && isHoldingForward == isHoldingBack) {
+		changePlayerStateHardcoded(p, 0);
 		return;
 	}
 
+	if (isWalkPrevented) return;
 	if (!p->mIsInControl) return;
 	if (isPlayerGuarding(p)) return;
-
 	if (getPlayerStateType(p) != MUGEN_STATE_TYPE_STANDING) return;
 
-	if (isPlayerCommandActive(p, "holdfwd") || isPlayerCommandActive(p, "holdback")) {
-		if (getPlayerState(p) != 20) {
-			changePlayerStateHardcoded(p, 20);
-		}
-	}
-	else if (getPlayerState(p) == 20) {
-		changePlayerStateHardcoded(p, 0);
+	const int isBackCounted = isHoldingBack && (!isPlayerInGuardDistance(p) || p->mPreviousNoStandGuardFlag);
+	if (isHoldingForward != isBackCounted && getPlayerState(p) != 20) {
+		changePlayerStateHardcoded(p, 20);
 	}
 }
 
@@ -1165,6 +1170,7 @@ static void updateGuardingFlags(DreamPlayer* p) {
 
 	p->mNoAirGuardFlag = 0;
 	p->mNoCrouchGuardFlag = 0;
+	p->mPreviousNoStandGuardFlag = p->mNoStandGuardFlag;
 	p->mNoStandGuardFlag = 0;
 	p->mUnguardableFlag = 0;
 }

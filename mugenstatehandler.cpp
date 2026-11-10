@@ -207,6 +207,9 @@ static void applyHardcodedPendingState(RegisteredMugenStateMachine* e, int tChan
 	if (state < 0) return;
 	if (e->mStateChangeCount != tChangesBefore || e->mHasPendingStateChange) return;
 	if (e->mIsInStoryMode || !e->mPlayer || !isPlayer(e->mPlayer) || isPlayerDestroyed(e->mPlayer)) return;
+	// Crouching stops at once, as in MUGEN (see Ikemen's actionPrepare),
+	// except from running (state 100), which slides into it.
+	if (state == 10 && getPlayerState(e->mPlayer) != 100) setPlayerVelocityX(e->mPlayer, 0, getPlayerCoordinateP(e->mPlayer));
 	changePlayerState(e->mPlayer, state);
 }
 
@@ -220,9 +223,22 @@ int hasDreamHandledStateMachineHardcodedState(RegisteredMugenStateMachine* e)
 	return e->mHardcodedPendingState >= 0;
 }
 
+// A state change made from outside the states (the engine's, as the
+// compatibility below) runs the new state at once, inside this update: a
+// loop of those is cut, as MUGEN stops a state machine stuck in a loop.
+// Kept low for the 3DS's stack (Lei-lei went 0 -> a move ending in her
+// missing state 59 -> 0 ... in one tick, and the stack ran out).
+static int gStateMachineUpdateDepth;
+static const int MAXIMUM_STATE_MACHINE_UPDATE_DEPTH = 64;
+
 static void updateSingleStateMachineByReference(RegisteredMugenStateMachine* tRegisteredState, int tDoesIncrementTimeInState) {
 	setProfilingSectionMarkerCurrentFunction();
 	if (tRegisteredState->mIsPaused) return;
+	if (gStateMachineUpdateDepth >= MAXIMUM_STATE_MACHINE_UPDATE_DEPTH) {
+		logWarningFormat("State machine %d stuck in a loop of state changes, stopped in state %d.", tRegisteredState->mID, tRegisteredState->mState);
+		return;
+	}
+	gStateMachineUpdateDepth++;
 	assert(tRegisteredState->mIsInStoryMode || !isPlayerProjectile(tRegisteredState->mPlayer));
 
 	const auto isHitPaused = isStateMachineInHitPause(tRegisteredState);
@@ -278,8 +294,9 @@ static void updateSingleStateMachineByReference(RegisteredMugenStateMachine* tRe
 	// back to standing or crouching, with control. Lei-lei's normal moves end
 	// in state 59, which she does not have; her flips land in state 53, in
 	// the air on the ground, also missing.
+	// Only in the outermost update: the one it starts would do it again.
 	DreamPlayer* p = tRegisteredState->mPlayer;
-	if (!isHitPaused && !tRegisteredState->mIsInStoryMode && p && !tRegisteredState->mIsUsingTemporaryOtherStateMachine
+	if (gStateMachineUpdateDepth == 1 && !isHitPaused && !tRegisteredState->mIsInStoryMode && p && !tRegisteredState->mIsUsingTemporaryOtherStateMachine
 		&& isPlayer(p) && !isPlayerDestroyed(p) && !isPlayerHelper(p) && !isPlayerProjectile(p)
 		&& !stl_map_contains(tRegisteredState->mStates->mStates, tRegisteredState->mState)
 		&& (getPlayerStateType(p) == MUGEN_STATE_TYPE_STANDING || getPlayerStateType(p) == MUGEN_STATE_TYPE_CROUCHING
@@ -290,6 +307,7 @@ static void updateSingleStateMachineByReference(RegisteredMugenStateMachine* tRe
 		setPlayerControl(p, 1);
 		changePlayerState(p, crouching ? 11 : 0);
 	}
+	gStateMachineUpdateDepth--;
 }
 
 // Its player moves now that its states have run (see updatePlayerPhysicsAfterStates).

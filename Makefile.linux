@@ -23,10 +23,12 @@ all: DolmexicaInfiniteTest
 
 $(OBJDIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 DolmexicaInfiniteTest: $(ALL_OBJS) $(PRISM_PATH)/bin_linux/libprism.a
 	$(CXX) $(ALL_OBJS) $(LDFLAGS) -o $@
+
+-include $(ALL_OBJS:.o=.d)
 
 clean:
 	rm -rf $(OBJDIR) DolmexicaInfiniteTest

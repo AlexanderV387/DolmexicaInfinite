@@ -28,10 +28,12 @@ all: DolmexicaInfiniteSim
 
 $(OBJDIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 DolmexicaInfiniteSim: $(ALL_OBJS) $(PRISM_PATH)/bin_n3dssim/libprism.a
 	$(CXX) $(ALL_OBJS) $(LDFLAGS) -o $@
+
+-include $(ALL_OBJS:.o=.d)
 
 clean:
 	rm -rf $(OBJDIR) DolmexicaInfiniteSim
