@@ -1827,6 +1827,7 @@ static int updateSinglePlayerPreStateMachine(DreamPlayer* p) {
 static void updatePlayersPreStateMachine(void* tData) {
 	(void)tData;
 	setProfilingSectionMarkerCurrentFunction();
+	setDreamStateHandlerTickStart();
 
 	int i;
 	for (i = 0; i < 2; i++) {

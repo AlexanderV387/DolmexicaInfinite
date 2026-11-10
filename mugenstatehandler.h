@@ -26,6 +26,7 @@ struct RegisteredMugenStateMachine {
 	int mIsInputControlDisabled;
 	int mIsDisabled;
 	int mWasUpdatedOutsideHandler;
+	int mHasRunThisTick;
 	int mIsBeingProcessed;
 
 	int mHasPendingStateChange;
@@ -46,6 +47,7 @@ struct RegisteredMugenStateMachine {
 
 ActorBlueprint getDreamMugenStateHandler();
 void setDreamHandledStateMachineHardcodedState(RegisteredMugenStateMachine* e, int tState);
+void setDreamStateHandlerTickStart();
 int hasDreamHandledStateMachineHardcodedState(RegisteredMugenStateMachine* e);
 
 RegisteredMugenStateMachine* registerDreamMugenStateMachine(DreamMugenStates* tStates, DreamPlayer* tPlayer, int tIsInSotryMode = 0);

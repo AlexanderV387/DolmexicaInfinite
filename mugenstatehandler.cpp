@@ -210,7 +210,12 @@ static void applyHardcodedPendingState(RegisteredMugenStateMachine* e, int tChan
 	// Crouching stops at once, as in MUGEN (see Ikemen's actionPrepare),
 	// except from running (state 100), which slides into it.
 	if (state == 10 && getPlayerState(e->mPlayer) != 100) setPlayerVelocityX(e->mPlayer, 0, getPlayerCoordinateP(e->mPlayer));
-	changePlayerState(e->mPlayer, state);
+	// Buffered, as in Ikemen (its stateChange2 after state -1): the new state
+	// runs once, below, the special states not again. Run at once, the -3,
+	// -2 and -1 states ran twice that tick, the new state twice, and the
+	// next tick none at all: a button pressed on the tick after crouching,
+	// standing up or starting to walk was lost.
+	changePlayerStateBeforeImmediatelyEvaluatingIt(e->mPlayer, state);
 }
 
 void setDreamHandledStateMachineHardcodedState(RegisteredMugenStateMachine* e, int tState)
@@ -316,10 +321,26 @@ static void moveStateMachinePlayer(RegisteredMugenStateMachine* e) {
 	updatePlayerPhysicsAfterStates(e->mPlayer);
 }
 
+// Where the tick is: before the state machines run (the players' updates
+// before them), running them, or after (hits, landing, guarding). A state
+// change from outside the states runs the new state at once; the handler
+// skips that machine's turn only if it had not had it yet this tick. After
+// its turn, or after the handler, the next tick runs as ever: skipped, a
+// landing, a guard or a hit took a tick more, and a button pressed then
+// was lost.
+enum StateHandlerTickPhase { STATE_HANDLER_BEFORE, STATE_HANDLER_RUNNING, STATE_HANDLER_AFTER };
+static StateHandlerTickPhase gStateHandlerTickPhase = STATE_HANDLER_BEFORE;
+
+void setDreamStateHandlerTickStart()
+{
+	gStateHandlerTickPhase = STATE_HANDLER_BEFORE;
+}
+
 static void updateSingleStateMachine(void* tCaller, RegisteredMugenStateMachine& tData) {
 	(void)tCaller;
 	setProfilingSectionMarkerCurrentFunction();
 	RegisteredMugenStateMachine* registeredState = &tData;
+	registeredState->mHasRunThisTick = 1;
 	registeredState->mTimeDilatationNow += registeredState->mTimeDilatation;
 	int updateAmount = (int)registeredState->mTimeDilatationNow;
 	registeredState->mTimeDilatationNow -= updateAmount;
@@ -355,6 +376,8 @@ static void updateStateHandler(void* tData) {
 	setProfilingSectionMarkerCurrentFunction();
 	auto& machines = gMugenStateHandlerData.mRegisteredStates;
 	if (machines.empty()) return;
+	gStateHandlerTickPhase = STATE_HANDLER_RUNNING;
+	for (auto& entry : machines) entry.second.mHasRunThisTick = 0;
 
 	static std::vector<std::pair<int, int>> order;   // (priority, id)
 	order.clear();
@@ -375,6 +398,7 @@ static void updateStateHandler(void* tData) {
 		if (it == machines.end()) break;
 		lastRunID = it->first;
 		RegisteredMugenStateMachine& e = it->second;
+		e.mHasRunThisTick = 1;
 		if (e.mWasUpdatedOutsideHandler) {
 			e.mWasUpdatedOutsideHandler = 0;
 		}
@@ -383,6 +407,7 @@ static void updateStateHandler(void* tData) {
 		}
 		moveStateMachinePlayer(&e);
 	}
+	gStateHandlerTickPhase = STATE_HANDLER_AFTER;
 }
 
 ActorBlueprint getDreamMugenStateHandler() {
@@ -407,6 +432,7 @@ RegisteredMugenStateMachine* registerDreamMugenStateMachine(DreamMugenStates * t
 	e.mIsInputControlDisabled = 0;
 	e.mIsDisabled = 0;
 	e.mWasUpdatedOutsideHandler = 0;
+	e.mHasRunThisTick = 0;
 	e.mIsBeingProcessed = 0;
 	e.mHasPendingStateChange = 0;
 	e.mPendingStateChange = 0;
@@ -565,6 +591,12 @@ static void applyRegisteredStateMachineStateChange(RegisteredMugenStateMachine* 
 		}
 	}
 	e->mHasPendingStateChange = 0; // changing state clears pending state changes
+	{
+		// For tests: DOLMEXICA_TRACE_STATES writes each state change.
+		static int traceStates = -1;
+		if (traceStates < 0) traceStates = getenv("DOLMEXICA_TRACE_STATES") ? 1 : 0;
+		if (traceStates) printf("TRACE state: machine %d, %d -> %d (time %d)\n", e->mID, e->mState, tNewState, e->mTimeInState);
+	}
 	DreamMugenStates* states = getCurrentStateMachineStates(e);
 	if (!stl_map_contains(states->mStates, tNewState)) {
 		if (!e->mPlayer || e->mIsInStoryMode) {
@@ -723,7 +755,9 @@ void setDreamHandledStateMachineSpeed(RegisteredMugenStateMachine* e, float tSpe
 void updateDreamSingleStateMachineByID(RegisteredMugenStateMachine* e, int tDoesIncrementTimeInState) {
 	assert(stl_map_contains(gMugenStateHandlerData.mRegisteredStates, e->mID));
 	updateSingleStateMachineByReference(e, tDoesIncrementTimeInState);
-	e->mWasUpdatedOutsideHandler = 1;
+	if (gStateHandlerTickPhase == STATE_HANDLER_BEFORE) e->mWasUpdatedOutsideHandler = 1;
+	else if (gStateHandlerTickPhase == STATE_HANDLER_RUNNING) e->mWasUpdatedOutsideHandler = !e->mHasRunThisTick;
+	else e->mWasUpdatedOutsideHandler = 0;
 }
 
 void setDreamSingleStateMachineToUpdateAgainByID(RegisteredMugenStateMachine* e)
