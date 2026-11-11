@@ -324,9 +324,24 @@ static void startScene() {
 	addFadeIn(scene->mFadeInTime, NULL, NULL);
 }
 
+// [3DS] A scene's window as wide as the game's 4:3 screen (or wider) also
+// takes the top screen's wider sides: clipped to it, the pictures left
+// black bands there.
+static GeoRectangle2D getSceneAnimationWindow(const Scene* tScene) {
+	GeoRectangle2D window = tScene->mWindow;
+	if (getDreamScreenSideMargin(320) > 0 && window.mTopLeft.x <= 0 && window.mBottomRight.x >= gStoryScreenData.mLocalCoordinates.x - 1) {
+		window.mTopLeft.x = -INF / 2;
+		window.mBottomRight.x = INF;
+	}
+	return window;
+}
+
 static void activateLayerAnimation(Scene* tScene, Layer* tLayer, const Position& tPos) {
 	tLayer->mAnimationElement = addMugenAnimation(tLayer->mAnimation, &gStoryScreenData.mSprites, tPos);
-	setMugenAnimationConstraintRectangle(tLayer->mAnimationElement, tScene->mWindow);
+	setMugenAnimationConstraintRectangle(tLayer->mAnimationElement, getSceneAnimationWindow(tScene));
+	// A picture the size of the screen: widened over the 3DS's wider sides
+	// (as the supers' full-screen backgrounds), not left with black bands.
+	setMugenAnimationStretchedToScreenWidth(tLayer->mAnimationElement, 1);
 }
 
 static void activateLayerText(Scene* tScene, Layer* tLayer, const Position& tPos) {

@@ -890,7 +890,7 @@ static void loadSingleCombo(int i, MugenDefScript* tScript) {
 	combo->mPosition.z = UI_BASE_Z;
 
 	sprintf(name, "team%d.start.x", i + 1);
-	combo->mStartX = getMugenDefFloatOrDefault(tScript, "combo", name, 0);
+	combo->mStartX = getMugenDefFloatOrDefault(tScript, "combo", name, 0) * coordinateScale;
 
 	sprintf(name, "team%d.counter.font", i + 1);
 	combo->mCounterFont = getMugenDefVectorIOrDefault(tScript, "combo", name, Vector3DI(-1, 0, 1));
@@ -920,6 +920,8 @@ static void loadSingleCombo(int i, MugenDefScript* tScript) {
 	}
 	combo->mCurrentDeltaY = 0;
 	setComboPosition(i);
+	setMugenTextVisibility(combo->mNumberTextID, 0);
+	setMugenTextVisibility(combo->mTextID, 0);
 
 	combo->mIsActive = 0;
 }
@@ -1474,6 +1476,12 @@ static void updateSingleComboMovement(int i) {
 	
 	updateSingleComboShake(combo);
 	setComboPosition(i);
+	// Hidden while it waits off the game's 4:3 screen: there, on the 3DS's
+	// wider top screen, the counter showed "111" at the right side and its
+	// text at the left the whole fight.
+	const int isWaiting = !combo->mIsActive && combo->mCurrentX == (i == 0 ? left : right);
+	setMugenTextVisibility(combo->mNumberTextID, !isWaiting);
+	setMugenTextVisibility(combo->mTextID, !isWaiting);
 }
 
 static void updateSingleComboActivity(int i) {

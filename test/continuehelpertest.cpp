@@ -18,6 +18,7 @@
 #include "stage.h"
 #include "gamelogic.h"
 #include "fightscreen.h"
+#include "titlescreen.h"
 
 /* The fight started over as at "Continue?" (arcade and free play), and each
  * root's helpers written as a tree before and after it.
@@ -409,5 +410,19 @@ TEST_F(ContinueHelperTest, Juggle) {
 		printf("frame %d: first state %d, second state %d, y %.0f, life %d, juggle left %d\n", frame, lastFirstState, lastState, getPlayerPositionY(second, getPlayerCoordinateP(second)), getPlayerLife(second), getPlayerJuggleLeftForTesting(second, first));
 	}
 	fflush(stdout);
+	unloadPrismWrapperScreenForDebug();
+}
+
+/* Screen tour: the game from its title screen, player 1's buttons from
+ * PRISM_LINUX_SCRIPT, for DOLMEXICA_FRAMES frames (default 3000), drawn
+ * (the simulator's N3DS_SIM_SHOT takes pictures): for looking at every
+ * screen on the 3DS's wider top screen. */
+TEST_F(ContinueHelperTest, ScreenTour) {
+	const int frames = getContinueIntegerSetting("DOLMEXICA_FRAMES", 3000);
+	initPrismWrapperScreenForDebug(getDreamTitleScreen());
+	for (int frame = 0; frame < frames; frame++) {
+		updatePrismWrapperScreenForDebugWithIterationsAndRender(1);
+		if (switchPrismWrapperScreenForDebugIfNeeded()) printf("frame %d: next screen\n", frame);
+	}
 	unloadPrismWrapperScreenForDebug();
 }
