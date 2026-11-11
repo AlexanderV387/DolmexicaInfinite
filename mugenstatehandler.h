@@ -32,6 +32,9 @@ struct RegisteredMugenStateMachine {
 	int mHasPendingStateChange;
 	int mPendingStateChange;
 	int mIsPendingStateChangeToOwnStates;
+	// Changed into a state by another player's TargetState: its statedef's
+	// settings (type, physics, anim, ctrl, velset...) wait for its own turn.
+	int mHasPendingStateInit;
 
 	int mCurrentJugglePoints;
 
@@ -74,6 +77,7 @@ int hasDreamHandledStateMachineStateSelf(RegisteredMugenStateMachine* tRegistere
 int isInOwnStateMachine(RegisteredMugenStateMachine* tRegisteredState);
 void changeDreamHandledStateMachineState(RegisteredMugenStateMachine* tRegisteredState, int tNewState);
 void changeDreamHandledStateMachineStateToOtherPlayerStateMachine(RegisteredMugenStateMachine* tRegisteredState, RegisteredMugenStateMachine* tBorrowState, int tNewState);
+void changeDreamHandledStateMachineStateToOtherPlayerStateMachineWithoutInit(RegisteredMugenStateMachine* tRegisteredState, RegisteredMugenStateMachine* tBorrowState, int tNewState);
 void changeDreamHandledStateMachineStateToOwnStateMachine(RegisteredMugenStateMachine* tRegisteredState, int tNewState);
 void changeDreamHandledStateMachineStateToOwnStateMachineWithoutChangingState(RegisteredMugenStateMachine* tRegisteredState);
 void setDreamHandledStateMachineSpeed(RegisteredMugenStateMachine* tRegisteredState, float tSpeed);

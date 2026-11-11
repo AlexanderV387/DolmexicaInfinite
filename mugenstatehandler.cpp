@@ -108,14 +108,15 @@ static DreamMugenStates* getCurrentStateMachineStates(RegisteredMugenStateMachin
 	}
 }
 
-static void applyRegisteredStateMachineStateChange(RegisteredMugenStateMachine* tRegisteredState, int tNewState);
+static void applyRegisteredStateMachineStateChange(RegisteredMugenStateMachine* tRegisteredState, int tNewState, int tIsDeferringInit);
+static void applyRegisteredStateMachineStateInit(RegisteredMugenStateMachine* e);
 
 static void applyRegisteredStateMachinePendingStateChange(RegisteredMugenStateMachine* tRegisteredState) {
 	tRegisteredState->mHasPendingStateChange = 0;
 	if (tRegisteredState->mIsPendingStateChangeToOwnStates) {
 		tRegisteredState->mIsUsingTemporaryOtherStateMachine = 0;
 	}
-	applyRegisteredStateMachineStateChange(tRegisteredState, tRegisteredState->mPendingStateChange);
+	applyRegisteredStateMachineStateChange(tRegisteredState, tRegisteredState->mPendingStateChange, 0);
 }
 
 // The machine running its state -3 or -2 now: a change from there into the
@@ -251,6 +252,10 @@ static void updateSingleStateMachineByReference(RegisteredMugenStateMachine* tRe
 		if (tRegisteredState->mHasPendingStateChange) {
 			// A state change deferred during a hitpause takes effect after the pause has finished, starts at 0 for this tick
 			applyRegisteredStateMachinePendingStateChange(tRegisteredState);
+		}
+		else if (tRegisteredState->mHasPendingStateInit) {
+			// Put in this state by another player's TargetState: it starts now, at 0.
+			applyRegisteredStateMachineStateInit(tRegisteredState);
 		}
 		else if (tDoesIncrementTimeInState) {
 			tRegisteredState->mTimeInState++;
@@ -437,6 +442,7 @@ RegisteredMugenStateMachine* registerDreamMugenStateMachine(DreamMugenStates * t
 	e.mHasPendingStateChange = 0;
 	e.mPendingStateChange = 0;
 	e.mIsPendingStateChangeToOwnStates = 0;
+	e.mHasPendingStateInit = 0;
 	e.mCurrentJugglePoints = 0;
 	e.mHardcodedPendingState = -1;
 	e.mStateChangeCount = 0;
@@ -574,7 +580,7 @@ static void resetStateControllers(DreamMugenState* e) {
 	vector_map(&e->mControllers, resetSingleStateController, NULL);
 }
 
-static void applyRegisteredStateMachineStateChange(RegisteredMugenStateMachine* e, int tNewState)
+static void applyRegisteredStateMachineStateChange(RegisteredMugenStateMachine* e, int tNewState, int tIsDeferringInit)
 {
 	setProfilingSectionMarkerCurrentFunction();
 	if (!e->mIsInStoryMode && e->mPlayer && isPlayer(e->mPlayer)) autoTurnPlayerOnStateChange(e->mPlayer);
@@ -609,6 +615,7 @@ static void applyRegisteredStateMachineStateChange(RegisteredMugenStateMachine* 
 		// moves end in state 59, which she does not have; refused, the move
 		// was started again 2500 times a frame).
 		logWarningFormat("Player %d %d changed into nonexistant state %d (without controllers).", e->mPlayer->mRootID, e->mPlayer->mID, tNewState);
+		e->mHasPendingStateInit = 0;
 		e->mTimeInState = 0;
 		e->mPreviousState = e->mState;
 		e->mState = tNewState;
@@ -630,7 +637,22 @@ static void applyRegisteredStateMachineStateChange(RegisteredMugenStateMachine* 
 	DreamMugenState* newState = &states->mStates[e->mState];
 	resetStateControllers(newState);
 
+	e->mHasPendingStateInit = 0;
 	if (!e->mPlayer || e->mIsInStoryMode) return;
+	if (tIsDeferringInit) {
+		e->mHasPendingStateInit = 1;
+		return;
+	}
+	applyRegisteredStateMachineStateInit(e);
+}
+
+// The statedef's own settings, as the state starts.
+static void applyRegisteredStateMachineStateInit(RegisteredMugenStateMachine* e)
+{
+	e->mHasPendingStateInit = 0;
+	DreamMugenStates* states = getCurrentStateMachineStates(e);
+	if (!stl_map_contains(states->mStates, e->mState)) return;
+	DreamMugenState* newState = &states->mStates[e->mState];
 
 	resetPlayerMoveContactCounter(e->mPlayer);
 	setPlayerStateType(e->mPlayer, newState->mType);
@@ -713,7 +735,7 @@ void changeDreamHandledStateMachineState(RegisteredMugenStateMachine* e, int tNe
 		e->mIsPendingStateChangeToOwnStates = 0;
 		return;
 	}
-	applyRegisteredStateMachineStateChange(e, tNewState);
+	applyRegisteredStateMachineStateChange(e, tNewState, 0);
 }
 
 void changeDreamHandledStateMachineStateToOtherPlayerStateMachine(RegisteredMugenStateMachine* e, RegisteredMugenStateMachine* tBorrowState, int tNewState)
@@ -723,7 +745,23 @@ void changeDreamHandledStateMachineStateToOtherPlayerStateMachine(RegisteredMuge
 	e->mIsUsingTemporaryOtherStateMachine = 1;
 	e->mTemporaryStates = tBorrowState->mStates;
 	e->mHasPendingStateChange = 0;
-	applyRegisteredStateMachineStateChange(e, tNewState);
+	applyRegisteredStateMachineStateChange(e, tNewState, 0);
+}
+
+// TargetState, as in MUGEN (and Ikemen's stateChange1): the target's state
+// number changes now, its statedef's settings wait for its own turn (see
+// updateSingleStateMachineByReference), so of several TargetStates in a
+// tick only the last one's count. New Kyouki's 8902 sends his opponent to
+// 8903 and 8905 (velset -1, -22) and his 8904 then to 5175: it stays where
+// it is in MUGEN; it flew off the top of the screen.
+void changeDreamHandledStateMachineStateToOtherPlayerStateMachineWithoutInit(RegisteredMugenStateMachine* e, RegisteredMugenStateMachine* tBorrowState, int tNewState)
+{
+	assert(stl_map_contains(gMugenStateHandlerData.mRegisteredStates, e->mID));
+	assert(stl_map_contains(gMugenStateHandlerData.mRegisteredStates, tBorrowState->mID));
+	e->mIsUsingTemporaryOtherStateMachine = 1;
+	e->mTemporaryStates = tBorrowState->mStates;
+	e->mHasPendingStateChange = 0;
+	applyRegisteredStateMachineStateChange(e, tNewState, 1);
 }
 
 void changeDreamHandledStateMachineStateToOwnStateMachine(RegisteredMugenStateMachine* e, int tNewState)
@@ -737,7 +775,7 @@ void changeDreamHandledStateMachineStateToOwnStateMachine(RegisteredMugenStateMa
 		return;
 	}
 	e->mIsUsingTemporaryOtherStateMachine = 0;
-	applyRegisteredStateMachineStateChange(e, tNewState);
+	applyRegisteredStateMachineStateChange(e, tNewState, 0);
 }
 
 void changeDreamHandledStateMachineStateToOwnStateMachineWithoutChangingState(RegisteredMugenStateMachine* e)
