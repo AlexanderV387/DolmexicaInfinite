@@ -4223,6 +4223,12 @@ static void setPlayerDead(DreamPlayer* p) {
 	if (!p->mNoKOSoundFlag) {
 		tryPlayMugenSoundAdvanced(&p->mHeader->mFiles.mSounds, 11, 0, getPlayerMidiVolumeForPrism(p));
 	}
+	// KOed while being hit in another player's state (a hyper holding him):
+	// left in it, as in MUGEN and Ikemen (actionFinish). New Kyouki's 8904
+	// puts his opponent, at life 0, into his state 5175 (where it lies).
+	if (p->mRegisteredStateMachine->mIsUsingTemporaryOtherStateMachine && getPlayerStateMoveType(p) == MUGEN_STATE_MOVE_TYPE_BEING_HIT) {
+		return;
+	}
 	const auto activeVelocity = transformDreamCoordinates(getActiveHitDataVelocityY(p), getPlayerCoordinateP(p), 320);
 	if (activeVelocity >= -6.0) {
 		setActiveHitDataVelocityY(p, -6.0, 320);
@@ -4273,7 +4279,12 @@ void addPlayerDamage(DreamPlayer* p, DreamPlayer* tDamagingPlayer, int tDamage)
 	if (p->mLife <= 0) {
 		p->mCheeseWinFlag = isPlayerGuarding(p);
 		p->mSuicideWinFlag = (p->mRootID == tDamagingPlayer->mRootID);
-		if (isPlayerHelper(p) || (!isDreamNoKOActive() && isDreamKOPossible())) setPlayerDead(p);
+		// A helper is KOed at once (New Kyouki's rely on it); a player at the
+		// start of its next update, as in MUGEN and Ikemen, where it happens
+		// after every character has acted: until then it is still Alive
+		// (New Kyouki's 8904 checks enemy, alive = 1 after taking his
+		// opponent's last life, to hold him in its state 5175).
+		if (isPlayerHelper(p)) setPlayerDead(p);
 		p->mLife = 0;
 	}
 	p->mLife = min(p->mLife, getPlayerLifeMax(p));
@@ -6057,8 +6068,14 @@ static void setSinglePlayerSuperDefenseMultiplierRecursiveCB(void* tCaller, void
 static void setSinglePlayerSuperDefenseMultiplierRecursive(DreamPlayer* tPlayer, float tMultiplier) {
 	if (!isGeneralPlayer(tPlayer)) return;
 
-	if (!isPlayerHitOver(tPlayer)) {
-		setPlayerSuperDefenseMultiplier(tPlayer, tMultiplier);
+	// Each SuperPause multiplies it, on whoever is being hit (MUGEN, Ikemen:
+	// "stacks", the state's move type deciding); back to 1 when a hit is
+	// over. New Kyouki's 4200 calls 86
+	// in a row: his trapped opponent's defense soars, and the hyper's last
+	// projectile (999) takes some 1 a hit, 97 in all (set, not multiplied,
+	// it took all of his life).
+	if (getPlayerStateMoveType(tPlayer) == MUGEN_STATE_MOVE_TYPE_BEING_HIT) {
+		setPlayerSuperDefenseMultiplier(tPlayer, std::min(tPlayer->mSuperDefenseMultiplier * tMultiplier, 1e30f));
 	}
 
 	SetPlayerSuperDefenseMultiplierCaller caller;

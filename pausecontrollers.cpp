@@ -107,14 +107,28 @@ ActorBlueprint getPauseControllerHandler() {
 	return makeActorBlueprint(loadPauseControllerHandler, NULL, updatePauseControllerHandler);
 }
 
+static void removeSuperPauseVisuals() {
+	if (gPauseControllerData.mSuperPause.mHasAnimation) {
+		removeMugenAnimation(gPauseControllerData.mSuperPause.mMugenAnimationElement);
+		gPauseControllerData.mSuperPause.mHasAnimation = 0;
+	}
+	if (gPauseControllerData.mSuperPause.mIsDarkening) {
+		removeHandledAnimation(gPauseControllerData.mSuperPause.mDarkeningAnimationElement);
+		gPauseControllerData.mSuperPause.mIsDarkening = 0;
+	}
+}
+
+// A SuperPause while one is on (or ending this tick) starts it again with
+// its own values, as in MUGEN and Ikemen (setSuperPauseTime): it used to
+// end it instead. New Kyouki's 4200 calls one every tick for 86 ticks: on
+// and off, his trapped opponent was not held and fell to the ground, where
+// the hyper's last projectile took all his life (in MUGEN 1.1, 97).
 int setDreamSuperPauseActiveAndReturnIfWorked(DreamPlayer * tPlayer)
 {
-	if (gPauseControllerData.mSuperPause.mIsActive || gPauseControllerData.mSuperPause.mWasFinishedThisFrame)
-	{
-		setSuperPauseInactive();
-		gPauseControllerData.mSuperPause.mWasFinishedThisFrame = 0;
-		return 0;
+	if (gPauseControllerData.mSuperPause.mIsActive) {
+		removeSuperPauseVisuals();
 	}
+	gPauseControllerData.mSuperPause.mWasFinishedThisFrame = 0;
 	gPauseControllerData.mSuperPause.mIsActive = 1;
 	gPauseControllerData.mSuperPause.mPlayer = tPlayer;
 	return 1;
@@ -303,14 +317,11 @@ void setDreamPauseIsPausingBG(DreamPlayer* /*tPlayer*/, int tIsPausingBG)
 	gPauseControllerData.mPause.mIsPausingBG = tIsPausingBG;
 }
 
+// As SuperPause: a Pause while one is on starts it again (in MUGEN the
+// last one called is the one that counts).
 int setDreamPauseActiveAndReturnIfWorked(DreamPlayer * tPlayer)
 {
-	if (gPauseControllerData.mPause.mIsActive || gPauseControllerData.mPause.mWasFinishedThisFrame)
-	{
-		setPauseInactive();
-		gPauseControllerData.mPause.mWasFinishedThisFrame = 0;
-		return 0;
-	}
+	gPauseControllerData.mPause.mWasFinishedThisFrame = 0;
 	gPauseControllerData.mPause.mIsActive = 1;
 	gPauseControllerData.mPause.mPlayer = tPlayer;
 	return 1;

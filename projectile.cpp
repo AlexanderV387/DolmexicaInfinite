@@ -30,6 +30,9 @@ typedef struct {
 
 	int mHitAmountBeforeVanishing;
 	int mMissTime;
+	// Its own hit pause after a hit (its pausetime's first value), as in
+	// MUGEN and Ikemen: its removetime and misstime stand still meanwhile.
+	int mHitPauseLeft;
 	int mPriority;
 	int mEdgeBound;
 	int mStageBound;
@@ -162,7 +165,6 @@ static void updateSingleProjectile(void* tCaller, void* tData) {
 	const auto timeDilationUpdates = getPlayerTimeDilationUpdates(e->mPlayer);
 	for (int currentUpdate = 0; currentUpdate < timeDilationUpdates; currentUpdate++) {
 		updateProjectilePhysics(e);
-		updateProjectileMissTime(e);
 		updateProjectileShadow(e);
 		const auto parent = getPlayerParent(e->mPlayer);
 		// The parent can be a helper already gone (and freed): looked up
@@ -170,6 +172,12 @@ static void updateSingleProjectile(void* tCaller, void* tData) {
 		if (isValidPlayerOrProjectile(parent) && isGeneralPlayer(parent) && getPlayerDoesScaleProjectiles(parent)) {
 			setPlayerTempScaleActive(e->mPlayer, e->mScale);
 		}
+		if (e->mHitPauseLeft > 0) {
+			e->mHitPauseLeft--;
+			if (updateProjectileBoundsAndReturnIfOver(e)) return;
+			continue;
+		}
+		updateProjectileMissTime(e);
 		if (updateProjectileDurationAndReturnIfOver(e)) return;
 		if (updateProjectileBoundsAndReturnIfOver(e)) return;
 	}
@@ -218,6 +226,10 @@ void handleProjectileHit(DreamPlayer* tProjectile, int tWasGuarded, int tWasCanc
 
 	e->mHitAmountBeforeVanishing--;
 	if (e->mHitAmountBeforeVanishing > 0) {
+		// The surviving projectile's hit pause (MUGEN, Ikemen): New Kyouki's
+		// 26000 projectiles (removetime 100, pausetime 2) hit for some 195
+		// ticks in MUGEN 1.1, gone here after 100.
+		e->mHitPauseLeft = std::max(0, getHitDataPlayer1PauseTime(tProjectile));
 		setHitDataActive(tProjectile);
 	}
 
@@ -341,6 +353,7 @@ void setProjectilMisstime(DreamPlayer* p, int tMissTime)
 	Projectile* e = (Projectile*)int_map_get(&gProjectileData.mProjectileList, p->mProjectileDataID);
 	e->mMissTime = tMissTime;
 	e->mMissHitNow = e->mMissTime + 1;
+	e->mHitPauseLeft = 0;
 }
 
 int getProjectilePriority(DreamPlayer* p)
