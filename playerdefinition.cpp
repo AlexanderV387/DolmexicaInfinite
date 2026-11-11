@@ -5433,6 +5433,10 @@ DreamPlayer * createNewProjectileFromPlayer(DreamPlayer* p)
 	helper->mHelperIDInStore = helperIDInStore;
 
 	resetHelperState(helper);
+	// Its damage is scaled by its creator's AttackMulSet as it was when it
+	// was fired, as in MUGEN (and Ikemen): Onslaught's Shockwave helpers set
+	// it to his damage dampener just before firing theirs.
+	helper->mAttackMultiplier = p->mAttackMultiplier;
 	setPlayerExternalDependencies(helper);
 	// Its full-screen images (a super's background drawn by a helper) also
 	// over the 3DS's wider sides; the characters themselves never.
