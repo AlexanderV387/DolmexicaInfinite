@@ -758,8 +758,14 @@ void changeDreamHandledStateMachineStateToOtherPlayerStateMachineWithoutInit(Reg
 {
 	assert(stl_map_contains(gMugenStateHandlerData.mRegisteredStates, e->mID));
 	assert(stl_map_contains(gMugenStateHandlerData.mRegisteredStates, tBorrowState->mID));
+	changeDreamHandledStateMachineStateToBorrowedStatesWithoutInit(e, tBorrowState->mStates, tNewState);
+}
+
+void changeDreamHandledStateMachineStateToBorrowedStatesWithoutInit(RegisteredMugenStateMachine* e, DreamMugenStates* tBorrowedStates, int tNewState)
+{
+	assert(stl_map_contains(gMugenStateHandlerData.mRegisteredStates, e->mID));
 	e->mIsUsingTemporaryOtherStateMachine = 1;
-	e->mTemporaryStates = tBorrowState->mStates;
+	e->mTemporaryStates = tBorrowedStates;
 	e->mHasPendingStateChange = 0;
 	applyRegisteredStateMachineStateChange(e, tNewState, 1);
 }

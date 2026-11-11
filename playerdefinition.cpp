@@ -1753,6 +1753,24 @@ static void updatePlayersWithCaller(void* /*tCaller*/) {
 	updatePlayers();
 }
 
+// The hits it took last tick came before a TargetState it was put in this
+// tick (in MUGEN hits are taken at the end of a tick, here at the start of
+// the next one): taken first, the TargetState then still holds. New
+// Kyouki's 12100 puts his opponent in 12300 (NotHitBy) each tick it is
+// not there; hit by his projectile first, it never got to run 12300.
+static void updatePlayerReceivedHitsBeforePendingTargetState(DreamPlayer* p) {
+	RegisteredMugenStateMachine* machine = p->mRegisteredStateMachine;
+	const int isPendingTargetState = machine && machine->mHasPendingStateInit && machine->mIsUsingTemporaryOtherStateMachine;
+	DreamMugenStates* borrowedStates = isPendingTargetState ? machine->mTemporaryStates : NULL;
+	const int pendingState = isPendingTargetState ? machine->mState : -1;
+	updatePlayerReceivedHits(p);
+	if (!isPendingTargetState || p->mIsDestroyed || !isGeneralPlayer(p)) return;
+	if (machine->mHasPendingStateInit && machine->mState == pendingState && machine->mTemporaryStates == borrowedStates) return;
+	changeDreamHandledStateMachineStateToBorrowedStatesWithoutInit(machine, borrowedStates, pendingState);
+	// The hit's state was run at once; this one still runs in its own turn.
+	machine->mWasUpdatedOutsideHandler = 0;
+}
+
 static int updateSinglePlayerPreStateMachine(DreamPlayer* p);
 static int updateSinglePlayerPreStateMachineCB(void* tCaller, void* tData) {
 	(void)tCaller;
@@ -1800,7 +1818,7 @@ static int updateSinglePlayerPreStateMachine(DreamPlayer* p) {
 		updatePlayerHitOver(p);
 		updatePlayerHitShake(p);
 		updateHitPause(p);
-		updatePlayerReceivedHits(p);
+		updatePlayerReceivedHitsBeforePendingTargetState(p);
 		// Destroyed in the state a hit put it in (a helper): gone now.
 		if (p->mIsDestroyed) {
 			updatePlayerDestruction(p);
