@@ -4289,6 +4289,12 @@ void addPlayerDamage(DreamPlayer* p, DreamPlayer* tDamagingPlayer, int tDamage)
 	if (newLife > 2147483647LL) newLife = 2147483647LL;
 	if (newLife < -2147483647LL) newLife = -2147483647LL;
 	p->mLife = int(newLife);
+	// In training the characters keep at least 1 life, as in MUGEN: still
+	// Alive with life 1 (not 0), New Kyouki's 8904 lets his opponent go
+	// from its state 5175 (stuck there at 0, it slid away for good).
+	if (gPlayerDefinition.mIsInTrainingMode && !isPlayerHelper(p) && !isPlayerProjectile(p) && p->mLife < 1) {
+		p->mLife = 1;
+	}
 	if (p->mLife <= 0) {
 		p->mCheeseWinFlag = isPlayerGuarding(p);
 		p->mSuicideWinFlag = (p->mRootID == tDamagingPlayer->mRootID);
@@ -5599,11 +5605,13 @@ static void performOnPlayerTargetsWithID(DreamPlayer* p, int tID, const std::fun
 
 void addPlayerTargetLife(DreamPlayer* p, DreamPlayer* tLifeGivingPlayer, int tID, int tLife, int tCanKill, int tIsAbsolute)
 {
-	const std::function<void(DreamPlayer*)> func = [&p, &tLifeGivingPlayer, &tLife, &tCanKill, &tIsAbsolute](DreamPlayer* tPlayer){
+	const std::function<void(DreamPlayer*)> func = [&tLifeGivingPlayer, &tLife, &tCanKill, &tIsAbsolute](DreamPlayer* tPlayer){
+		// Scaled by the target's defense only: TargetLifeAdd ignores the
+		// attacker's AttackMulSet, as in MUGEN (and Ikemen). Onslaught's orbs
+		// (11200) end with 62 damage, not 62 times his damage dampener.
 		if (!tIsAbsolute) {
-			const auto attackMultiplier = getPlayerAttackMultiplier(p);
 			const auto defenseMultiplier = getInvertedPlayerDefenseMultiplier(tPlayer);
-			if (attackMultiplier != 1.0 || defenseMultiplier != 1.0) tLife = scaleLifeChange(tLife, (double)attackMultiplier * defenseMultiplier);
+			if (defenseMultiplier != 1.0) tLife = scaleLifeChange(tLife, (double)defenseMultiplier);
 		}
 		tLife = clampLifeChange(tLife);
 
@@ -5715,7 +5723,7 @@ void changePlayerTargetState(DreamPlayer* p, int tID, int tNewState)
 				tPlayer->mRootID, tPlayer->mID, getPlayerState(tPlayer), tNewState);
 			fflush(stdout);
 		}
-		changePlayerStateToOtherPlayerStateMachine(tPlayer, p, tNewState);
+		changeDreamHandledStateMachineStateToOtherPlayerStateMachineWithoutInit(tPlayer->mRegisteredStateMachine, p->mRegisteredStateMachine, tNewState);
 	};
 
 	performOnPlayerTargetsWithID(p, tID, func);
