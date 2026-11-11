@@ -890,7 +890,7 @@ static void loadSingleCombo(int i, MugenDefScript* tScript) {
 	combo->mPosition.z = UI_BASE_Z;
 
 	sprintf(name, "team%d.start.x", i + 1);
-	combo->mStartX = getMugenDefFloatOrDefault(tScript, "combo", name, 0) * coordinateScale;
+	combo->mStartX = getMugenDefFloatOrDefault(tScript, "combo", name, 0);
 
 	sprintf(name, "team%d.counter.font", i + 1);
 	combo->mCounterFont = getMugenDefVectorIOrDefault(tScript, "combo", name, Vector3DI(-1, 0, 1));
@@ -920,8 +920,6 @@ static void loadSingleCombo(int i, MugenDefScript* tScript) {
 	}
 	combo->mCurrentDeltaY = 0;
 	setComboPosition(i);
-	setMugenTextVisibility(combo->mNumberTextID, 0);
-	setMugenTextVisibility(combo->mTextID, 0);
 
 	combo->mIsActive = 0;
 }
@@ -1476,12 +1474,6 @@ static void updateSingleComboMovement(int i) {
 	
 	updateSingleComboShake(combo);
 	setComboPosition(i);
-	// Hidden while it waits off the game's 4:3 screen: there, on the 3DS's
-	// wider top screen, the counter showed "111" at the right side and its
-	// text at the left the whole fight.
-	const int isWaiting = !combo->mIsActive && combo->mCurrentX == (i == 0 ? left : right);
-	setMugenTextVisibility(combo->mNumberTextID, !isWaiting);
-	setMugenTextVisibility(combo->mTextID, !isWaiting);
 }
 
 static void updateSingleComboActivity(int i) {
@@ -2410,12 +2402,8 @@ int isTimerFinished()
 
 void setEnvironmentColor(const Vector3DI& tColors, int tTime, int tIsUnderCharacters)
 {
-	// [3DS] Over the screen past the game's sides too (Felicia's hypers
-	// darkened the 4:3 middle only, the stage showing at the sides).
-	const auto sz = getScreenSize();
-	const auto margin = getDreamScreenSideMargin(sz.x);
-	setAnimationPosition(gFightUIData.mEnvironmentEffects.mAnimationElement, Vector3D(-margin, 0, tIsUnderCharacters ? ENVIRONMENT_COLOR_LOWER_Z : ENVIRONMENT_COLOR_UPPER_Z));
-	setAnimationSize(gFightUIData.mEnvironmentEffects.mAnimationElement, Vector3D(sz.x + 2 * margin, sz.y, 1), Vector3D(0, 0, 0));
+	setAnimationPosition(gFightUIData.mEnvironmentEffects.mAnimationElement, Vector3D(0, 0, tIsUnderCharacters ? ENVIRONMENT_COLOR_LOWER_Z : ENVIRONMENT_COLOR_UPPER_Z));
+	setAnimationSize(gFightUIData.mEnvironmentEffects.mAnimationElement, Vector3D(640, 480, 1), Vector3D(0, 0, 0));
 	setAnimationColor(gFightUIData.mEnvironmentEffects.mAnimationElement, tColors.x / 255.0f, tColors.y / 255.0f, tColors.z / 255.0f);
 
 	gFightUIData.mEnvironmentEffects.mDuration = tTime;

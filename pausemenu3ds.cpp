@@ -32,22 +32,23 @@ typedef enum {
 	PAUSE_MENU_TITLE_SCREEN,
 } PauseMenuItem;
 
-// The screen's shape (stretched over the whole top screen, or the game's
-// own shape with more of the stage at the sides), kept on the SD card.
+// The screen's shape (stretched over the whole top screen, or normal: the
+// game's 4:3 with black bands at the sides), kept on the SD card. An older
+// "wide" (more of the stage at the sides) is read as normal.
 #define SCREEN_SETTINGS_PATH "sdmc:/3ds/dolmexica/screen.txt"
 
 void loadN3DSScreenSetting() {
 	FILE* file = fopen(SCREEN_SETTINGS_PATH, "r");
 	if (!file) return;
 	char text[32] = { 0 };
-	if (fgets(text, sizeof(text), file)) setN3DSScreenStretched(strncmp(text, "wide", 4) != 0);
+	if (fgets(text, sizeof(text), file)) setN3DSScreenStretched(strncmp(text, "stretched", 9) == 0);
 	fclose(file);
 }
 
 static void saveN3DSScreenSetting() {
 	FILE* file = fopen(SCREEN_SETTINGS_PATH, "w");
 	if (!file) return;
-	fputs(isN3DSScreenStretched() ? "stretched\n" : "wide\n", file);
+	fputs(isN3DSScreenStretched() ? "stretched\n" : "normal\n", file);
 	fclose(file);
 }
 
@@ -77,7 +78,7 @@ static const char* getItemText(PauseMenuItem tItem) {
 	switch (tItem) {
 	case PAUSE_MENU_CONTINUE: return "CONTINUAR";
 	case PAUSE_MENU_CHARACTER_SELECT: return "ELEGIR PERSONAJES";
-	case PAUSE_MENU_SCREEN: return isN3DSScreenStretched() ? "PANTALLA: COMPLETA" : "PANTALLA: ANCHA";
+	case PAUSE_MENU_SCREEN: return isN3DSScreenStretched() ? "PANTALLA: COMPLETA" : "PANTALLA: NORMAL 4:3";
 	default: return "MENU PRINCIPAL";
 	}
 }
