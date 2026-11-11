@@ -341,7 +341,7 @@ static void activateLayerAnimation(Scene* tScene, Layer* tLayer, const Position&
 	setMugenAnimationConstraintRectangle(tLayer->mAnimationElement, getSceneAnimationWindow(tScene));
 	// A picture the size of the screen: widened over the 3DS's wider sides
 	// (as the supers' full-screen backgrounds), not left with black bands.
-	setMugenAnimationStretchedToScreenWidth(tLayer->mAnimationElement, 1);
+	setMugenAnimationStretchedToScreenWidth(tLayer->mAnimationElement, MUGEN_ANIMATION_STRETCH_ALWAYS);
 }
 
 static void activateLayerText(Scene* tScene, Layer* tLayer, const Position& tPos) {

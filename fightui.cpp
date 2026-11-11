@@ -2005,6 +2005,9 @@ void playDreamHitSpark(const Position2D& tPosition, DreamPlayer* tPlayer, int tI
 	
 	e.mPosition = tPosition.xyz(HITSPARK_BASE_Z);
 	e.mAnimationElement = addMugenAnimation(anim, spriteFile, getDreamStageCoordinateSystemOffset(tPositionCoordinateP).xyz(0.0));
+	// [3DS] A hit spark that flashes the whole screen (Onslaught's, the CvS
+	// characters' big ones) also over the wider sides.
+	setMugenAnimationStretchedToScreenWidth(e.mAnimationElement, MUGEN_ANIMATION_STRETCH_WHEN_FLASH);
 	setMugenAnimationBasePosition(e.mAnimationElement, &e.mPosition);
 	setMugenAnimationCameraPositionReference(e.mAnimationElement, getDreamMugenStageHandlerCameraPositionReference());
 	setMugenAnimationBaseDrawScale(e.mAnimationElement, (getScreenSize().x / float(getDreamUICoordinateP())) * getDreamUIFightFXScale());
