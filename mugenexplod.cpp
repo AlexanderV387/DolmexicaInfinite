@@ -471,7 +471,7 @@ void finalizeExplod(int tID)
 	e->mAnimationElement = addMugenAnimation(animation, sprites, p);
 	// A full-screen flash or background made for the 4:3 screen: also over
 	// the 3DS's wider sides.
-	setMugenAnimationStretchedToScreenWidth(e->mAnimationElement, MUGEN_ANIMATION_STRETCH_ALWAYS);
+	setMugenAnimationStretchedToScreenWidth(e->mAnimationElement, 1);
 	e->mShadowAnimationElement = addMugenAnimation(animation, sprites, Vector3D(0, 0, 0));
 	setMugenAnimationBasePosition(e->mAnimationElement, getHandledPhysicsPositionReference(e->mPhysicsElement));
 	setMugenAnimationBasePosition(e->mShadowAnimationElement, getHandledPhysicsPositionReference(e->mPhysicsElement));

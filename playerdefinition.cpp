@@ -5280,11 +5280,9 @@ DreamPlayer * clonePlayerAsHelper(DreamPlayer* p)
 	resetHelperState(helper);
 	setPlayerExternalDependencies(helper);
 	setHandledPhysicsUpdatedByOwner(helper->mPhysicsElement, 1);
-	// Its full-screen flashes (drawn adding or subtracting their colors) also
-	// over the 3DS's wider sides; the characters themselves never, nor what a
-	// helper draws as it is (widened, Galactus's eye beams and arms were
-	// pulled out of shape and away from where they hit).
-	setMugenAnimationStretchedToScreenWidth(helper->mAnimationElement, MUGEN_ANIMATION_STRETCH_WHEN_FLASH);
+	// Its full-screen images (a super's background drawn by a helper) also
+	// over the 3DS's wider sides; the characters themselves never.
+	setMugenAnimationStretchedToScreenWidth(helper->mAnimationElement, 1);
 	// A new helper has no animation (nothing drawn, no boxes) until its
 	// state gives it one, as in MUGEN and Ikemen: Cammy's helper in a state
 	// she lacks (90900) was a second Cammy standing there.
@@ -5293,9 +5291,6 @@ DreamPlayer * clonePlayerAsHelper(DreamPlayer* p)
 	}
 	loadPlayerShadow(helper);
 	loadPlayerReflection(helper);
-	// Its shadow and reflection as its flash.
-	setMugenAnimationStretchedToScreenWidth(helper->mShadow.mAnimationElement, MUGEN_ANIMATION_STRETCH_WHEN_FLASH);
-	setMugenAnimationStretchedToScreenWidth(helper->mReflection.mAnimationElement, MUGEN_ANIMATION_STRETCH_WHEN_FLASH);
 	loadPlayerDebug(helper);
 	setDreamRegisteredStateToHelperMode(helper->mRegisteredStateMachine);
 
@@ -5410,16 +5405,11 @@ DreamPlayer * createNewProjectileFromPlayer(DreamPlayer* p)
 
 	resetHelperState(helper);
 	setPlayerExternalDependencies(helper);
-	// Its full-screen flashes (drawn adding or subtracting their colors) also
-	// over the 3DS's wider sides; the characters themselves never, nor what a
-	// helper draws as it is (widened, Galactus's eye beams and arms were
-	// pulled out of shape and away from where they hit).
-	setMugenAnimationStretchedToScreenWidth(helper->mAnimationElement, MUGEN_ANIMATION_STRETCH_WHEN_FLASH);
+	// Its full-screen images (a super's background drawn by a helper) also
+	// over the 3DS's wider sides; the characters themselves never.
+	setMugenAnimationStretchedToScreenWidth(helper->mAnimationElement, 1);
 	loadPlayerShadow(helper);
 	loadPlayerReflection(helper);
-	// Its shadow and reflection as its flash.
-	setMugenAnimationStretchedToScreenWidth(helper->mShadow.mAnimationElement, MUGEN_ANIMATION_STRETCH_WHEN_FLASH);
-	setMugenAnimationStretchedToScreenWidth(helper->mReflection.mAnimationElement, MUGEN_ANIMATION_STRETCH_WHEN_FLASH);
 	loadPlayerDebug(helper);
 	disableDreamRegisteredStateMachine(helper->mRegisteredStateMachine);
 	addProjectileToRoot(p, helper);
