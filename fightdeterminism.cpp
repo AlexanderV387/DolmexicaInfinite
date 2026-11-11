@@ -71,6 +71,8 @@ static uint32_t hashSinglePlayerStep(uint32_t h, DreamPlayer* p) {
 	h = hashIntStep(h, p->mIsHitOverridden);
 	h = hashIntStep(h, p->mHitCount);
 	h = hashIntStep(h, p->mFallAmountInCombo);
+	h = hashIntStep(h, p->mGetHitVarHitCount);
+	h = hashIntStep(h, p->mGetHitVarGuarded);
 	h = hashIntStep(h, p->mAirJumpCounter);
 	h = hashIntStep(h, p->mJumpFlank);
 	h = hashIntStep(h, p->mSuperMoveTime);

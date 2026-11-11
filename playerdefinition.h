@@ -252,6 +252,8 @@ struct DreamPlayer {
 
 	int mHitCount;
 	int mFallAmountInCombo;
+	int mGetHitVarHitCount;
+	int mGetHitVarGuarded;
 
 	float mAttackMultiplier;
 
@@ -669,6 +671,7 @@ int getPlayerHitCount(DreamPlayer* p);
 int getPlayerUniqueHitCount(DreamPlayer* p);
 void increasePlayerHitCount(DreamPlayer* p);
 void resetPlayerHitCount(DreamPlayer* p);
+int getPlayerGetHitVarHitCount(DreamPlayer* p);
 void increasePlayerComboCounter(DreamPlayer* p, int tValue);
 
 float getPlayerAttackMultiplier(DreamPlayer* p);

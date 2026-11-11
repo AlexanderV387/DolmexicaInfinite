@@ -430,6 +430,8 @@ static void resetHelperState(DreamPlayer* p) {
 
 	p->mHitCount = 0;
 	p->mFallAmountInCombo = 0;
+	p->mGetHitVarHitCount = 0;
+	p->mGetHitVarGuarded = 0;
 
 	p->mAttackMultiplier = 1;
 
@@ -2348,6 +2350,9 @@ static void payJuggleCost(DreamPlayer* p, DreamPlayer* tOtherPlayer);
 static void setPlayerHit(DreamPlayer* p, DreamPlayer* tOtherPlayer, void* tHitData) {
 	setProfilingSectionMarkerCurrentFunction();
 	const int wasFalling = p->mIsFalling;
+	// Already being hit (or in the shake of a hit this frame) by an attack
+	// not guarded: the hit adds to its combo (gethitvar(hitcount)).
+	const int wasInCombo = (getPlayerStateMoveType(p) == MUGEN_STATE_MOVE_TYPE_BEING_HIT || p->mIsHitShakeActive) && !p->mGetHitVarGuarded;
 	setPlayerControl(p, 0);
 	stopSoundEffect(parsePlayerSoundEffectChannel(0, p));
 	removeExplodsForPlayerAfterHit(p);
@@ -2370,6 +2375,14 @@ static void setPlayerHit(DreamPlayer* p, DreamPlayer* tOtherPlayer, void* tHitDa
 	if (getPlayerUnguardableFlag(tOtherPlayer) || (isPlayerGuarding(p) && !checkPlayerHitGuardFlagsAndReturnIfGuardable(p, getActiveHitDataGuardFlag(p)))) {
 		setPlayerUnguarding(p);
 	}
+
+	// gethitvar(hitcount), as in MUGEN (and Ikemen): the hits this player
+	// has taken in the current combo, kept when it changes state (not the
+	// attacker's hitcount; Onslaught scales the damage of its hits by it).
+	if (!isPlayerGuarding(p)) {
+		p->mGetHitVarHitCount = wasInCombo ? p->mGetHitVarHitCount + 1 : 1;
+	}
+	p->mGetHitVarGuarded = isPlayerGuarding(p);
 
 	if (isPlayerGuarding(p)) {
 		setActiveHitDataVelocityX(p, getActiveHitDataGuardVelocity(p), getPlayerCoordinateP(p));
@@ -4991,6 +5004,11 @@ int getPlayerUniqueHitCount(DreamPlayer* p)
 void increasePlayerHitCount(DreamPlayer* p)
 {
 	p->mHitCount++;
+}
+
+int getPlayerGetHitVarHitCount(DreamPlayer* p)
+{
+	return p->mGetHitVarHitCount;
 }
 
 void resetPlayerHitCount(DreamPlayer* p)

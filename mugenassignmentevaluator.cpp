@@ -2046,7 +2046,7 @@ static AssignmentReturnValue* getHitVarFallEnvshakePhaseFunction(DreamPlayer* tP
 static AssignmentReturnValue* getHitVarSlidetimeFunction(DreamPlayer* tPlayer) {	return makeBooleanAssignmentReturn(getPlayerSlideTime(tPlayer));}
 static AssignmentReturnValue* getHitVarHitshaketimeFunction(DreamPlayer* tPlayer) { return makeNumberAssignmentReturn(getActiveHitDataPlayerHitShakeTime(tPlayer)); }
 static AssignmentReturnValue* getHitVarHitTimeFunction(DreamPlayer* tPlayer) { return makeNumberAssignmentReturn(getPlayerHitTime(tPlayer));}
-static AssignmentReturnValue* getHitVarHitcountFunction(DreamPlayer* tPlayer) {	return makeNumberAssignmentReturn(getPlayerHitCount(tPlayer));}
+static AssignmentReturnValue* getHitVarHitcountFunction(DreamPlayer* tPlayer) {	return makeNumberAssignmentReturn(getPlayerGetHitVarHitCount(tPlayer));}
 static AssignmentReturnValue* getHitVarDamageFunction(DreamPlayer* tPlayer) {return makeNumberAssignmentReturn(getActiveHitDataDamage(tPlayer));}
 static AssignmentReturnValue* getHitVarFallcountFunction(DreamPlayer* tPlayer) {	return makeNumberAssignmentReturn(getPlayerFallAmountInCombo(tPlayer));}
 static AssignmentReturnValue* getHitVarCtrltimeFunction(DreamPlayer* tPlayer) {	return makeNumberAssignmentReturn(getPlayerControlTime(tPlayer));}
