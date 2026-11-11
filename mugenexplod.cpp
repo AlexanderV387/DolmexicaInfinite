@@ -287,14 +287,14 @@ static Position2D getFinalExplodPositionFromPositionType(DreamExplodPositionType
 		return p + mOffset;
 	}
 	else if (tPositionType == EXPLOD_POSITION_TYPE_RELATIVE_TO_FRONT) {
-		DreamPlayer* target = tPlayer;
-		// The screen's own edges, its sides on the wide 3DS screen with them
-		// (as postype left and right): an ultimate's full-screen background
-		// at the back left a strip on the left, its colors unchanged.
-		const float margin = getDreamScreenSideMargin(getDreamMugenStageHandlerCameraCoordinateP());
-		const auto p = Vector2D(getPlayerScreenEdgeInFrontX(target, getDreamMugenStageHandlerCameraCoordinateP()) + (getPlayerIsFacingRight(target) ? margin : -margin), getDreamStageTopOfScreenBasedOnPlayerInStageCoordinateOffset(getDreamMugenStageHandlerCameraCoordinateP()));
-		int isReversed = !getPlayerIsFacingRight(target);
-		if (isReversed) mOffset.x *= -1;
+		// As Ikemen (and MUGEN 1.1): the screen's right side when the player
+		// faces right, its left side otherwise (with the 3DS's wider sides,
+		// as postype left and right), its x not turned with the facing. From
+		// the player's screen edge (half a screen off), New Kyouki's mask
+		// (pos = ifelse(facing = -1, 0, -320)) was half off the left side.
+		const int coordinateP = getDreamMugenStageHandlerCameraCoordinateP();
+		const float x = getPlayerIsFacingRight(tPlayer) ? getDreamStageRightOfScreenBasedOnPlayer(coordinateP) : getDreamStageLeftOfScreenBasedOnPlayer(coordinateP);
+		const auto p = Vector2D(x, getDreamStageTopOfScreenBasedOnPlayerInStageCoordinateOffset(coordinateP));
 		return p + mOffset;
 	}
 	else if (tPositionType == EXPLOD_POSITION_TYPE_RELATIVE_TO_BACK) {
