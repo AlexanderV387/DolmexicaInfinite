@@ -203,6 +203,8 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 	// one's buttons from PRISM_LINUX_SCRIPT, see prism's linux/input_linux.cpp).
 	if (getContinueIntegerSetting("DOLMEXICA_VERSUS", 0)) setGameModeVersus();
 	else setGameModeArcade();
+	// DOLMEXICA_TRAINING=1: training mode (both at the controls, no KO).
+	if (getContinueIntegerSetting("DOLMEXICA_TRAINING", 0)) setGameModeTraining();
 	// DOLMEXICA_WATCH=level: both at the computer's hands, at that AI level
 	// (as MUGEN's -p1.ai and -p2.ai), one round.
 	if (const int watchLevel = getContinueIntegerSetting("DOLMEXICA_WATCH", 0)) {
