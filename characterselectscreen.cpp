@@ -355,15 +355,17 @@ static int isInOsuModeAndNotOsuStage(MugenDefScript* tScript) {
 }
 
 static void addSingleSelectStage(char* tPath) {
+	// "random" (a character's stage when none is given) is no file: looked
+	// for on the SD card, it cost a file check for each character.
+	if (stringEqualCaseIndependent(tPath, "random")) return;
 	char path[1024];
 	getStagePath(path, tPath);
 
+	if (isSelectStageLoadedAlready(path)) return;
 	if (!isFile(path)) {
 		logWarningFormat("Unable to find stage file %s. Ignoring.", path);
 		return;
 	}
-
-	if (isSelectStageLoadedAlready(path)) return;
 	MugenDefScript script;
 	loadMugenDefScript(&script, path);
 	const int isUsingStage = !isInOsuModeAndNotOsuStage(&script);

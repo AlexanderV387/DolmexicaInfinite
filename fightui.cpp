@@ -2402,8 +2402,12 @@ int isTimerFinished()
 
 void setEnvironmentColor(const Vector3DI& tColors, int tTime, int tIsUnderCharacters)
 {
-	setAnimationPosition(gFightUIData.mEnvironmentEffects.mAnimationElement, Vector3D(0, 0, tIsUnderCharacters ? ENVIRONMENT_COLOR_LOWER_Z : ENVIRONMENT_COLOR_UPPER_Z));
-	setAnimationSize(gFightUIData.mEnvironmentEffects.mAnimationElement, Vector3D(640, 480, 1), Vector3D(0, 0, 0));
+	// [3DS] Over the screen past the game's sides too (Felicia's hypers
+	// darkened the 4:3 middle only, the stage showing at the sides).
+	const auto sz = getScreenSize();
+	const auto margin = getDreamScreenSideMargin(sz.x);
+	setAnimationPosition(gFightUIData.mEnvironmentEffects.mAnimationElement, Vector3D(-margin, 0, tIsUnderCharacters ? ENVIRONMENT_COLOR_LOWER_Z : ENVIRONMENT_COLOR_UPPER_Z));
+	setAnimationSize(gFightUIData.mEnvironmentEffects.mAnimationElement, Vector3D(sz.x + 2 * margin, sz.y, 1), Vector3D(0, 0, 0));
 	setAnimationColor(gFightUIData.mEnvironmentEffects.mAnimationElement, tColors.x / 255.0f, tColors.y / 255.0f, tColors.z / 255.0f);
 
 	gFightUIData.mEnvironmentEffects.mDuration = tTime;
