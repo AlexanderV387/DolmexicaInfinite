@@ -1333,15 +1333,22 @@ static int havePlayersPassiveBoxesOverlap(DreamPlayer* p, DreamPlayer* tOther) {
 // was jumped over, then turned with his parts not, and came apart.
 static void updateCornerPush(DreamPlayer* p);
 
+// A player with PlayerPush 0 still pushes the other one when that one has
+// it: as in MUGEN 1.1 (traced), the other moves away by half the overlap
+// each tick while it does not move; only with both at 0 do they pass
+// through each other. Onslaught (PlayerPush 0 in his -2) did not move his
+// opponent; his Sentinel Force (3200) then hit him at the wrong times.
 static void updatePush(DreamPlayer* p) {
 	if (isPlayerPaused(p)) return;
 	if (isPlayerHelper(p)) return;
-	if (p->mPushDisabledFlag) return;
 	if (p->mIsBound) return;
 
 	DreamPlayer* otherPlayer = getPlayerOtherPlayer(p);
-	if (otherPlayer->mPushDisabledFlag) return;
 	if (otherPlayer->mIsBound) return;
+	if (p->mPushDisabledFlag && otherPlayer->mPushDisabledFlag) return;
+	// Only one of them pushing: done once, from the one that does not.
+	if (!p->mPushDisabledFlag && otherPlayer->mPushDisabledFlag) return;
+	const int isMovingSelf = !p->mPushDisabledFlag;
 
 	float frontX1 = getPlayerFrontXPlayer(p, getPlayerCoordinateP(p));
 	float frontX2 = getPlayerFrontXPlayer(otherPlayer, getPlayerCoordinateP(p));
@@ -1359,13 +1366,13 @@ static void updatePush(DreamPlayer* p) {
 
 	if (x1 < x2) {
 		if (frontX1 > frontX2) {
-			setPlayerPositionX(p, x1 - distX / 2, getPlayerCoordinateP(p));
+			if (isMovingSelf) setPlayerPositionX(p, x1 - distX / 2, getPlayerCoordinateP(p));
 			setPlayerPositionX(otherPlayer, x2 + distX / 2, getPlayerCoordinateP(p));
 		}
 	}
 	else {
 		if (frontX1 < frontX2) {
-			setPlayerPositionX(p, x1 + distX / 2, getPlayerCoordinateP(p));
+			if (isMovingSelf) setPlayerPositionX(p, x1 + distX / 2, getPlayerCoordinateP(p));
 			setPlayerPositionX(otherPlayer, x2 - distX / 2, getPlayerCoordinateP(p));
 		}
 	}
@@ -4633,11 +4640,11 @@ float getPlayerBackBodyDistanceToScreen(DreamPlayer* p, int tCoordinateP)
 	else return screenX - x;
 }
 
+// The size's ground or air width, attacking or not: MUGEN 1.1 does not use
+// attack.width for it (traced: Onslaught, attack.width 4, attacking, pushes
+// Kung Fu Man away by his ground.front 46; Ikemen does not use it either).
 float getPlayerFrontWidth(DreamPlayer* p, int tCoordinateP) {
-	if (p->mCustomSizeData.mHasAttackWidth && getPlayerStateMoveType(p) == MUGEN_STATE_MOVE_TYPE_ATTACK) {
-		return float(transformDreamCoordinatesI(p->mCustomSizeData.mAttackWidth.y, getPlayerCoordinateP(p), tCoordinateP));
-	}
-	else if (getPlayerStateType(p) == MUGEN_STATE_TYPE_AIR) {
+	if (getPlayerStateType(p) == MUGEN_STATE_TYPE_AIR) {
 		return float(transformDreamCoordinatesI(p->mCustomSizeData.mAirFrontWidth, getPlayerCoordinateP(p), tCoordinateP));
 	}
 	else {
@@ -4666,10 +4673,7 @@ float getPlayerFrontWidthStage(DreamPlayer* p, int tCoordinateP)
 }
 
 float getPlayerBackWidth(DreamPlayer* p, int tCoordinateP) {
-	if (p->mCustomSizeData.mHasAttackWidth && getPlayerStateMoveType(p) == MUGEN_STATE_MOVE_TYPE_ATTACK) {
-		return transformDreamCoordinatesI(p->mCustomSizeData.mAttackWidth.x, getPlayerCoordinateP(p), tCoordinateP);
-	}
-	else if (getPlayerStateType(p) == MUGEN_STATE_TYPE_AIR) {
+	if (getPlayerStateType(p) == MUGEN_STATE_TYPE_AIR) {
 		return float(transformDreamCoordinatesI(p->mCustomSizeData.mAirBackWidth, getPlayerCoordinateP(p), tCoordinateP));
 	}
 	else {
