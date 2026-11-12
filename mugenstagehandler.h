@@ -93,6 +93,8 @@ void clearDreamMugenStageHandler();
 
 void addDreamMugenStageHandlerAnimatedBackgroundElement(const Position& tStart, MugenAnimation* tAnimation, int tOwnsAnimation, MugenSpriteFile * tSprites, const Position2D& tDelta, const Vector2DI& tTile, const Vector2DI& tTileSpacing, BlendType tBlendType, const Vector2D& tAlpha, const GeoRectangle2D& tConstraintRectangle, const Vector2D& tConstraintRectangleDelta, const Vector2D& tVelocity, const Vector3D& tSinX, const Vector3D& tSinY, float tScaleStartY, float tScaleDeltaY, const Vector2D& tScaleStart, const Vector2D& tScaleDelta, const Vector2D& tDrawScale, int tLayerNo, int tID, int tIsParallax, const Vector2DI& tWidth, const Vector2D& tXScale, float tZoomDelta, int tPositionLink, const Vector2DI& tCoordinates);
 Position* getDreamMugenStageHandlerCameraPositionReference();
+void setDreamMugenStageHandlerLetterboxOffsetY(float tOffset);
+float getDreamMugenStageHandlerLetterboxOffsetY();
 Position2D* getDreamMugenStageHandlerCameraEffectPositionReference();
 void setDreamMugenStageHandlerCameraEffectPositionX(float tX);
 void setDreamMugenStageHandlerCameraEffectPositionY(float tY);

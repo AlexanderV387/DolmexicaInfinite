@@ -28,6 +28,7 @@
 typedef enum {
 	PAUSE_MENU_CONTINUE,
 	PAUSE_MENU_SCREEN,
+	PAUSE_MENU_WIDE_STAGES,
 	PAUSE_MENU_CHARACTER_SELECT,
 	PAUSE_MENU_TITLE_SCREEN,
 } PauseMenuItem;
@@ -37,11 +38,30 @@ typedef enum {
 // "wide" (more of the stage at the sides) is read as normal.
 #define SCREEN_SETTINGS_PATH "sdmc:/3ds/dolmexica/screen.txt"
 
+// How a stage wider than 4:3 (1280x720) is shown: whole with black bands
+// above and below, as MUGEN 1.1 in a 4:3 window (the default), or cut at
+// its sides to fill the screen.
+#define WIDE_STAGES_SETTINGS_PATH "sdmc:/3ds/dolmexica/widestages.txt"
+
 void loadN3DSScreenSetting() {
 	FILE* file = fopen(SCREEN_SETTINGS_PATH, "r");
+	if (file) {
+		char text[32] = { 0 };
+		if (fgets(text, sizeof(text), file)) setN3DSScreenStretched(strncmp(text, "stretched", 9) == 0);
+		fclose(file);
+	}
+	file = fopen(WIDE_STAGES_SETTINGS_PATH, "r");
+	if (file) {
+		char text[32] = { 0 };
+		if (fgets(text, sizeof(text), file)) setDreamWideStageLetterboxed(strncmp(text, "cut", 3) != 0);
+		fclose(file);
+	}
+}
+
+static void saveN3DSWideStagesSetting() {
+	FILE* file = fopen(WIDE_STAGES_SETTINGS_PATH, "w");
 	if (!file) return;
-	char text[32] = { 0 };
-	if (fgets(text, sizeof(text), file)) setN3DSScreenStretched(strncmp(text, "stretched", 9) == 0);
+	fputs(isDreamWideStageLetterboxed() ? "bands\n" : "cut\n", file);
 	fclose(file);
 }
 
@@ -79,6 +99,7 @@ static const char* getItemText(PauseMenuItem tItem) {
 	case PAUSE_MENU_CONTINUE: return "CONTINUAR";
 	case PAUSE_MENU_CHARACTER_SELECT: return "ELEGIR PERSONAJES";
 	case PAUSE_MENU_SCREEN: return isN3DSScreenStretched() ? "PANTALLA: COMPLETA" : "PANTALLA: NORMAL 4:3";
+	case PAUSE_MENU_WIDE_STAGES: return isDreamWideStageLetterboxed() ? "ESCENARIOS 16:9: CON FRANJAS" : "ESCENARIOS 16:9: RECORTADOS";
 	default: return "MENU PRINCIPAL";
 	}
 }
@@ -105,6 +126,7 @@ static void openPauseMenu() {
 	gPauseMenu3DSData.mItems.clear();
 	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_CONTINUE);
 	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_SCREEN);
+	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_WIDE_STAGES);
 	if (getCharacterSelectStart()) gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_CHARACTER_SELECT);
 	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_TITLE_SCREEN);
 
@@ -141,6 +163,14 @@ static void selectItem() {
 	if (item == PAUSE_MENU_SCREEN) {
 		setN3DSScreenStretched(!isN3DSScreenStretched());
 		saveN3DSScreenSetting();
+		changeMugenText(gPauseMenu3DSData.mTextIDs[gPauseMenu3DSData.mSelected], getItemText(item));
+		return;
+	}
+
+	// From the next fight (the stage is laid out as it is loaded).
+	if (item == PAUSE_MENU_WIDE_STAGES) {
+		setDreamWideStageLetterboxed(!isDreamWideStageLetterboxed());
+		saveN3DSWideStagesSetting();
 		changeMugenText(gPauseMenu3DSData.mTextIDs[gPauseMenu3DSData.mSelected], getItemText(item));
 		return;
 	}

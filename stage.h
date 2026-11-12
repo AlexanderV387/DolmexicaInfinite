@@ -93,3 +93,6 @@ Vector2D getBackgroundAlphaVector(MugenDefScriptGroup* tGroup);
 
 void resetStageIfNotResetForRound();
 void resetStageForRound();
+
+void setDreamWideStageLetterboxed(int tIsLetterboxed);
+int isDreamWideStageLetterboxed();

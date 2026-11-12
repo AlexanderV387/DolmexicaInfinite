@@ -14,6 +14,7 @@
 #include <prism/mugendefreader.h>
 #include <prism/mugenspritefilereader.h>
 #include <prism/sound.h>
+#include <prism/screeneffect.h>
 
 #include "playerdefinition.h"
 #include "mugenstagehandler.h"
@@ -222,9 +223,35 @@ static void loadStageBound(MugenDefScript* s) {
 	gStageData.mBound.mScreenRight = getMugenDefFloatOrDefault(s, "bound", "screenright", 15);
 }
 
+// A stage wider than 4:3 (localcoord 1280x720): shown whole, as MUGEN 1.1
+// does in a 4:3 window (black bands above and below), or cut at its sides
+// to fill the screen (an option of the 3DS's pause menu).
+static int gIsWideStageLetterboxed = 1;
+static float gStageLetterboxOffsetY;   // in the stage's coordinates
+
+void setDreamWideStageLetterboxed(int tIsLetterboxed)
+{
+	gIsWideStageLetterboxed = tIsLetterboxed;
+}
+
+int isDreamWideStageLetterboxed()
+{
+	return gIsWideStageLetterboxed;
+}
+
 static void sanitizeLocalCoordinates()
 {
-	if ((gStageData.mStageInfo.mLocalCoordinates.y * 4) / 3 != gStageData.mStageInfo.mLocalCoordinates.x)
+	gStageLetterboxOffsetY = 0;
+	const auto& coordinates = gStageData.mStageInfo.mLocalCoordinates;
+	if (gIsWideStageLetterboxed && coordinates.x * 3 > coordinates.y * 4)
+	{
+		// Its whole width on the screen: 4:3 by its height, the stage in
+		// the middle of it.
+		const int height = (coordinates.x * 3) / 4;
+		gStageLetterboxOffsetY = (height - coordinates.y) / 2.0f;
+		gStageData.mStageInfo.mLocalCoordinates.y = height;
+	}
+	else if ((gStageData.mStageInfo.mLocalCoordinates.y * 4) / 3 != gStageData.mStageInfo.mLocalCoordinates.x)
 	{
 		logWarningFormat("Unsupported coordinate system %d %d, adjusting width to 4:3 resolution", gStageData.mStageInfo.mLocalCoordinates.x, gStageData.mStageInfo.mLocalCoordinates.y);
 		gStageData.mStageInfo.mLocalCoordinates.x = (gStageData.mStageInfo.mLocalCoordinates.y * 4) / 3;
@@ -530,6 +557,32 @@ static void setStageCamera() {
 	setDreamMugenStageHandlerCameraRange(transformDreamCoordinatesGeoRectangle2D(GeoRectangle2D(boundLeft, gStageData.mCamera.mBoundHigh, sizeX, sizeY), gStageData.mStageInfo.mLocalCoordinates.x, getDreamMugenStageHandlerCameraCoordinateP()));
 }
 
+// The black bands above and below a wide stage shown whole: over the stage,
+// its characters and effects, under the fight's bars and texts.
+#define STAGE_LETTERBOX_Z 70
+static AnimationHandlerElement* gStageLetterboxBands[2];
+
+static void loadStageLetterboxBands() {
+	gStageLetterboxBands[0] = gStageLetterboxBands[1] = NULL;
+	if (gStageLetterboxOffsetY <= 0) return;
+	const auto sz = getScreenSize();
+	const float bandHeight = gStageLetterboxOffsetY * sz.y / float(gStageData.mStageInfo.mLocalCoordinates.y);
+	const float margin = getDreamScreenSideMargin(sz.x);
+	for (int i = 0; i < 2; i++) {
+		const float y = i ? sz.y - bandHeight : 0.0f;
+		gStageLetterboxBands[i] = playOneFrameAnimationLoop(Vector3D(-margin, y, STAGE_LETTERBOX_Z), getEmptyWhiteTextureReference());
+		setAnimationSize(gStageLetterboxBands[i], Vector3D(sz.x + 2 * margin, bandHeight, 1), Vector3D(0, 0, 0));
+		setAnimationColor(gStageLetterboxBands[i], 0, 0, 0);
+	}
+}
+
+static void unloadStageLetterboxBands() {
+	for (int i = 0; i < 2; i++) {
+		if (gStageLetterboxBands[i] && isHandledAnimation(gStageLetterboxBands[i])) removeHandledAnimation(gStageLetterboxBands[i]);
+		gStageLetterboxBands[i] = NULL;
+	}
+}
+
 static void loadStage(void* tData)
 {
 	(void)tData;
@@ -553,6 +606,7 @@ static void loadStage(void* tData)
 	const auto sz = getScreenSize();
 	setDreamMugenStageHandlerCameraCoordinates(Vector2DI(sz.x, sz.y));
 
+	setDreamMugenStageHandlerLetterboxOffsetY(transformDreamCoordinates(gStageLetterboxOffsetY, gStageData.mStageInfo.mLocalCoordinates.x, getDreamMugenStageHandlerCameraCoordinateP()));
 	setStageCamera();
 	loadStageBackgroundDefinitionAndElements(gStageData.mDefinitionPath, &s);
 	setStageCamera();   // [3DS] again, with the backgrounds (full width)
@@ -562,12 +616,14 @@ static void loadStage(void* tData)
 
 	unloadMugenDefScript(&s);
 	resetDreamMugenStageHandlerCameraPosition();
+	loadStageLetterboxBands();
 }
 
 static void unloadStage(void* tData)
 {
 	(void)tData;
 	setProfilingSectionMarkerCurrentFunction();
+	unloadStageLetterboxBands();
 	unloadMugenSpriteFile(&gStageData.mSprites);
 	unloadMugenAnimationFile(&gStageData.mAnimations);
 }
@@ -743,6 +799,7 @@ float getDreamCameraPositionX(int tCoordinateP)
 float getDreamCameraPositionY(int tCoordinateP)
 {
 	Position p = *getDreamMugenStageHandlerCameraPositionReference();
+	p.y += getDreamMugenStageHandlerLetterboxOffsetY();   // the camera's own (CameraPos), not the bands'
 	p = transformDreamCoordinatesVector(p, getDreamMugenStageHandlerCameraCoordinateP(), tCoordinateP);
 
 	return p.y;

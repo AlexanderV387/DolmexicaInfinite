@@ -199,6 +199,8 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 	setPlayerDefinitionPath(0, getContinueCharDefPath("DOLMEXICA_CHAR1").c_str());
 	setPlayerDefinitionPath(1, getContinueCharDefPath("DOLMEXICA_CHAR").c_str());
 	setDreamStageMugenDefinition((getDolmexicaAssetFolder() + (stageEnv ? stageEnv : "stages/kfm.def")).c_str(), "");
+	// DOLMEXICA_WIDE_STAGES_CUT=1: wide stages cut at the sides, not with bands.
+	setDreamWideStageLetterboxed(!getContinueIntegerSetting("DOLMEXICA_WIDE_STAGES_CUT", 0));
 	// DOLMEXICA_VERSUS=1: both at the controls, the second idle (the first
 	// one's buttons from PRISM_LINUX_SCRIPT, see prism's linux/input_linux.cpp).
 	if (getContinueIntegerSetting("DOLMEXICA_VERSUS", 0)) setGameModeVersus();

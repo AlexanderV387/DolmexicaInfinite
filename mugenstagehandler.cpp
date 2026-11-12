@@ -19,6 +19,9 @@ static struct {
 	list<StaticStageHandlerElement> mStaticElements;
 
 	Position mCameraPosition;
+	// A stage wider than 4:3 shown whole, with black bands: the camera this
+	// much higher (in camera coordinates), so the stage is in the middle.
+	float mLetterboxOffsetY = 0;
 	Position2D mCameraPositionPreEffects;
 	Position2D mCameraTargetPosition;
 
@@ -242,6 +245,11 @@ static void updateSingleStaticStageElementBasePosition(StaticStageHandlerElement
 	}
 	const auto positionDeltaInElementSpace = transformDreamCoordinatesVector2D(positionDelta * e->mDrawScale * e->mParallaxScale, getDreamMugenStageHandlerCameraCoordinateP(), e->mCoordinates.x);
 	e->mTileBasePosition = (e->mStart + e->mSinOffset + e->mSinOffsetInternal + positionDeltaInElementSpace) - Vector2D(-e->mCoordinates.x / 2, 0);
+	// A wide stage shown whole: all of it lower by its band, whatever its
+	// delta (one linked to another is lower with it already).
+	if (!e->mPositionLinkElement && gMugenStageHandlerData.mLetterboxOffsetY) {
+		e->mTileBasePosition.y += transformDreamCoordinates(gMugenStageHandlerData.mLetterboxOffsetY, getDreamMugenStageHandlerCameraCoordinateP(), e->mCoordinates.x);
+	}
 
 	const auto scaleDelta = cameraOffset * e->mScaleDelta;
 	e->mTileBaseScale = e->mScaleStart + scaleDelta;
@@ -270,6 +278,7 @@ static void updateCamera() {
 
 	gMugenStageHandlerData.mCameraPositionPreEffects = gMugenStageHandlerData.mCameraPositionPreEffects + (delta * 0.95f);
 	gMugenStageHandlerData.mCameraPosition = (gMugenStageHandlerData.mCameraPositionPreEffects + gMugenStageHandlerData.mCameraShakeOffset).xyz(0.0);
+	gMugenStageHandlerData.mCameraPosition.y -= gMugenStageHandlerData.mLetterboxOffsetY;
 }
 
 static void updateMugenStageHandler(void* tData) {
@@ -388,6 +397,17 @@ void resetDreamMugenStageHandlerCameraPosition()
 	const auto clampedStartPos = clampPositionToGeoRectangle(startPos, gMugenStageHandlerData.mCameraRange);
 	gMugenStageHandlerData.mCameraPosition.x = gMugenStageHandlerData.mCameraPositionPreEffects.x = gMugenStageHandlerData.mCameraTargetPosition.x = clampedStartPos.x;
 	gMugenStageHandlerData.mCameraPosition.y = gMugenStageHandlerData.mCameraPositionPreEffects.y = gMugenStageHandlerData.mCameraTargetPosition.y = clampedStartPos.y;
+	gMugenStageHandlerData.mCameraPosition.y -= gMugenStageHandlerData.mLetterboxOffsetY;
+}
+
+void setDreamMugenStageHandlerLetterboxOffsetY(float tOffset)
+{
+	gMugenStageHandlerData.mLetterboxOffsetY = tOffset;
+}
+
+float getDreamMugenStageHandlerLetterboxOffsetY()
+{
+	return gMugenStageHandlerData.mLetterboxOffsetY;
 }
 
 void resetDreamMugenStageHandler()

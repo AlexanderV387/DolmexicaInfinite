@@ -3245,7 +3245,8 @@ float getPlayerPositionBasedOnStageFloorY(DreamPlayer* p, int tCoordinateP)
 float getPlayerScreenPositionY(DreamPlayer* p, int tCoordinateP)
 {
 	float physicsPosition = getHandledPhysicsPositionReference(p->mPhysicsElement)->y;
-	float cameraPosition = getDreamMugenStageHandlerCameraPositionReference()->y;
+	// On the stage's own screen (a wide one shown whole: below its band).
+	float cameraPosition = getDreamMugenStageHandlerCameraPositionReference()->y + getDreamMugenStageHandlerLetterboxOffsetY();
 	float animationPosition = getMugenAnimationPosition(p->mAnimationElement).y;
 	float unscaledPosition = physicsPosition + animationPosition - cameraPosition;
 	return transformDreamCoordinates(unscaledPosition, getDreamMugenStageHandlerCameraCoordinateP(), tCoordinateP);
