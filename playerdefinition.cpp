@@ -3695,13 +3695,17 @@ void setPlayerPositionBasedOnScreenCenterX(DreamPlayer* p, float x, int tCoordin
 	setPlayerPositionX(p, nx, tCoordinateP);
 }
 
+// A helper shares its player's commands; the computer's random ones are
+// not its own (see isDreamCommandActiveFromInput).
 int isPlayerCommandActive(DreamPlayer* p, const char * tCommandName)
 {
+	if (isPlayerHelper(p)) return isDreamCommandActiveFromInput(p->mCommandID, tCommandName);
 	return isDreamCommandActive(p->mCommandID, tCommandName);
 }
 
 int isPlayerCommandActiveWithLookup(DreamPlayer* p, int tCommandLookupIndex)
 {
+	if (isPlayerHelper(p)) return isDreamCommandActiveFromInputByLookupIndex(p->mCommandID, tCommandLookupIndex);
 	return isDreamCommandActiveByLookupIndex(p->mCommandID, tCommandLookupIndex);
 }
 

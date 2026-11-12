@@ -24,6 +24,7 @@ typedef struct {
 	int mNow;
 	int mBufferTime;
 	int mLookupID;
+	int mIsFromAI;   // made active by the computer, not by input
 } MugenCommandState;
 
 typedef struct {
@@ -109,6 +110,7 @@ static void addSingleMugenCommandState(RegisteredMugenCommand* tCaller, const st
 	MugenCommandState e;
 	e.mName = tKey;
 	e.mIsActive = 0;
+	e.mIsFromAI = 0;
 	e.mLookupID = int(s->tStates.mStateLookup.size());
 	s->tStates.mStates[tKey] = e;
 	s->tStates.mStateLookup.push_back(&s->tStates.mStates[tKey]);
@@ -161,6 +163,35 @@ int isDreamCommandActive(int tID, const char * tCommandName)
 	return state->mIsActive;
 }
 
+// A helper's: in MUGEN the computer's random commands are each player's and
+// each helper's own, so a helper does not see its player's (only input).
+// New AIs tell a person from the computer by a helper and its player
+// seeing the same button pressed (Scream's "AIstart"): with the player's
+// random ones seen by its helpers too, her AI was off whenever a button's
+// came before one of her AI commands, aggressive one round, passive the next.
+int isDreamCommandActiveFromInput(int tID, const char* tCommandName)
+{
+	RegisteredMugenCommand* e = &gMugenCommandHandler.mRegisteredCommands[tID];
+	string key(tCommandName);
+	if (!stl_map_contains(e->tStates.mStates, key)) {
+		logWarningFormat("Querying nonexistant command name %s.", tCommandName);
+		return 0;
+	}
+	MugenCommandState* state = &e->tStates.mStates[key];
+	return state->mIsActive && !state->mIsFromAI;
+}
+
+int isDreamCommandActiveFromInputByLookupIndex(int tID, int tLookupIndex)
+{
+	RegisteredMugenCommand* e = &gMugenCommandHandler.mRegisteredCommands[tID];
+	if (tLookupIndex < 0 || tLookupIndex >= (int)e->tStates.mStateLookup.size()) {
+		logWarningFormat("Querying nonexistant command lookup %d.", tLookupIndex);
+		return 0;
+	}
+	MugenCommandState* state = e->tStates.mStateLookup[tLookupIndex];
+	return state->mIsActive && !state->mIsFromAI;
+}
+
 int isDreamCommandActiveByLookupIndex(int tID, int tLookupIndex)
 {
 	RegisteredMugenCommand* e = &gMugenCommandHandler.mRegisteredCommands[tID];
@@ -173,7 +204,7 @@ int isDreamCommandActiveByLookupIndex(int tID, int tLookupIndex)
 	return state->mIsActive;
 }
 
-static void setCommandStateActive(RegisteredMugenCommand* tRegisteredCommand, const string& tName, int tBufferTime);
+static void setCommandStateActive(RegisteredMugenCommand* tRegisteredCommand, const string& tName, int tBufferTime, int tIsFromAI);
 
 int isDreamCommandForLookup(int tID, const char * tCommandName, int * oLookupIndex)
 {
@@ -201,7 +232,7 @@ int getDreamCommandMinimumDuration(int tID, const char * tCommandName)
 void setDreamPlayerCommandActiveForAI(int tID, const char * tCommandName, int tBufferTime)
 {
 	RegisteredMugenCommand* e = &gMugenCommandHandler.mRegisteredCommands[tID];
-	setCommandStateActive(e, tCommandName, tBufferTime);
+	setCommandStateActive(e, tCommandName, tBufferTime, 1);
 }
 
 int setDreamPlayerCommandNumberActiveForDebug(int tID, int tCommandNumber)
@@ -436,8 +467,10 @@ static void removeActiveCommand(ActiveMugenCommand* tCommand, RegisteredMugenCom
 	state->mIsBeingProcessed = 0;
 }
 
-static void setCommandStateActive(RegisteredMugenCommand* tRegisteredCommand, const string& tName, int tBufferTime) {
+static void setCommandStateActive(RegisteredMugenCommand* tRegisteredCommand, const string& tName, int tBufferTime, int tIsFromAI = 0) {
 	MugenCommandState* state = &tRegisteredCommand->tStates.mStates[tName];
+	// One from input stays one from input while it lasts.
+	state->mIsFromAI = tIsFromAI && (!state->mIsActive || state->mIsFromAI);
 	state->mIsActive = 1;
 	state->mNow = 0;
 	state->mBufferTime = tBufferTime;
