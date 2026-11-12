@@ -650,6 +650,15 @@ static void updateInputMaskGeneral(int i, int tButtonPrecondition) {
 	gMugenCommandHandler.mPreviousHeldMask[i] = gMugenCommandHandler.mHeldMask[i];
 	gMugenCommandHandler.mHeldMask[i] = 0;
 
+	// A player the computer controls reads no controller, as in MUGEN 1.1
+	// (watch mode: the 3DS's buttons moved the first fighter, New Kyouki
+	// stood still after an ultimate until the D-pad was pressed).
+	if (gMugenCommandHandler.mControllerUsed[i] < 0) {
+		gMugenCommandHandler.mHeldMask[i] |= gMugenCommandHandler.mOverrideMask[i];
+		gMugenCommandHandler.mOverrideMask[i] = 0;
+		return;
+	}
+
 	updateSingleInputMaskEntry(i, MASK_A, tButtonPrecondition && hasPressedASingle(gMugenCommandHandler.mControllerUsed[i]));
 	updateSingleInputMaskEntry(i, MASK_B, tButtonPrecondition && hasPressedBSingle(gMugenCommandHandler.mControllerUsed[i]));
 	updateSingleInputMaskEntry(i, MASK_C, tButtonPrecondition && hasPressedRSingle(gMugenCommandHandler.mControllerUsed[i]));

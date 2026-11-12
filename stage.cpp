@@ -223,10 +223,10 @@ static void loadStageBound(MugenDefScript* s) {
 	gStageData.mBound.mScreenRight = getMugenDefFloatOrDefault(s, "bound", "screenright", 15);
 }
 
-// A stage wider than 4:3 (localcoord 1280x720): shown whole, as MUGEN 1.1
-// does in a 4:3 window (black bands above and below), or cut at its sides
-// to fill the screen (an option of the 3DS's pause menu).
-static int gIsWideStageLetterboxed = 1;
+// A stage wider than 4:3 (localcoord 1280x720): cut at its sides to fill the
+// screen (the default), or shown whole as MUGEN 1.1 does in a 4:3 window,
+// with black bands above and below (an option of the 3DS's pause menu).
+static int gIsWideStageLetterboxed = 0;
 static float gStageLetterboxOffsetY;   // in the stage's coordinates
 
 void setDreamWideStageLetterboxed(int tIsLetterboxed)

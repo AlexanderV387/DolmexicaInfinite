@@ -5083,7 +5083,7 @@ void setPlayerArtificial(int i, int tValue)
 {
 	DreamPlayer* p = getRootPlayer(i);
 	p->mAILevel = tValue;
-	setDreamCommandInputControllerUsed(i, i);
+	setDreamCommandInputControllerUsed(i, -1);   // no controller: the computer's commands only
 }
 
 int isPlayerHuman(DreamPlayer* p) {

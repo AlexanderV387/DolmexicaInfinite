@@ -87,6 +87,12 @@ static void updateAIMovement(PlayerAI* e) {
 	else if (dist < 30) {
 		e->mIsMoving = 0;
 	}
+	else if (!e->mIsMoving && randfromInteger(0, 29) == 0) {
+		// Stopped between 30 and 50 it walked no more: New Kyouki (whose
+		// close moves need 30 or less) stood still after an ultimate until
+		// the D-pad moved him. Now he steps in after half a second or so.
+		e->mIsMoving = 1;
+	}
 
 	const auto isOtherPlayerCloseAndCrouching = (dist < 30) && (otherPlayerStateType == MUGEN_STATE_TYPE_CROUCHING);
 	const auto isOtherPlayerCrouchAttacking = (otherPlayerStateType == MUGEN_STATE_TYPE_CROUCHING) && (otherPlayerStateMoveType == MUGEN_STATE_MOVE_TYPE_ATTACK);
