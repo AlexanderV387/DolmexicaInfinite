@@ -475,7 +475,17 @@ static void loadStageTextures(char* tPath) {
 	}
 
 	setMugenSpriteFileReaderToUsePalette(2);
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	// [3DS] A high resolution stage's sprites read as small as they are
+	// drawn on the 240 lines of the screen (a 1280x720 one's a third: its
+	// 3072x2100 background took 25 MB, the game closed for want of memory).
+	const int downscale = max(1, gStageData.mStageInfo.mLocalCoordinates.y / 240);
+	setMugenSpriteFileReaderDownscale(downscale);
+#endif
 	gStageData.mSprites = loadMugenSpriteFileWithoutPalette(sffFile);
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	setMugenSpriteFileReaderDownscale(1);
+#endif
 	setMugenSpriteFileReaderToNotUsePalette();
 }
 
@@ -567,7 +577,12 @@ static void updateZOffset() {
 
 	auto elements = getStageHandlerElementsWithID(gStageData.mStageInfo.mZOffsetLink);
 	if (elements.empty()) return;
-	gStageData.mZOffset = elements[0]->mTileBasePosition.y;
+	// As in Ikemen (and MUGEN 1.1): the stage's zoffset moved by that
+	// element's start and its offsets as it moves (its sin, its velocity),
+	// not replaced by its position (Alpine Train's element 1 starts at y 0:
+	// the players stood at the top of the screen, out of sight).
+	const auto e = elements[0];
+	gStageData.mZOffset = gStageData.mStageInfo.mZOffset + (e->mStart.y + e->mSinOffset.y + e->mSinOffsetInternal.y) * gStageData.mStageInfo.mScale.y;
 }
 
 static float getDreamCameraTargetPositionX(int tCoordinateP)
