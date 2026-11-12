@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <malloc.h>
+#include <dirent.h>
 
 #include <3ds.h>
 
@@ -163,6 +164,9 @@ static void writeMark() {
 	gFightTrace.mMarks++;
 	FILE* file = fopen(TRACE_FOLDER "marks.txt", "a");
 	if (!file) return;
+	// Written to the SD in a few large pieces, not one per line.
+	static char buffer[64 * 1024];
+	setvbuf(file, buffer, _IOFBF, sizeof(buffer));
 	const auto info = mallinfo();
 	DreamPlayer* p1 = getRootPlayer(0);
 	DreamPlayer* p2 = getRootPlayer(1);
@@ -218,18 +222,28 @@ static void writeMark() {
 	printf("\nMarca %d guardada en marks.txt\n", gFightTrace.mMarks);
 }
 
-static void takeScreenshot() {
-	char path[96];
-	for (int i = 1; i < 1000; i++) {
-		snprintf(path, sizeof(path), TRACE_FOLDER "screenshot-%03d.bmp", i);
-		FILE* existing = fopen(path, "rb");
-		if (existing) {
-			fclose(existing);
-			continue;
-		}
-		if (saveN3DSScreenshot(path)) printf("\nCaptura guardada: screenshot-%03d.bmp\n", i);
-		return;
+// The next free screenshot number: the folder is read once (one pass over
+// its names). Looking for it by opening screenshot-001.bmp, -002... one by
+// one froze the game for 89 s on the console with many screenshots there.
+static int findNextScreenshotNumber() {
+	int highest = 0;
+	DIR* folder = opendir(TRACE_FOLDER);
+	if (!folder) return 1;
+	while (struct dirent* entry = readdir(folder)) {
+		int number;
+		if (sscanf(entry->d_name, "screenshot-%d.bmp", &number) == 1 && number > highest) highest = number;
 	}
+	closedir(folder);
+	return highest + 1;
+}
+
+static void takeScreenshot() {
+	static int nextNumber = 0;
+	if (!nextNumber) nextNumber = findNextScreenshotNumber();
+	char path[96];
+	snprintf(path, sizeof(path), TRACE_FOLDER "screenshot-%03d.bmp", nextNumber);
+	if (saveN3DSScreenshot(path)) printf("\nCaptura guardada: screenshot-%03d.bmp\n", nextNumber);
+	nextNumber++;
 }
 
 static void updateFightTrace(void* /*tData*/) {
