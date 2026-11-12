@@ -521,10 +521,12 @@ static void loadStageBackgroundDefinitionAndElements(char* tPath, MugenDefScript
 	if (!bgdef) return;
 
 	loadStageTextures(tPath);
+	logg("stage: sprites read");
 
 	int i = 0;
 	MugenDefScriptGroup* cur = bgdef->mNext;
 	while (cur != NULL) {
+		logFormat("stage: group %d, %s", i, cur->mName.c_str());
 		loadBackgroundDefinitionGroup(cur, i);
 		i++;
 		cur = cur->mNext;
@@ -603,20 +605,26 @@ static void loadStage(void* tData)
 	loadStageShadow(&s);
 	loadStageReflection(&s);
 	loadStageMusic(&s);
+	logg("stage: settings read");
 	const auto sz = getScreenSize();
 	setDreamMugenStageHandlerCameraCoordinates(Vector2DI(sz.x, sz.y));
 
 	setDreamMugenStageHandlerLetterboxOffsetY(transformDreamCoordinates(gStageLetterboxOffsetY, gStageData.mStageInfo.mLocalCoordinates.x, getDreamMugenStageHandlerCameraCoordinateP()));
+	logg("stage: setting the camera");
 	setStageCamera();
 	loadStageBackgroundDefinitionAndElements(gStageData.mDefinitionPath, &s);
+	logg("stage: backgrounds made");
 	setStageCamera();   // [3DS] again, with the backgrounds (full width)
 	gStageData.mIsCameraManual = 0;
 
 	setBackgroundStatesFromScript(&s);
+	logg("stage: background controllers made");
 
 	unloadMugenDefScript(&s);
 	resetDreamMugenStageHandlerCameraPosition();
+	logg("stage: camera placed");
 	loadStageLetterboxBands();
+	logg("stage: loaded");
 }
 
 static void unloadStage(void* tData)
