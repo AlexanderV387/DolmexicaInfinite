@@ -91,6 +91,7 @@ typedef struct{
 } updateStageTileCaller;
 
 static int getTileAmountSingleAxis(int tSize, int tScreenSize, float tDelta, float tInvertedMinimumWidthFactor) {
+	if (tSize <= 0) return 1;
 	const auto length = (int)(((2 * tScreenSize) + (tSize * tInvertedMinimumWidthFactor)) * (1 / tDelta));
 	return int(length / (tSize * (1.0 / tInvertedMinimumWidthFactor)) + 1);
 }
@@ -539,6 +540,16 @@ void addDreamMugenStageHandlerAnimatedBackgroundElement(const Position& tStart, 
 	e->mTileSize = spriteSize;
 	if (!e->mTileSize.x || !e->mTileSize.y) e->mTileSize = Vector2DI(1, 1);
 	e->mTileSpacing = tTileSpacing;
+	// An animation of several sprites is tiled every tilespacing, from the
+	// start of one tile to the next; with none (0), as in MUGEN 1.1 and
+	// Ikemen, it is not tiled on that axis (Alpine Train's birds: Tile = 1,
+	// no tilespacing). Tiled by a size of 0, the amount of tiles divided by
+	// it: none on a PC, 2 billion on the 3DS (its CPU turns the infinity
+	// into the biggest int), the heap gone and the game closed.
+	if (e->mAnimation && vector_size(&e->mAnimation->mSteps) > 1) {
+		if (e->mTileSpacing.x <= 0) e->mTile.x = 0;
+		if (e->mTileSpacing.y <= 0) e->mTile.y = 0;
+	}
 
 	e->mScaleStartY = tScaleStartY;
 	e->mScaleDeltaY = tScaleDeltaY;
@@ -582,7 +593,7 @@ void addDreamMugenStageHandlerAnimatedBackgroundElement(const Position& tStart, 
 	}
 
 	if (e->mAnimation) {
-		addMugenStageHandlerBackgroundElementTiles(e, tSprites, tTile, tBlendType, tAlpha, tZoomDelta);
+		addMugenStageHandlerBackgroundElementTiles(e, tSprites, e->mTile, tBlendType, tAlpha, tZoomDelta);
 	}
 	updateSingleStaticStageElement(e);
 
