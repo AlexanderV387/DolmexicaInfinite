@@ -164,8 +164,109 @@ static int isListedCharacterMissing(void* /*tCaller*/, void* tData) {
 	return !gCharacterAutoDetectData.mFoundFolders.count(folder);
 }
 
+// [3DS] Stages found by themselves: the .def files in stages/ (and in its
+// folders) that are a stage's and select.def does not list are added to its
+// [ExtraStages], in alphabetical order (only the listed ones were offered:
+// stages copied to the card did not appear).
+static struct {
+	int mHasSearched = 0;
+	std::vector<std::string> mFound;   // as select.def would list them ("stages/x.def")
+} gStageAutoDetectData;
+
+// A stage's .def has a [BGdef] group (its background) or a [StageInfo] one.
+static int isStageDefinition(const std::string& tFullPath) {
+	const auto text = readDefinitionStart(tFullPath);
+	return text.find("[bgdef") != std::string::npos || text.find("[stageinfo]") != std::string::npos;
+}
+
+static void searchStagesInFolder(const std::string& tFolderFullPath, const std::string& tListedFolder, int tDepth) {
+	for (const auto& name : getEntries(tFolderFullPath, 0)) {
+		if (name.size() <= 4 || lowercase(name.substr(name.size() - 4)) != ".def") continue;
+		if (!isStageDefinition(tFolderFullPath + name)) {
+			addCompatLine("%s%s: not a stage's .def, left out", tListedFolder.c_str(), name.c_str());
+			continue;
+		}
+		gStageAutoDetectData.mFound.push_back(tListedFolder + name);
+		addCompatLine("%s%s", tListedFolder.c_str(), name.c_str());
+	}
+	if (tDepth >= 1) return;
+	for (const auto& folder : getEntries(tFolderFullPath, 1)) {
+		searchStagesInFolder(tFolderFullPath + folder + "/", tListedFolder + folder + "/", tDepth + 1);
+	}
+}
+
+static void searchStages() {
+	gStageAutoDetectData.mHasSearched = 1;
+	const uint64_t start = getLoadProfileTicks();
+
+	char stagesFullPath[1024];
+	getFullPath(stagesFullPath, (getDolmexicaAssetFolder() + "stages/").c_str());
+	std::string stagesFolder = stagesFullPath;
+	if (!stagesFolder.empty() && stagesFolder.back() != '/') stagesFolder += '/';
+
+	beginCompatSection("stages found in stages/ (not in select.def: added after it)");
+	searchStagesInFolder(stagesFolder, "stages/", 0);
+	addLoadProfileLine("  stages in stages/: %d stages, %.0f ms", (int)gStageAutoDetectData.mFound.size(), getLoadProfileMilliseconds(getLoadProfileTicks() - start));
+	endCompatSection();
+}
+
+static std::string getListedStage(const char* tName) {
+	std::string name = lowercase(tName);
+	std::replace(name.begin(), name.end(), '\\', '/');
+	while (!name.empty() && (name.front() == ' ' || name.front() == '\t')) name.erase(name.begin());
+	while (!name.empty() && (name.back() == ' ' || name.back() == '\t' || name.back() == '\r')) name.pop_back();
+	return name;
+}
+
+static void addListedStage(void* tCaller, void* tData) {
+	auto listed = (std::set<std::string>*)tCaller;
+	auto element = (MugenDefScriptGroupElement*)tData;
+	if (element->mType != MUGEN_DEF_SCRIPT_GROUP_STRING_ELEMENT) return;
+	listed->insert(getListedStage(((MugenDefScriptStringElement*)element->mData)->mString));
+}
+
+// The stages a character's line names ("kfm, stages/kfm.def"): also listed.
+static void addCharacterListedStage(void* tCaller, void* tData) {
+	auto listed = (std::set<std::string>*)tCaller;
+	auto element = (MugenDefScriptGroupElement*)tData;
+	if (element->mType != MUGEN_DEF_SCRIPT_GROUP_STRING_ELEMENT) return;
+	const std::string line = ((MugenDefScriptStringElement*)element->mData)->mString;
+	const auto comma = line.find(',');
+	if (comma == std::string::npos) return;
+	auto stage = line.substr(comma + 1);
+	const auto nextComma = stage.find(',');
+	if (nextComma != std::string::npos) stage = stage.substr(0, nextComma);
+	listed->insert(getListedStage(stage.c_str()));
+}
+
+static void addAutoDetectedStagesToSelectScript(MugenDefScript* tSelectScript) {
+	if (!gStageAutoDetectData.mHasSearched) {
+		searchStages();
+	}
+	if (gStageAutoDetectData.mFound.empty()) return;
+	if (!stl_string_map_contains_array(tSelectScript->mGroups, "extrastages")) {
+		MugenDefScriptGroup group;
+		group.mElements.clear();
+		group.mName = "extrastages";
+		group.mNext = NULL;
+		group.mOrderedElementList = new_list();
+		tSelectScript->mGroups["extrastages"] = group;
+	}
+
+	std::set<std::string> listed;
+	list_map(&tSelectScript->mGroups["extrastages"].mOrderedElementList, addListedStage, &listed);
+	if (stl_string_map_contains_array(tSelectScript->mGroups, "characters")) {
+		list_map(&tSelectScript->mGroups["characters"].mOrderedElementList, addCharacterListedStage, &listed);
+	}
+	for (const auto& entry : gStageAutoDetectData.mFound) {
+		if (listed.count(lowercase(entry))) continue;
+		addMugenDefScriptGroupStringStatement(tSelectScript, "extrastages", entry.c_str());
+	}
+}
+
 void addAutoDetectedCharactersToSelectScript(MugenDefScript* tSelectScript)
 {
+	if (isAutoDetectingCharactersConfig()) addAutoDetectedStagesToSelectScript(tSelectScript);
 	if (!isAutoDetectingCharactersConfig()) return;
 	if (!stl_string_map_contains_array(tSelectScript->mGroups, "characters")) return;
 	if (!gCharacterAutoDetectData.mHasSearched) {

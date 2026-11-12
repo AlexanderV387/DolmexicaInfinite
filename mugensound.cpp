@@ -1,5 +1,9 @@
 #include "mugensound.h"
 
+#include <algorithm>
+#include <string>
+#include <vector>
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -70,27 +74,40 @@ int isMugenBGMMusicPath(const char * tPath)
 	return isMugenBGMMusicPath(tPath, "");
 }
 
+// Where a stage's or a screen's bgmusic is: in music/, from the game's
+// folder (MUGEN's root: "sound/x.mp3"), next to the .def that names it, or
+// (copied there instead of to sound/) just its file name next to that .def.
+static int findMugenBGMMusicFile(const char* tPath, const char* tRootFilePath, std::string& oPath) {
+	std::string path = tPath;
+	std::replace(path.begin(), path.end(), '\\', '/');
+	std::vector<std::string> candidates;
+	candidates.push_back(getDolmexicaAssetFolder() + "music/" + path);
+	candidates.push_back(getDolmexicaAssetFolder() + path);
+	if (*tRootFilePath) {
+		const char* folderEnd = strrchr(tRootFilePath, '/');
+		const std::string folder = folderEnd ? std::string(tRootFilePath, size_t(folderEnd - tRootFilePath + 1)) : std::string();
+		candidates.push_back(folder + path);
+		const auto nameStart = path.find_last_of('/');
+		if (nameStart != std::string::npos) candidates.push_back(folder + path.substr(nameStart + 1));
+	}
+	candidates.push_back(path);
+	for (const auto& candidate : candidates) {
+		if (isFile(candidate)) {
+			oPath = candidate;
+			return 1;
+		}
+	}
+	return 0;
+}
+
 int isMugenBGMMusicPath(const char* tPath, const char* tRootFilePath) {
 	if (!strchr(tPath, '.')) return 0;
 	const char* fileExtension = getFileExtension(tPath);
 	if (!strcmp("da", fileExtension)) return 1;
 	if (getGameMode() == GAME_MODE_OSU && !strcmp("osu", fileExtension)) return 1;
 
-	char inFolderPath[1024];
-	sprintf(inFolderPath, "%smusic/%s", getDolmexicaAssetFolder().c_str(), tPath);
-	if (isFile(inFolderPath)) return 1;
-
-	if (*tRootFilePath) {
-		string s;
-		const char* folderEnd = strrchr(tRootFilePath, '/');
-		if (folderEnd) {
-			s = string(tRootFilePath, size_t(folderEnd - tRootFilePath + 1));
-		}
-		sprintf(inFolderPath, "%s%s", s.data(), tPath);
-		if (isFile(inFolderPath)) return 1;
-	}
-
-	return isFile(tPath);
+	std::string found;
+	return findMugenBGMMusicFile(tPath, tRootFilePath, found);
 }
 
 void playMugenBGMMusicPath(const char * tPath, int tIsLooping)
@@ -144,25 +161,10 @@ void playMugenBGMMusicPath(const char* tPath, const char* tRootFilePath, int tIs
 		return;
 	}
 
-	char inFolderPath[1024];
-	sprintf(inFolderPath, "%smusic/%s", getDolmexicaAssetFolder().c_str(), tPath); 
-	if (isFile(inFolderPath)) {
-		playMugenBGMMusicCompletePath(inFolderPath, tIsLooping);
+	std::string found;
+	if (findMugenBGMMusicFile(tPath, tRootFilePath, found)) {
+		playMugenBGMMusicCompletePath(found.c_str(), tIsLooping);
 		return;
 	}
-
-	if (*tRootFilePath) {
-		string s;
-		const char* folderEnd = strrchr(tRootFilePath, '/');
-		if (folderEnd) {
-			s = string(tRootFilePath, size_t(folderEnd - tRootFilePath + 1));
-		}
-		sprintf(inFolderPath, "%s%s", s.data(), tPath);
-		if (isFile(inFolderPath)) {
-			playMugenBGMMusicCompletePath(inFolderPath, tIsLooping);
-			return;
-		}
-	}
-
 	playMugenBGMMusicCompletePath(tPath, tIsLooping);
 }
