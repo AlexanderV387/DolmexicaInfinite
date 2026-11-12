@@ -90,9 +90,15 @@ typedef struct{
 	StaticStageHandlerElement* e;
 } updateStageTileCaller;
 
-static int getTileAmountSingleAxis(int tSize, int tScreenSize, float tDelta, float tInvertedMinimumWidthFactor) {
+// The tiles of a tiled element: enough to cover twice the screen and one
+// tile more. A tile gone past one side of the screen is moved to the other
+// (updateSingleStaticStageElementTileTiling), so how far the element moves
+// (its delta) does not add any: divided by the delta, Alpine Train's
+// mountains and trees (delta 0.003 to 0.1) took 25,000 tiles, the 3DS took
+// seconds a frame and seemed frozen.
+static int getTileAmountSingleAxis(int tSize, int tScreenSize, float /*tDelta*/, float tInvertedMinimumWidthFactor) {
 	if (tSize <= 0) return 1;
-	const auto length = (int)(((2 * tScreenSize) + (tSize * tInvertedMinimumWidthFactor)) * (1 / tDelta));
+	const auto length = (2 * tScreenSize) + (tSize * tInvertedMinimumWidthFactor);
 	return int(length / (tSize * (1.0 / tInvertedMinimumWidthFactor)) + 1);
 }
 
@@ -125,24 +131,31 @@ static void updateSingleStaticStageElementTileTiling(StaticStageHandlerElement* 
 	const auto sz = getScreenSize();
 	// [3DS] The screen past the game's sides, in full width.
 	const auto margin = getDreamScreenSideMargin(sz.x);
+	// The tile's sides in its sprite's pixels, the screen's too (they were
+	// compared with the screen in screen pixels: a high resolution stage's
+	// tile, drawn smaller, was moved to the other side while still on the
+	// screen, Alpine Train's trees left a gap).
 	if (e->mTile.x == 1) {
+		const auto screenLeft = -margin / tTotalScale.x;
+		const auto screenRight = (sz.x + margin) / tTotalScale.x;
 		const auto right = tSingleAnimation->mReferencePosition.x * (1.0 / tTotalScale.x) + e->mTileSize.x - offset.x + std::max(0.0f, getMugenAnimationShearLowerOffsetX(tSingleAnimation->mElement));
-		if (right < -margin) {
+		if (right < screenLeft) {
 			tSingleAnimation->mOffset.x += amount.x*totalSizeX;
 		}
 		const auto left = tSingleAnimation->mReferencePosition.x * (1.0 / tTotalScale.x) - offset.x + std::min(0.0f, getMugenAnimationShearLowerOffsetX(tSingleAnimation->mElement));
-		if (left > sz.x + margin) {
+		if (left > screenRight) {
 			tSingleAnimation->mOffset.x -= amount.x*totalSizeX;
 		}
 	}
 
 	if (e->mTile.y == 1) {
+		const auto screenBottom = sz.y / tTotalScale.y;
 		const auto down = tSingleAnimation->mReferencePosition.y * (1.0 / tTotalScale.y) + e->mTileSize.y - offset.y;
 		if (down < 0) {
 			tSingleAnimation->mOffset.y += amount.y*totalSizeY;
 		}
 		const auto up = tSingleAnimation->mReferencePosition.y * (1.0 / tTotalScale.y) - offset.y;
-		if (up > sz.y) {
+		if (up > screenBottom) {
 			tSingleAnimation->mOffset.y -= amount.y*totalSizeY;
 		}
 	}
