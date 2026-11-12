@@ -673,13 +673,14 @@ static void loadSinglePlayerSprites(DreamPlayer* tPlayer) {
 	// [3DS] A high resolution character (drawn smaller than its sprites:
 	// Chun Li HD's [Size] scale .25, her 1280x960 sprites four times
 	// MUGEN's) read smaller, as high resolution stages are, and drawn back
-	// at its size: about a texel for each of the screen's pixels (400 of
-	// them for 320 of MUGEN's), never fewer. Chun Li HD's took all of the
-	// texture memory: her fights drew garbage and beeped.
+	// at its size: at MUGEN's own resolution (a texel for each of its 320
+	// pixels across, as the other characters; the 3DS's screen shows 400).
+	// Chun Li HD's took all of the texture memory: her fights drew garbage
+	// and beeped; a third of her size still took 53 MB of 62.
 	{
 		const auto& scale = tPlayer->mHeader->mFiles.mConstants.mSizeData.mScale;
 		const float drawnScale = std::min(scale.x, scale.y) * 320.0f / std::max(1, getPlayerCoordinateP(tPlayer));
-		const int downscale = drawnScale > 0 ? std::max(1, int(1.0f / (drawnScale * 1.25f))) : 1;
+		const int downscale = (drawnScale > 0 && drawnScale * 1.25f < 0.5f) ? std::max(1, int(1.0f / drawnScale + 0.5f)) : 1;
 		setMugenSpriteFileReaderDownscale(downscale);
 		if (downscale > 1) logFormat("P%d sprites read %d times smaller (drawn at %.2f of their size)", tPlayer->mRootID + 1, downscale, drawnScale);
 	}
