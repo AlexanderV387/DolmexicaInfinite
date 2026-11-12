@@ -23,14 +23,22 @@ CXXFLAGS = -std=c++17 -fpermissive -O1 -g -fsanitize=address -fno-omit-frame-poi
 	-DN3DS_TEXTURE_SIM -I$(PRISM_PATH)/include -I$(PRISM_PATH)/linux/n3dssim -I$(PRISM_PATH)/linux/shim -Itest/gtest-shim -I. \
 	$(shell pkg-config --cflags libpng zlib) -include cstdint -include cstring
 LDFLAGS = -fsanitize=address -L$(PRISM_PATH)/bin_n3dssim -lprism -lpng -lz -l:libzstd.so.1 -lpthread
+# LINEAR_DIAG=1: as the 3DS's linear memory diagnosis build (prism's built so too).
+SIM_NAME = DolmexicaInfiniteSim
+ifdef LINEAR_DIAG
+CXXFLAGS += -DN3DS_LINEAR_DIAG
+OBJDIR = build_sim_diag
+LDFLAGS = -fsanitize=address -L$(PRISM_PATH)/bin_n3dssim_diag -lprism -lpng -lz -l:libzstd.so.1 -lpthread
+SIM_NAME = DolmexicaInfiniteSimDiag
+endif
 
-all: DolmexicaInfiniteSim
+all: $(SIM_NAME)
 
 $(OBJDIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
-DolmexicaInfiniteSim: $(ALL_OBJS) $(PRISM_PATH)/bin_n3dssim/libprism.a
+$(SIM_NAME): $(ALL_OBJS) $(PRISM_PATH)/bin_n3dssim/libprism.a
 	$(CXX) $(ALL_OBJS) $(LDFLAGS) -o $@
 
 -include $(ALL_OBJS:.o=.d)
