@@ -680,7 +680,13 @@ static void loadSinglePlayerSprites(DreamPlayer* tPlayer) {
 	{
 		const auto& scale = tPlayer->mHeader->mFiles.mConstants.mSizeData.mScale;
 		const float drawnScale = std::min(scale.x, scale.y) * 320.0f / std::max(1, getPlayerCoordinateP(tPlayer));
+#ifdef N3DS_LINEAR_DIAG
+		// The linear memory's diagnosis: read as prueba 95 did (a third of
+		// Chun Li HD's size), her fights running the memory out.
+		const int downscale = drawnScale > 0 ? std::max(1, int(1.0f / (drawnScale * 1.25f))) : 1;
+#else
 		const int downscale = (drawnScale > 0 && drawnScale * 1.25f < 0.5f) ? std::max(1, int(1.0f / drawnScale + 0.5f)) : 1;
+#endif
 		setMugenSpriteFileReaderDownscale(downscale);
 		if (downscale > 1) logFormat("P%d sprites read %d times smaller (drawn at %.2f of their size)", tPlayer->mRootID + 1, downscale, drawnScale);
 	}

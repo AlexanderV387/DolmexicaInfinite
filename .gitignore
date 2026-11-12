@@ -88,3 +88,6 @@ DolmexicaInfiniteSim
 # Simulator build with allocation tracking (prism bin_n3dssim_track)
 build_sim_track/
 DolmexicaInfiniteSimTrack
+dolmexica-diag.elf
+dolmexica-diag.3dsx
+build_3ds_diag/

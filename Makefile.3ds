@@ -9,6 +9,15 @@ include Makefile.common
 PRISM_PATH ?= ../prism
 
 OBJDIR = build_3ds
+PRISM_BIN = bin_3ds
+NAME = dolmexica
+# LINEAR_DIAG=1: the linear memory's diagnosis (prism's 3ds/lineardiag_3ds.cpp),
+# as dolmexica-diag.3dsx, with prism built the same (LINEAR_DIAG=1 there too).
+ifdef LINEAR_DIAG
+OBJDIR = build_3ds_diag
+PRISM_BIN = bin_3ds_diag
+NAME = dolmexica-diag
+endif
 ALL_OBJS = $(addprefix $(OBJDIR)/,$(OBJS) pausemenu3ds.o fighttrace3ds.o characterautodetect.o)
 
 DEVKITPRO ?= /opt/devkitpro
@@ -20,8 +29,12 @@ CXXFLAGS = $(ARCH) -std=gnu++17 -fsigned-char -fpermissive -O2 -g -mword-relocat
 	-Wno-write-strings -D__3DS__ -DDOLMEXICA_CHARACTER_AUTODETECT -I$(PRISM_PATH)/include -I$(PRISM_PATH)/linux/shim -I. \
 	-I$(DEVKITPRO)/libctru/include -I$(DEVKITPRO)/portlibs/3ds/include
 LDFLAGS = $(ARCH) -specs=3dsx.specs -g -Wl,--gc-sections \
-	-L$(PRISM_PATH)/bin_3ds -L$(DEVKITPRO)/portlibs/3ds/lib -L$(DEVKITPRO)/libctru/lib
+	-L$(PRISM_PATH)/$(PRISM_BIN) -L$(DEVKITPRO)/portlibs/3ds/lib -L$(DEVKITPRO)/libctru/lib
 LIBS = -lprism -lpng -lzstd -lz -lmpg123 -lvorbisidec -logg -lcitro3d -lctru -lm
+ifdef LINEAR_DIAG
+CXXFLAGS += -DN3DS_LINEAR_DIAG
+LDFLAGS += -Wl,--wrap=linearAlloc,--wrap=linearMemAlign,--wrap=linearFree
+endif
 
 APP_TITLE = Dolmexica Infinite
 APP_DESCRIPTION = MUGEN-compatible fighting game engine
@@ -29,13 +42,13 @@ APP_AUTHOR = CaptainDreamcast, AlexanderV387
 ICON = 3ds/icon.png
 ROMFS = $(OBJDIR)/romfs
 
-all: dolmexica.3dsx
+all: $(NAME).3dsx
 
 $(OBJDIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
-dolmexica.elf: $(ALL_OBJS) $(PRISM_PATH)/bin_3ds/libprism.a
+$(NAME).elf: $(ALL_OBJS) $(PRISM_PATH)/$(PRISM_BIN)/libprism.a
 	$(CXX) $(LDFLAGS) $(ALL_OBJS) $(LIBS) -o $@
 
 # prism's own files (the fonts) in the romfs, as "$/rd/".
@@ -47,7 +60,7 @@ $(ROMFS): $(PRISM_PATH)/assets/fonts/segoe.hdr $(PRISM_PATH)/assets/fonts/segoe.
 dolmexica.smdh: $(ICON)
 	$(DEVKITPRO)/tools/bin/smdhtool --create "$(APP_TITLE)" "$(APP_DESCRIPTION)" "$(APP_AUTHOR)" $(ICON) $@
 
-dolmexica.3dsx: dolmexica.elf dolmexica.smdh $(ROMFS)
+$(NAME).3dsx: $(NAME).elf dolmexica.smdh $(ROMFS)
 	$(DEVKITPRO)/tools/bin/3dsxtool $< $@ --smdh=dolmexica.smdh --romfs=$(ROMFS)
 
 # Rebuilt when a header they use changes.
