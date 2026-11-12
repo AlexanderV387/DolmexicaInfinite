@@ -500,11 +500,16 @@ static void addMugenStageHandlerBackgroundElementTiles(StaticStageHandlerElement
 	handleSingleTile(tTile.x, &startX, &amountX, size.x, e->mTileSpacing.x, e->mCoordinates.x, deltaX, e->mInvertedMinimumWidthFactor);
 	handleSingleTile(tTile.y, &startY, &amountY, size.y, e->mTileSpacing.y, e->mCoordinates.y, deltaY, 1.0);
 	
-	Vector3D offset = Vector3D(startX, startY, 0);
+	// The tiles every size and spacing from the element's start, both ways
+	// (the first one was at startX pixels, not tiles: the tiles' places
+	// moved with how many there were).
+	const float firstX = float(startX * (size.x + e->mTileSpacing.x));
+	const float firstY = float(startY * (size.y + e->mTileSpacing.y));
+	Vector3D offset = Vector3D(firstX, firstY, 0);
 	int j;
 	for (j = 0; j < amountY; j++) {
 		int i;
-		offset.x = startX;
+		offset.x = firstX;
 		for (i = 0; i < amountX; i++) {
 			addSingleMugenStageHandlerBackgroundElementTile(e, tSprites, tBlendType, tAlpha, tZoomDelta, offset);
 			offset.x += size.x + e->mTileSpacing.x;
