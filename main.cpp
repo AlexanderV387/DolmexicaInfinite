@@ -43,6 +43,8 @@ extern "C" {
 
 #ifdef __3DS__
 #include "pausemenu3ds.h"
+#include "gamelogic.h"
+#include "characterselectscreen.h"
 #endif
 
 #ifdef __3DS__
@@ -56,6 +58,65 @@ extern "C" {
 extern "C" {
 	u32 __ctru_heap_size = 48 * 1024 * 1024;
 	u32 __stacksize__ = 512 * 1024;
+}
+#endif
+
+#ifdef __3DS__
+// [3DS] A fight watched at once, again and again, with no menus (to run the
+// game in an emulator): autostart.txt in the game's folder, four lines: the
+// first fighter's .def and the second's (from the asset folder's chars/),
+// the stage's .def (from the asset folder), the computer's level (1 to 8).
+// Without the file, the game as always.
+#define N3DS_AUTOSTART_FILE "sdmc:/3ds/dolmexica/autostart.txt"
+
+static struct {
+	std::string mCharacters[2];
+	std::string mStage;
+	int mLevel = 8;
+} gN3DSAutostart;
+
+static void startN3DSAutostartFight();
+
+static void n3dsAutostartFightFinishedCB() {
+	startN3DSAutostartFight();
+}
+
+static void startN3DSAutostartFight() {
+	for (int i = 0; i < 2; i++) {
+		char path[1024];
+		getCharacterSelectNamePath(gN3DSAutostart.mCharacters[i].c_str(), path);
+		setPlayerDefinitionPath(i, path);
+	}
+	char noMusic[2] = "";
+	setDreamStageMugenDefinition((getDolmexicaAssetFolder() + gN3DSAutostart.mStage).c_str(), noMusic);
+	setDifficulty(gN3DSAutostart.mLevel);
+	setGameModeWatch();
+	startFightScreen(n3dsAutostartFightFinishedCB, n3dsAutostartFightFinishedCB);
+}
+
+static Screen gN3DSAutostartScreen;
+
+static void loadN3DSAutostartScreen() {
+	startN3DSAutostartFight();
+}
+
+static Screen* getN3DSAutostartScreenOrNull() {
+	FILE* file = fopen(N3DS_AUTOSTART_FILE, "r");
+	if (!file) return NULL;
+	std::string lines[4];
+	char line[512];
+	for (int i = 0; i < 4 && fgets(line, sizeof(line), file); i++) {
+		lines[i] = line;
+		while (!lines[i].empty() && (lines[i].back() == '\n' || lines[i].back() == '\r' || lines[i].back() == ' ')) lines[i].pop_back();
+	}
+	fclose(file);
+	if (lines[0].empty() || lines[1].empty() || lines[2].empty()) return NULL;
+	gN3DSAutostart.mCharacters[0] = lines[0];
+	gN3DSAutostart.mCharacters[1] = lines[1];
+	gN3DSAutostart.mStage = lines[2];
+	if (!lines[3].empty()) gN3DSAutostart.mLevel = atoi(lines[3].c_str());
+	gN3DSAutostartScreen = makeScreen(loadN3DSAutostartScreen);
+	return &gN3DSAutostartScreen;
 }
 #endif
 
@@ -133,6 +194,13 @@ int main(int argc, char** argv) {
 	setDebugMinusCheckEnabled(1);
 #endif
 
+#ifdef __3DS__
+	if (Screen* autostart = getN3DSAutostartScreenOrNull()) {
+		startScreenHandling(autostart);
+		exitGame();
+		return 0;
+	}
+#endif
 	startScreenHandling(getInitScreen());
 	
 	exitGame();
