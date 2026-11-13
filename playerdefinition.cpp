@@ -45,6 +45,7 @@
 
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 #include <malloc.h>
+#include <3ds.h>
 #include <prism/mugenspritefilereader.h>
 extern "C" {
 	extern uint32_t __ctru_heap_size;
@@ -642,6 +643,66 @@ void loadPlayers(MemoryStack* tMemoryStack) {
 	gPlayerDefinition.mHasLoadedSprites = 0;
 }
 
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+// [3DS] High resolution characters (drawn smaller than their sprites: Chun
+// Li HD's [Size] scale .25, her 1280x960 sprites four times MUGEN's) are
+// read smaller, as high resolution stages are, and drawn back at their
+// size. At most at MUGEN's own resolution (a texel for each of its 320
+// pixels across, as the other characters; nearer than that the GPU's
+// nearest texel would skip some, no sharper); further when both fighters'
+// true color sprites (kept as they are, never let go) would not fit in the
+// texture memory left: Chun Li HD at a quarter took 29 MB, against herself
+// 59 of the 52 there are (both screens and the sprites drawn over each
+// other then, see prism's 3ds/linearguard_3ds.cpp), a fifth 39.
+static float getN3DSPlayerDrawnScale(DreamPlayer* tPlayer) {
+	const auto& scale = tPlayer->mHeader->mFiles.mConstants.mSizeData.mScale;
+	return std::min(scale.x, scale.y) * 320.0f / std::max(1, getPlayerCoordinateP(tPlayer));
+}
+
+static int getN3DSPlayerNaturalDownscale(DreamPlayer* tPlayer) {
+	const float drawnScale = getN3DSPlayerDrawnScale(tPlayer);
+	return (drawnScale > 0 && drawnScale * 1.25f < 0.5f) ? std::max(1, int(1.0f / drawnScale + 0.5f)) : 1;
+}
+
+// Texture memory left after both fighters' true color sprites: the
+// paletted ones (made again when drawn), the effects, the fight's own.
+static const long long N3DS_PLAYER_TEXTURE_HEADROOM = 10 * 1024 * 1024;
+static const int N3DS_PLAYER_MAXIMUM_DOWNSCALE = 8;
+static int gN3DSPlayerDownscales[2] = { 1, 1 };
+static long long gN3DSPlayerTrueColorBytes[2] = { -1, -1 };   // -1: not estimated
+
+static void chooseN3DSPlayerDownscales() {
+	int natural[2];
+	for (int i = 0; i < 2; i++) {
+		natural[i] = getN3DSPlayerNaturalDownscale(&gPlayerDefinition.mPlayers[i]);
+		gN3DSPlayerDownscales[i] = natural[i];
+		gN3DSPlayerTrueColorBytes[i] = -1;
+	}
+	if (natural[0] == 1 && natural[1] == 1) return;
+	const long long budget = (long long)linearSpaceFree() - N3DS_PLAYER_TEXTURE_HEADROOM;
+	long long total = 0;
+	for (int extra = 0; ; extra++) {
+		int isAtMost = 1;
+		total = 0;
+		for (int i = 0; i < 2; i++) {
+			// Only the high resolution ones read smaller still.
+			const int factor = natural[i] > 1 ? std::min(natural[i] + extra, N3DS_PLAYER_MAXIMUM_DOWNSCALE) : 1;
+			if (natural[i] > 1 && factor < N3DS_PLAYER_MAXIMUM_DOWNSCALE) isAtMost = 0;
+			gN3DSPlayerDownscales[i] = factor;
+			const long long bytes = estimateMugenSpriteFileTrueColorTextureBytes(gPlayerDefinition.mPlayers[i].mHeader->mFiles.mSpritePath, factor);
+			gN3DSPlayerTrueColorBytes[i] = bytes;
+			if (bytes > 0) total += bytes;
+		}
+		if (total <= budget || isAtMost) break;
+	}
+	addLoadProfileLine("  fighters' sprites read %d and %d times smaller: %lld KB of true color textures, %lld KB there", gN3DSPlayerDownscales[0], gN3DSPlayerDownscales[1], total / 1024, budget / 1024);
+#ifndef __3DS__
+	fprintf(stderr, "fighters' sprites read %d and %d times smaller: %lld KB of true color textures, %lld KB there\n", gN3DSPlayerDownscales[0], gN3DSPlayerDownscales[1], total / 1024, budget / 1024);
+#endif
+	addCompatLine("fighters' sprites read %d and %d times smaller (%lld KB of true color textures for %lld KB)", gN3DSPlayerDownscales[0], gN3DSPlayerDownscales[1], total / 1024, budget / 1024);
+}
+#endif
+
 static void loadSinglePlayerSprites(DreamPlayer* tPlayer) {
 	beginCompatSection(tPlayer->mHeader->mFiles.mDefinitionPath);
 	const uint64_t compatStart = getLoadProfileTicks();
@@ -666,29 +727,21 @@ static void loadSinglePlayerSprites(DreamPlayer* tPlayer) {
 #endif
 #ifdef __3DS__
 	// The texture memory too: the first fighter's textures made at load
-	// take at most half of what is free, the second its share.
-	setN3DSTextureLoadReserve(tPlayer->mRootID == 0 ? linearSpaceFree() / 2 : 0);
+	// take at most half of what is free, the second its share; with a high
+	// resolution one, what is left but the second's true color sprites
+	// (estimated from its sprite list) and some room.
+	if (tPlayer->mRootID == 0) chooseN3DSPlayerDownscales();
+	if (tPlayer->mRootID == 0 && gN3DSPlayerTrueColorBytes[1] >= 0) setN3DSTextureLoadReserve(size_t(gN3DSPlayerTrueColorBytes[1] + N3DS_PLAYER_TEXTURE_HEADROOM));
+	else setN3DSTextureLoadReserve(tPlayer->mRootID == 0 ? linearSpaceFree() / 2 : 0);
 #endif
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
-	// [3DS] A high resolution character (drawn smaller than its sprites:
-	// Chun Li HD's [Size] scale .25, her 1280x960 sprites four times
-	// MUGEN's) read smaller, as high resolution stages are, and drawn back
-	// at its size: at MUGEN's own resolution (a texel for each of its 320
-	// pixels across, as the other characters; the 3DS's screen shows 400).
-	// Chun Li HD's took all of the texture memory: her fights drew garbage
-	// and beeped; a third of her size still took 53 MB of 62.
-	{
-		const auto& scale = tPlayer->mHeader->mFiles.mConstants.mSizeData.mScale;
-		const float drawnScale = std::min(scale.x, scale.y) * 320.0f / std::max(1, getPlayerCoordinateP(tPlayer));
-#ifdef N3DS_LINEAR_DIAG
-		// The linear memory's diagnosis: read as prueba 95 did (a third of
-		// Chun Li HD's size), her fights running the memory out.
-		const int downscale = drawnScale > 0 ? std::max(1, int(1.0f / (drawnScale * 1.25f))) : 1;
-#else
-		const int downscale = (drawnScale > 0 && drawnScale * 1.25f < 0.5f) ? std::max(1, int(1.0f / drawnScale + 0.5f)) : 1;
+#ifndef __3DS__
+	if (tPlayer->mRootID == 0) chooseN3DSPlayerDownscales();
 #endif
+	{
+		const int downscale = gN3DSPlayerDownscales[tPlayer->mRootID];
 		setMugenSpriteFileReaderDownscale(downscale);
-		if (downscale > 1) logFormat("P%d sprites read %d times smaller (drawn at %.2f of their size)", tPlayer->mRootID + 1, downscale, drawnScale);
+		if (downscale > 1) logFormat("P%d sprites read %d times smaller (drawn at %.2f of their size)", tPlayer->mRootID + 1, downscale, getN3DSPlayerDrawnScale(tPlayer));
 	}
 #endif
 	tPlayer->mHeader->mFiles.mSprites = loadMugenSpriteFile(tPlayer->mHeader->mFiles.mSpritePath, tPlayer->mHeader->mFiles.mHasPalettePath, tPlayer->mHeader->mFiles.mPalettePath);
