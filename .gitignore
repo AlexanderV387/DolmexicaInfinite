@@ -91,3 +91,5 @@ DolmexicaInfiniteSimTrack
 dolmexica-diag.elf
 dolmexica-diag.3dsx
 build_3ds_diag/
+DolmexicaInfiniteSimDiag
+build_sim_diag/
