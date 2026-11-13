@@ -332,6 +332,37 @@ void setDreamMugenStageHandlerScreen(int tScreen)
 	}
 }
 
+void setDreamMugenStageHandlerScreenByArea(const GeoRectangle2D& tArea, int tInsideScreen, int tOutsideScreen)
+{
+	const float screenW = float(getScreenSize().x);
+	const float huge = 1e6f;
+	for (auto& element : gMugenStageHandlerData.mStaticElements) {
+		int screen = tOutsideScreen;
+		const Vector2DI size = getAnimationFirstElementSpriteSize(element.mAnimation, element.mSprites);
+		if (size.x > 0 && size.y > 0 && element.mCoordinates.x > 0) {
+			// Where it is drawn on the screen as it starts (x from the middle,
+			// y from the top; tiled, all across; in its window, if any).
+			const float toScreen = screenW / element.mCoordinates.x;
+			const Vector2D scale = element.mDrawScale * element.mGlobalScale;
+			const float x = (element.mCoordinates.x / 2.0f + float(element.mStart.x)) * toScreen, y = float(element.mStart.y) * toScreen;
+			float x0 = element.mTile.x ? -huge : x, x1 = element.mTile.x ? huge : x + size.x * float(scale.x) * toScreen;
+			float y0 = element.mTile.y ? -huge : y, y1 = element.mTile.y ? huge : y + size.y * float(scale.y) * toScreen;
+			const GeoRectangle2D& window = element.mConstraintRectangle;
+			x0 = std::max(x0, float(window.mTopLeft.x) * toScreen);
+			x1 = std::min(x1, float(window.mBottomRight.x) * toScreen);
+			y0 = std::max(y0, float(window.mTopLeft.y) * toScreen);
+			y1 = std::min(y1, float(window.mBottomRight.y) * toScreen);
+			const float w = x1 - x0, h = y1 - y0;
+			const float overlapW = std::max(0.0f, std::min(x1, float(tArea.mBottomRight.x)) - std::max(x0, float(tArea.mTopLeft.x)));
+			const float overlapH = std::max(0.0f, std::min(y1, float(tArea.mBottomRight.y)) - std::max(y0, float(tArea.mTopLeft.y)));
+			if (w > 0 && h > 0 && w < screenW * 0.85f && overlapW * overlapH >= 0.6f * w * h) screen = tInsideScreen;
+		}
+		for (auto& animation : element.mAnimationReferences) {
+			setMugenAnimationScreen(animation.mElement, screen);
+		}
+	}
+}
+
 void setDreamMugenStageHandlerCameraCoordinates(const Vector2DI& tCoordinates)
 {
 	gMugenStageHandlerData.mCameraCoordinates = tCoordinates;

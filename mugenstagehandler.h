@@ -78,6 +78,9 @@ void setDreamMugenStageHandlerCameraCoordinates(const Vector2DI& tCoordinates);
 // The screen its elements are drawn on (prism's setMugenAnimationScreen: 2,
 // a menu's background on both of the 3DS's screens).
 void setDreamMugenStageHandlerScreen(int tScreen);
+// The same, the elements mostly inside an area of the game's screen (and
+// narrower than it) on one screen, the others on another.
+void setDreamMugenStageHandlerScreenByArea(const GeoRectangle2D& tArea, int tInsideScreen, int tOutsideScreen);
 void setDreamMugenStageHandlerCameraRange(const GeoRectangle2D& tRect);
 GeoRectangle2D getDreamMugenStageHandlerCameraRange();
 // [3DS] The camera positions (x, in the elements' coordinates) in which the

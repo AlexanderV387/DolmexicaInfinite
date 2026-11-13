@@ -616,8 +616,17 @@ static void putOnN3DSSelectGridScreen(MugenAnimationHandlerElement* tElement) {
 	if (isN3DSSelectGridOnBottomScreen()) setMugenAnimationScreen(tElement, N3DS_SELECT_GRID_SCREEN);
 }
 
+// The motif's own grid, where its background has the grid's panel.
+static GeoRectangle2D gN3DSMotifGridArea;
+
 static void layoutN3DSSelectGrid() {
 	if (!isN3DSSelectGridOnBottomScreen()) return;
+	{
+		const auto& motif = gCharacterSelectScreenData.mHeader;
+		const float w = motif.mColumns * (motif.mCellSize.x + motif.mCellSpacing) - motif.mCellSpacing;
+		const float h = motif.mRows * (motif.mCellSize.y + motif.mCellSpacing) - motif.mCellSpacing;
+		gN3DSMotifGridArea = GeoRectangle2D(float(motif.mPosition.x), float(motif.mPosition.y), w, h);
+	}
 	if (!stl_string_map_contains_array(gCharacterSelectScreenData.mCharacterScript.mGroups, "characters")) return;
 	auto& header = gCharacterSelectScreenData.mHeader;
 	const int amount = std::max(1, list_size(&gCharacterSelectScreenData.mCharacterScript.mGroups["characters"].mOrderedElementList));
@@ -1245,7 +1254,13 @@ static void loadCharacterSelectScreen() {
 
 	loadStageSelectStages();
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
-	if (isN3DSSelectGridOnBottomScreen()) layoutN3DSSelectGrid();
+	if (isN3DSSelectGridOnBottomScreen()) {
+		layoutN3DSSelectGrid();
+		// The background's grid panel (and the like) left out: on the top
+		// screen it was an empty box, below it darkened some rows.
+		const auto& area = gN3DSMotifGridArea;
+		setDreamMugenStageHandlerScreenByArea(GeoRectangle2D(area.mTopLeft.x - 12, area.mTopLeft.y - 12, area.mBottomRight.x - area.mTopLeft.x + 24, area.mBottomRight.y - area.mTopLeft.y + 24), -1, 2);
+	}
 	else ensureMenuCellsForCharacters();
 #else
 	ensureMenuCellsForCharacters();
@@ -2038,6 +2053,10 @@ static void updateStageSelection(int i, int tNewStage, int tDoesPlaySound) {
 		}
 	}
 	changeMugenText(gCharacterSelectScreenData.mStageSelect.mTextID, newText);
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	// The bottom screen's stage picture says it (with the name).
+	if (isN3DSSelectGridOnBottomScreen()) setMugenTextVisibility(gCharacterSelectScreenData.mStageSelect.mTextID, 0);
+#endif
 	updateStageCredit(stage);
 
 	if (tDoesPlaySound) {
