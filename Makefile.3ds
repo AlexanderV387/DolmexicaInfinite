@@ -34,6 +34,10 @@ LIBS = -lprism -lpng -lzstd -lz -lmpg123 -lvorbisidec -logg -lcitro3d -lctru -lm
 ifdef LINEAR_DIAG
 CXXFLAGS += -DN3DS_LINEAR_DIAG
 LDFLAGS += -Wl,--wrap=linearAlloc,--wrap=linearMemAlign,--wrap=linearFree,--wrap=malloc,--wrap=free
+else
+# libctru's linear allocator never left with nothing free (prism's
+# 3ds/linearguard_3ds.cpp).
+LDFLAGS += -Wl,--wrap=linearAlloc,--wrap=linearMemAlign
 endif
 
 APP_TITLE = Dolmexica Infinite
