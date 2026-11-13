@@ -1444,10 +1444,16 @@ static void updateCharacterSelectionCredits(SelectCharacter* character) {
 
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 // [3DS] A big portrait at the motif's place and size whatever its own: in
-// the box of MUGEN's usual big portrait (120x140 at 320x240, times the
-// motif's face.scale) from face.offset (to its left for one facing left),
-// as big as fits, keeping its shape, at the box's bottom and middle (some
-// characters' were drawn over the other's, others small up in a corner).
+// the upper part of the box of MUGEN's usual big portrait (120x140 at
+// 320x240, times the motif's face.scale) from face.offset (to its left for
+// one facing left), as big as fits, keeping its shape, at its top and
+// middle (some characters' were drawn over the other's, others small up
+// in a corner).
+// The big portrait in the upper part of the motif's box, the standing
+// sprite under it down to the screen's bottom (one over the other, they
+// were drawn mixed).
+static const float N3DS_PORTRAIT_SHARE = 0.62f;
+
 static void getN3DSPortraitBox(int i, float* oX, float* oY, float* oW, float* oH) {
 	PlayerHeader* player = &gCharacterSelectScreenData.mHeader.mPlayers[i];
 	const float toScreen = getScreenSize().x / float(std::max(1, gCharacterSelectScreenData.mLocalCoord.x));
@@ -1467,9 +1473,10 @@ static void fitN3DSBigPortrait(int i, SelectCharacter* tCharacter) {
 	if (!element || !sprite || sprite->mOriginalTextureSize.x <= 0 || sprite->mOriginalTextureSize.y <= 0) return;
 	float boxX, boxY, boxW, boxH;
 	getN3DSPortraitBox(i, &boxX, &boxY, &boxW, &boxH);
+	boxH *= N3DS_PORTRAIT_SHARE;   // its upper part: the standing sprite below it
 	const float w = float(sprite->mOriginalTextureSize.x), h = float(sprite->mOriginalTextureSize.y);
 	const float scale = std::min(boxW / w, boxH / h);
-	const float left = boxX + (boxW - w * scale) / 2, top = boxY + (boxH - h * scale);
+	const float left = boxX + (boxW - w * scale) / 2, top = boxY;
 	const float axisX = player->mBigPortraitIsFacingRight ? float(sprite->mAxisOffset.x) : w - float(sprite->mAxisOffset.x);
 	setMugenAnimationPosition(element, Vector3D(left + axisX * scale, top + float(sprite->mAxisOffset.y) * scale, 30.0));
 	setMugenAnimationDrawScale(element, Vector2D(scale, scale));
@@ -1478,8 +1485,8 @@ static void fitN3DSBigPortrait(int i, SelectCharacter* tCharacter) {
 
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 // [3DS] The character's standing sprite (0,0, as MUGEN's stand animation
-// starts) in front of its big portrait, at the box's bottom and middle,
-// facing the other side: read from its sprite file alone once the cursor
+// starts) under its big portrait, down to the screen's bottom, in the
+// middle, facing the other side: read from its sprite file alone once the cursor
 // rests on it a few frames (a high resolution one smaller), the last few
 // kept.
 static const int N3DS_STAND_REST_FRAMES = 6;
@@ -1538,6 +1545,9 @@ static MugenSpriteFile* getN3DSStandSprites(SelectCharacter* tCharacter, int tMa
 static void showN3DSStand(int i, SelectCharacter* tCharacter) {
 	float boxX, boxY, boxW, boxH;
 	getN3DSPortraitBox(i, &boxX, &boxY, &boxW, &boxH);
+	// Under the portrait, down to the screen's bottom.
+	boxY += boxH * N3DS_PORTRAIT_SHARE + 2;
+	boxH = std::max(24.0f, getScreenSize().y - 4 - boxY);
 	MugenSpriteFile* sprites = getN3DSStandSprites(tCharacter, int(boxH));
 	MugenSpriteFileSprite* sprite = sprites ? getMugenSpriteFileTextureReference(sprites, 0, 0) : NULL;
 	if (!sprite || sprite->mOriginalTextureSize.x <= 0 || sprite->mOriginalTextureSize.y <= 0) {
@@ -1552,7 +1562,7 @@ static void showN3DSStand(int i, SelectCharacter* tCharacter) {
 	}
 	MugenAnimationHandlerElement* element = gN3DSStand.mElements[i];
 	const float w = float(sprite->mOriginalTextureSize.x), h = float(sprite->mOriginalTextureSize.y);
-	const float scale = std::min(1.0f, std::min(boxW * 0.9f / w, boxH * 0.9f / h));
+	const float scale = std::min(1.0f, std::min(boxW * 0.9f / w, boxH / h));
 	// Its axis (its feet's middle) at the box's bottom, the sprite inside it.
 	const float axisX = float(sprite->mAxisOffset.x), axisY = float(sprite->mAxisOffset.y);
 	float x = boxX + boxW / 2;
