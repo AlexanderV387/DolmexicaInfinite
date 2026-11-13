@@ -33,7 +33,7 @@ LDFLAGS = $(ARCH) -specs=3dsx.specs -g -Wl,--gc-sections \
 LIBS = -lprism -lpng -lzstd -lz -lmpg123 -lvorbisidec -logg -lcitro3d -lctru -lm
 ifdef LINEAR_DIAG
 CXXFLAGS += -DN3DS_LINEAR_DIAG
-LDFLAGS += -Wl,--wrap=linearAlloc,--wrap=linearMemAlign,--wrap=linearFree,--wrap=malloc,--wrap=free,--wrap=calloc,--wrap=realloc,--wrap=memalign
+LDFLAGS += -Wl,--wrap=linearAlloc,--wrap=linearMemAlign,--wrap=linearFree,--wrap=malloc,--wrap=free,--wrap=calloc,--wrap=realloc,--wrap=memalign,--wrap=_malloc_r,--wrap=_free_r,--wrap=_calloc_r,--wrap=_realloc_r,--wrap=_memalign_r
 endif
 
 APP_TITLE = Dolmexica Infinite
