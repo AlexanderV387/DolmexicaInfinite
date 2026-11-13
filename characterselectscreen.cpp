@@ -603,6 +603,10 @@ static const float N3DS_SELECT_GRID_MARGIN = 4;
 static void resetN3DSStand();
 static void unloadN3DSStand();
 static void updateN3DSStand();
+static void resetN3DSStagePreview();
+static bool isSelectedStageRandomStage(int tIndex);
+static void unloadN3DSStagePreview();
+static void updateN3DSStagePreview();
 
 static int isN3DSSelectGridOnBottomScreen() {
 	return gCharacterSelectScreenData.mSelectScreenType != CHARACTER_SELECT_SCREEN_TYPE_STORY && gCharacterSelectScreenData.mSelectScreenType != CHARACTER_SELECT_SCREEN_TYPE_CREDITS;
@@ -1236,6 +1240,7 @@ static void loadCharacterSelectScreen() {
 	if (isN3DSSelectGridOnBottomScreen()) setDreamMugenStageHandlerScreen(2);
 	resetN3DSSelectFrame();
 	resetN3DSStand();
+	resetN3DSStagePreview();
 #endif
 
 	loadStageSelectStages();
@@ -1325,6 +1330,7 @@ static void unloadCharacterSelectScreen() {
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 	removeN3DSSelectFrame();
 	unloadN3DSStand();
+	unloadN3DSStagePreview();
 #endif
 	unloadMugenDefScript(&gCharacterSelectScreenData.mScript);
 	unloadMugenDefScript(&gCharacterSelectScreenData.mCharacterScript);
@@ -1565,6 +1571,212 @@ static void updateN3DSStand() {
 		if (++gN3DSStand.mRestFrames[i] < N3DS_STAND_REST_FRAMES) continue;
 		showN3DSStand(i, character);
 	}
+}
+#endif
+
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+// [3DS] Choosing the stage: over the grid on the bottom screen, a still
+// picture of the stage as a fight in it starts (its plain background
+// elements of layer 0 where they start, the camera in the middle; their
+// sprites alone read from its sprite file, small, kept in the SD card's
+// cache after the first time) and its name between arrows, once the
+// cursor rests on it a few frames.
+static const float N3DS_STAGE_PREVIEW_TOP = 20, N3DS_STAGE_PREVIEW_HEIGHT = 170, N3DS_STAGE_PREVIEW_MARGIN = 8;
+static const int N3DS_STAGE_PREVIEW_REST_FRAMES = 6;
+static const size_t N3DS_STAGE_PREVIEW_MAXIMUM_ELEMENTS = 48;
+
+typedef struct {
+	Vector2DI mSprite;
+	Vector2D mStart;
+	int mTileX;
+	float mTileSpacingX;
+	BlendType mBlendType;
+} N3DSStagePreviewLayer;
+
+static struct {
+	MugenSpriteFile mSprites;
+	int mHasSprites;
+	std::vector<MugenAnimation*> mAnimations;
+	std::vector<MugenAnimationHandlerElement*> mElements;
+	AnimationHandlerElement* mBackdrop;
+	int mTextID;
+	int mIsShown;
+	int mWantedStage;
+	int mShownStage;
+	int mRestFrames;
+} gN3DSStagePreview;
+
+static void resetN3DSStagePreview() {
+	gN3DSStagePreview.mHasSprites = 0;
+	gN3DSStagePreview.mAnimations.clear();
+	gN3DSStagePreview.mElements.clear();
+	gN3DSStagePreview.mBackdrop = NULL;
+	gN3DSStagePreview.mTextID = -1;
+	gN3DSStagePreview.mIsShown = 0;
+	gN3DSStagePreview.mWantedStage = -1;
+	gN3DSStagePreview.mShownStage = -1;
+	gN3DSStagePreview.mRestFrames = 0;
+}
+
+static void letN3DSStagePreviewSpritesGo() {
+	for (auto element : gN3DSStagePreview.mElements) removeMugenAnimation(element);
+	gN3DSStagePreview.mElements.clear();
+	for (auto animation : gN3DSStagePreview.mAnimations) destroyMugenAnimation(animation);
+	gN3DSStagePreview.mAnimations.clear();
+	if (gN3DSStagePreview.mHasSprites) unloadMugenSpriteFile(&gN3DSStagePreview.mSprites);
+	gN3DSStagePreview.mHasSprites = 0;
+}
+
+static void unloadN3DSStagePreview() {
+	letN3DSStagePreviewSpritesGo();
+	if (gN3DSStagePreview.mBackdrop) removeHandledAnimation(gN3DSStagePreview.mBackdrop);
+	gN3DSStagePreview.mBackdrop = NULL;
+	if (gN3DSStagePreview.mTextID >= 0) removeMugenText(gN3DSStagePreview.mTextID);
+	gN3DSStagePreview.mTextID = -1;
+}
+
+// The stage's sprite file, its size (localcoord) and its plain background
+// elements of layer 0, in their order.
+static int readN3DSStagePreviewLayers(const char* tStagePath, std::string* oSpritePath, Vector2DI* oLocalCoord, std::vector<N3DSStagePreviewLayer>* oLayers) {
+	if (!isFile(tStagePath)) return 0;
+	MugenDefScript script;
+	loadMugenDefScript(&script, tStagePath);
+	std::string spr;
+	*oLocalCoord = Vector2DI(320, 240);
+	for (MugenDefScriptGroup* group = script.mFirstGroup; group; group = group->mNext) {
+		const std::string& name = group->mName;
+		if (name == "bgdef") spr = getSTLMugenDefStringOrDefaultAsGroup(group, "spr", "");
+		if (name == "stageinfo") *oLocalCoord = getMugenDefVectorIOrDefaultAsGroup(group, "localcoord", Vector3DI(320, 240, 0)).xy();
+		if (name.size() < 3 || name[0] != 'b' || name[1] != 'g' || name[2] == 'c' || name == "bgdef") continue;
+		if (!isMugenDefVector2DIVariableAsGroup(group, "spriteno")) continue;
+		if (getMugenDefIntegerOrDefaultAsGroup(group, "layerno", 0) != 0) continue;
+		std::string type = getSTLMugenDefStringOrDefaultAsGroup(group, "type", "normal");
+		std::string trans = getSTLMugenDefStringOrDefaultAsGroup(group, "trans", "none");
+		std::transform(type.begin(), type.end(), type.begin(), ::tolower);
+		std::transform(trans.begin(), trans.end(), trans.begin(), ::tolower);
+		if (type != "normal" && type != "parallax") continue;
+		N3DSStagePreviewLayer layer;
+		if (trans == "none" || trans.empty()) layer.mBlendType = BLEND_TYPE_NORMAL;
+		else if (trans.compare(0, 3, "add") == 0) layer.mBlendType = BLEND_TYPE_ADDITION;
+		else continue;
+		layer.mSprite = getMugenDefVector2DIVariableAsGroup(group, "spriteno");
+		layer.mStart = getMugenDefVector2DOrDefaultAsGroup(group, "start", Vector2D(0, 0));
+		layer.mTileX = getMugenDefVector2DIOrDefaultAsGroup(group, "tile", Vector2DI(0, 0)).x;
+		layer.mTileSpacingX = float(getMugenDefVector2DOrDefaultAsGroup(group, "tilespacing", Vector2D(0, 0)).x);
+		oLayers->push_back(layer);
+		if (oLayers->size() >= N3DS_STAGE_PREVIEW_MAXIMUM_ELEMENTS) break;
+	}
+	unloadMugenDefScript(&script);
+	if (spr.empty() || oLayers->empty() || oLocalCoord->x <= 0 || oLocalCoord->y <= 0) return 0;
+	char path[1024];
+	getPathToFile(path, tStagePath);
+	std::string sprPath = std::string(path) + spr;
+	if (!isFile(sprPath)) sprPath = getDolmexicaAssetFolder() + spr;
+	if (!isFile(sprPath)) return 0;
+	*oSpritePath = sprPath;
+	return 1;
+}
+
+static void addN3DSStagePreviewElement(const N3DSStagePreviewLayer& tLayer, MugenSpriteFileSprite* tSprite, const Position2D& tStageOrigin, float tScale, float tX, const GeoRectangle2D& tBox, float tZ) {
+	MugenAnimation* animation = createOneFrameMugenAnimationForSprite(tLayer.mSprite.x, tLayer.mSprite.y);
+	gN3DSStagePreview.mAnimations.push_back(animation);
+	const Position2D p = tStageOrigin + Vector2D(tX, float(tLayer.mStart.y)) * tScale;
+	MugenAnimationHandlerElement* element = addMugenAnimation(animation, &gN3DSStagePreview.mSprites, p.xyz(tZ));
+	setMugenAnimationDrawScale(element, Vector2D(tScale, tScale));
+	setMugenAnimationBlendType(element, tLayer.mBlendType);
+	setMugenAnimationConstraintRectangle(element, tBox);
+	setMugenAnimationScreen(element, N3DS_SELECT_GRID_SCREEN);
+	gN3DSStagePreview.mElements.push_back(element);
+	(void)tSprite;
+}
+
+static void showN3DSStagePreview(int tStage) {
+	letN3DSStagePreviewSpritesGo();
+	gN3DSStagePreview.mShownStage = tStage;
+	if (isSelectedStageRandomStage(tStage)) return;
+	SelectStage* stage = (SelectStage*)vector_get(&gCharacterSelectScreenData.mSelectStages, tStage);
+	std::string spritePath;
+	Vector2DI localCoord;
+	std::vector<N3DSStagePreviewLayer> layers;
+	if (!readN3DSStagePreviewLayers(stage->mPath, &spritePath, &localCoord, &layers)) return;
+
+	const float maximumW = getScreenSize().x - 2 * N3DS_STAGE_PREVIEW_MARGIN, maximumH = N3DS_STAGE_PREVIEW_HEIGHT;
+	const float scale = std::min(maximumW / localCoord.x, maximumH / localCoord.y);
+	const float boxW = localCoord.x * scale, boxH = localCoord.y * scale;
+	const GeoRectangle2D box((getScreenSize().x - boxW) / 2, N3DS_STAGE_PREVIEW_TOP + (maximumH - boxH) / 2, boxW, boxH);
+	// The stage's (0, 0): the screen's middle across, its top.
+	const Position2D origin = box.mTopLeft + Vector2D(localCoord.x / 2.0f, 0) * scale;
+
+	std::set<std::pair<int, int>> wanted;
+	for (const auto& layer : layers) wanted.insert(std::make_pair(layer.mSprite.x, layer.mSprite.y));
+	// With the stage's palette, as stage.cpp reads them (color 0 not drawn).
+	setMugenSpriteFileReaderToUsePalette(2);
+	setMugenSpriteFileReaderDownscale(std::max(1, int(1.0f / scale)));
+	gN3DSStagePreview.mSprites = loadMugenSpriteFileSomeSprites(spritePath.c_str(), wanted);
+	setMugenSpriteFileReaderDownscale(1);
+	setMugenSpriteFileReaderToNotUsePalette();
+	gN3DSStagePreview.mHasSprites = 1;
+
+	float z = 61;
+	for (const auto& layer : layers) {
+		MugenSpriteFileSprite* sprite = getMugenSpriteFileTextureReference(&gN3DSStagePreview.mSprites, layer.mSprite.x, layer.mSprite.y);
+		if (!sprite || sprite->mOriginalTextureSize.x <= 0) continue;
+		const float step = float(sprite->mOriginalTextureSize.x) + layer.mTileSpacingX;
+		if (layer.mTileX == 1 && step > 0) {
+			// Repeated across the whole width seen.
+			const float half = localCoord.x / 2.0f;
+			int first = int(floorf((-half - float(layer.mStart.x) - step) / step));
+			int last = int(ceilf((half - float(layer.mStart.x)) / step));
+			for (int k = first; k <= last && gN3DSStagePreview.mElements.size() < N3DS_STAGE_PREVIEW_MAXIMUM_ELEMENTS * 2; k++) {
+				addN3DSStagePreviewElement(layer, sprite, origin, scale, float(layer.mStart.x) + k * step, box, z);
+			}
+		}
+		else {
+			const int amount = std::max(1, std::min(layer.mTileX, 16));
+			for (int k = 0; k < amount; k++) addN3DSStagePreviewElement(layer, sprite, origin, scale, float(layer.mStart.x) + k * step, box, z);
+		}
+		z += 0.01f;
+	}
+}
+
+static void updateN3DSStagePreview() {
+	if (!isN3DSSelectGridOnBottomScreen()) return;
+	const auto& stageSelect = gCharacterSelectScreenData.mStageSelect;
+	const int isChoosing = stageSelect.mIsUsing && stageSelect.mIsActive;
+	if (!isChoosing) {
+		if (gN3DSStagePreview.mIsShown) {
+			unloadN3DSStagePreview();
+			resetN3DSStagePreview();
+		}
+		return;
+	}
+	if (!gN3DSStagePreview.mIsShown) {
+		gN3DSStagePreview.mIsShown = 1;
+		gN3DSStagePreview.mBackdrop = playAnimationLoop(Vector3D(0, 0, 60), &gCharacterSelectScreenData.mWhiteTexture, createOneFrameAnimation(), makeRectangleFromTexture(gCharacterSelectScreenData.mWhiteTexture));
+		setAnimationScreen(gN3DSStagePreview.mBackdrop, N3DS_SELECT_GRID_SCREEN);
+		setAnimationSize(gN3DSStagePreview.mBackdrop, Vector3D(getScreenSize().x, getScreenSize().y, 1), Vector3D(0, 0, 0));
+		setAnimationColor(gN3DSStagePreview.mBackdrop, 0, 0, 0);
+		setAnimationTransparency(gN3DSStagePreview.mBackdrop, 0.85f);
+		const auto& font = gCharacterSelectScreenData.mHeader.mStageSelect.mActiveFont1;
+		gN3DSStagePreview.mTextID = addMugenText(" ", Vector3D(getScreenSize().x / 2, N3DS_STAGE_PREVIEW_TOP + N3DS_STAGE_PREVIEW_HEIGHT + 22, 62), font.x);
+		setMugenTextAlignment(gN3DSStagePreview.mTextID, MUGEN_TEXT_ALIGNMENT_CENTER);
+		setMugenTextColor(gN3DSStagePreview.mTextID, getMugenTextColorFromMugenTextColorIndex(font.y));
+		setMugenTextScreen(gN3DSStagePreview.mTextID, N3DS_SELECT_GRID_SCREEN);
+	}
+	const int stage = stageSelect.mSelectedStage;
+	if (stage != gN3DSStagePreview.mWantedStage) {
+		gN3DSStagePreview.mWantedStage = stage;
+		gN3DSStagePreview.mRestFrames = 0;
+		SelectStage* selected = (SelectStage*)vector_get(&gCharacterSelectScreenData.mSelectStages, stage);
+		char text[300];
+		snprintf(text, sizeof(text), "< %s >", isSelectedStageRandomStage(stage) ? "?" : selected->mName);
+		changeMugenText(gN3DSStagePreview.mTextID, text);
+		for (auto element : gN3DSStagePreview.mElements) setMugenAnimationVisibility(element, 0);
+		return;
+	}
+	if (gN3DSStagePreview.mShownStage == stage) return;
+	if (++gN3DSStagePreview.mRestFrames < N3DS_STAGE_PREVIEW_REST_FRAMES) return;
+	showN3DSStagePreview(stage);
 }
 #endif
 
@@ -2029,6 +2241,7 @@ static void updateCharacterSelectScreen() {
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 	updateN3DSSelectFrame();
 	updateN3DSStand();
+	updateN3DSStagePreview();
 #endif
 }
 
