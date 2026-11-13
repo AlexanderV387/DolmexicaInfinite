@@ -34,6 +34,8 @@ void setDreamButtonXActiveForPlayer(int tControllerIndex);
 void setDreamButtonYActiveForPlayer(int tControllerIndex);
 void setDreamButtonZActiveForPlayer(int tControllerIndex);
 void setDreamButtonStartActiveForPlayer(int tControllerIndex);
+// The computer's directions held this frame (screen directions, as a pad's).
+void setDreamDirectionsActiveForPlayer(int tControllerIndex, int tIsUp, int tIsDown, int tIsLeft, int tIsRight);
 
 void updateCommandNetplayReceive(int tID);
 void updateCommandNetplaySend(int tID);

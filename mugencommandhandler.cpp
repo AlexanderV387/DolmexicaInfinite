@@ -749,6 +749,13 @@ void setDreamButtonStartActiveForPlayer(int tControllerIndex)
 {
 	gMugenCommandHandler.mOverrideMask[tControllerIndex] |= MASK_START;
 }
+void setDreamDirectionsActiveForPlayer(int tControllerIndex, int tIsUp, int tIsDown, int tIsLeft, int tIsRight)
+{
+	if (tIsUp) gMugenCommandHandler.mOverrideMask[tControllerIndex] |= MASK_UP;
+	if (tIsDown) gMugenCommandHandler.mOverrideMask[tControllerIndex] |= MASK_DOWN;
+	if (tIsLeft) gMugenCommandHandler.mOverrideMask[tControllerIndex] |= MASK_LEFT;
+	if (tIsRight) gMugenCommandHandler.mOverrideMask[tControllerIndex] |= MASK_RIGHT;
+}
 
 void setDreamCommandInputControllerUsed(int i, int tControllerIndex)
 {
