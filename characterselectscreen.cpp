@@ -127,6 +127,9 @@ typedef struct {
 	char mStageName[1024];
 	char* mDisplayCharacterName;
 	char mCharacterName[200];
+	char mSpritePath[1024];    // [3DS] its sprite file and palette, for its standing sprite
+	char mPalettePath[1024];
+	int mHasPalettePath;
 
 	SelectCharacterCredits mCredits;
 } SelectCharacter;
@@ -541,6 +544,9 @@ static int loadMenuCharacterSpritesAndNameAndReturnWhetherExists(SelectCharacter
 			assert(strcmp("", file));
 			sprintf(scriptPath, "%s%s", path, file);
 			sprintf(scriptPathPreloaded, "%s.portraits.preloaded", scriptPath);
+			strcpy(e.mSpritePath, scriptPath);
+			strcpy(e.mPalettePath, palettePath);
+			e.mHasPalettePath = hasPalettePath;
 			if (isFile(scriptPathPreloaded)) {
 				e.mSprites = loadMugenSpriteFilePortraits(scriptPathPreloaded, hasPalettePath, palettePath);
 			}
@@ -594,6 +600,9 @@ static Position2D getCellScreenPosition(const Vector2DI& tCellPosition) {
 // the title) stays on the top screen. Not the story's or the credits'.
 static const int N3DS_SELECT_GRID_SCREEN = 1;
 static const float N3DS_SELECT_GRID_MARGIN = 4;
+static void resetN3DSStand();
+static void unloadN3DSStand();
+static void updateN3DSStand();
 
 static int isN3DSSelectGridOnBottomScreen() {
 	return gCharacterSelectScreenData.mSelectScreenType != CHARACTER_SELECT_SCREEN_TYPE_STORY && gCharacterSelectScreenData.mSelectScreenType != CHARACTER_SELECT_SCREEN_TYPE_CREDITS;
@@ -1226,6 +1235,7 @@ static void loadCharacterSelectScreen() {
 	// The motif's background behind the grid too.
 	if (isN3DSSelectGridOnBottomScreen()) setDreamMugenStageHandlerScreen(2);
 	resetN3DSSelectFrame();
+	resetN3DSStand();
 #endif
 
 	loadStageSelectStages();
@@ -1314,6 +1324,7 @@ static void resetSelectState() {
 static void unloadCharacterSelectScreen() {
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 	removeN3DSSelectFrame();
+	unloadN3DSStand();
 #endif
 	unloadMugenDefScript(&gCharacterSelectScreenData.mScript);
 	unloadMugenDefScript(&gCharacterSelectScreenData.mCharacterScript);
@@ -1416,24 +1427,144 @@ static void updateCharacterSelectionCredits(SelectCharacter* character) {
 // motif's face.scale) from face.offset (to its left for one facing left),
 // as big as fits, keeping its shape, at the box's bottom and middle (some
 // characters' were drawn over the other's, others small up in a corner).
+static void getN3DSPortraitBox(int i, float* oX, float* oY, float* oW, float* oH) {
+	PlayerHeader* player = &gCharacterSelectScreenData.mHeader.mPlayers[i];
+	const float toScreen = getScreenSize().x / float(std::max(1, gCharacterSelectScreenData.mLocalCoord.x));
+	const float motifScaleX = player->mBigPortraitScale.x > 0 ? float(player->mBigPortraitScale.x) : 1.0f;
+	const float motifScaleY = player->mBigPortraitScale.y > 0 ? float(player->mBigPortraitScale.y) : 1.0f;
+	*oW = 120 * motifScaleX * toScreen;
+	*oH = 140 * motifScaleY * toScreen;
+	*oX = player->mBigPortraitIsFacingRight ? float(player->mBigPortraitOffset.x) : float(player->mBigPortraitOffset.x) - *oW;
+	*oY = float(player->mBigPortraitOffset.y);
+}
+
 static void fitN3DSBigPortrait(int i, SelectCharacter* tCharacter) {
 	if (!isN3DSSelectGridOnBottomScreen()) return;
 	PlayerHeader* player = &gCharacterSelectScreenData.mHeader.mPlayers[i];
 	MugenAnimationHandlerElement* element = gCharacterSelectScreenData.mSelectors[i].mBigPortraitAnimationElement;
 	MugenSpriteFileSprite* sprite = getMugenSpriteFileTextureReference(&tCharacter->mSprites, player->mBigPortraitSprite.x, player->mBigPortraitSprite.y);
 	if (!element || !sprite || sprite->mOriginalTextureSize.x <= 0 || sprite->mOriginalTextureSize.y <= 0) return;
-	const float toScreen = getScreenSize().x / float(std::max(1, gCharacterSelectScreenData.mLocalCoord.x));
-	const float motifScaleX = player->mBigPortraitScale.x > 0 ? float(player->mBigPortraitScale.x) : 1.0f;
-	const float motifScaleY = player->mBigPortraitScale.y > 0 ? float(player->mBigPortraitScale.y) : 1.0f;
-	const float boxW = 120 * motifScaleX * toScreen, boxH = 140 * motifScaleY * toScreen;
-	const float boxX = player->mBigPortraitIsFacingRight ? float(player->mBigPortraitOffset.x) : float(player->mBigPortraitOffset.x) - boxW;
-	const float boxY = float(player->mBigPortraitOffset.y);
+	float boxX, boxY, boxW, boxH;
+	getN3DSPortraitBox(i, &boxX, &boxY, &boxW, &boxH);
 	const float w = float(sprite->mOriginalTextureSize.x), h = float(sprite->mOriginalTextureSize.y);
 	const float scale = std::min(boxW / w, boxH / h);
 	const float left = boxX + (boxW - w * scale) / 2, top = boxY + (boxH - h * scale);
 	const float axisX = player->mBigPortraitIsFacingRight ? float(sprite->mAxisOffset.x) : w - float(sprite->mAxisOffset.x);
 	setMugenAnimationPosition(element, Vector3D(left + axisX * scale, top + float(sprite->mAxisOffset.y) * scale, 30.0));
 	setMugenAnimationDrawScale(element, Vector2D(scale, scale));
+}
+#endif
+
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+// [3DS] The character's standing sprite (0,0, as MUGEN's stand animation
+// starts) in front of its big portrait, at the box's bottom and middle,
+// facing the other side: read from its sprite file alone once the cursor
+// rests on it a few frames (a high resolution one smaller), the last few
+// kept.
+static const int N3DS_STAND_REST_FRAMES = 6;
+static const size_t N3DS_STAND_KEPT = 8;
+
+static struct {
+	std::list<std::pair<std::string, MugenSpriteFile>> mKept;   // the latest first
+	MugenAnimation* mAnimation;
+	MugenAnimationHandlerElement* mElements[2];
+	std::string mShown[2];
+	SelectCharacter* mWanted[2];
+	int mRestFrames[2];
+} gN3DSStand;
+
+static void resetN3DSStand() {
+	gN3DSStand.mKept.clear();
+	gN3DSStand.mAnimation = createOneFrameMugenAnimationForSprite(0, 0);
+	for (int i = 0; i < 2; i++) {
+		gN3DSStand.mElements[i] = NULL;
+		gN3DSStand.mShown[i] = "";
+		gN3DSStand.mWanted[i] = NULL;
+		gN3DSStand.mRestFrames[i] = 0;
+	}
+}
+
+static void unloadN3DSStand() {
+	for (int i = 0; i < 2; i++) {
+		if (gN3DSStand.mElements[i]) removeMugenAnimation(gN3DSStand.mElements[i]);
+		gN3DSStand.mElements[i] = NULL;
+	}
+	for (auto& kept : gN3DSStand.mKept) unloadMugenSpriteFile(&kept.second);
+	gN3DSStand.mKept.clear();
+	if (gN3DSStand.mAnimation) destroyMugenAnimation(gN3DSStand.mAnimation);
+	gN3DSStand.mAnimation = NULL;
+}
+
+static MugenSpriteFile* getN3DSStandSprites(SelectCharacter* tCharacter, int tMaximumHeight) {
+	const std::string key = tCharacter->mSpritePath;
+	for (auto it = gN3DSStand.mKept.begin(); it != gN3DSStand.mKept.end(); ++it) {
+		if (it->first != key) continue;
+		gN3DSStand.mKept.splice(gN3DSStand.mKept.begin(), gN3DSStand.mKept, it);
+		return &gN3DSStand.mKept.front().second;
+	}
+	if (!isFile(tCharacter->mSpritePath)) return NULL;
+	gN3DSStand.mKept.push_front(std::make_pair(key, loadMugenSpriteFileSingleSprite(tCharacter->mSpritePath, tCharacter->mHasPalettePath, tCharacter->mPalettePath, 0, 0, tMaximumHeight)));
+	// The oldest let go, but not one shown.
+	while (gN3DSStand.mKept.size() > N3DS_STAND_KEPT) {
+		auto last = std::prev(gN3DSStand.mKept.end());
+		if (last->first == gN3DSStand.mShown[0] || last->first == gN3DSStand.mShown[1]) break;
+		unloadMugenSpriteFile(&last->second);
+		gN3DSStand.mKept.erase(last);
+	}
+	return &gN3DSStand.mKept.front().second;
+}
+
+static void showN3DSStand(int i, SelectCharacter* tCharacter) {
+	float boxX, boxY, boxW, boxH;
+	getN3DSPortraitBox(i, &boxX, &boxY, &boxW, &boxH);
+	MugenSpriteFile* sprites = getN3DSStandSprites(tCharacter, int(boxH));
+	MugenSpriteFileSprite* sprite = sprites ? getMugenSpriteFileTextureReference(sprites, 0, 0) : NULL;
+	if (!sprite || sprite->mOriginalTextureSize.x <= 0 || sprite->mOriginalTextureSize.y <= 0) {
+		if (gN3DSStand.mElements[i]) setMugenAnimationVisibility(gN3DSStand.mElements[i], 0);
+		gN3DSStand.mShown[i] = "";
+		return;
+	}
+	if (!gN3DSStand.mElements[i]) gN3DSStand.mElements[i] = addMugenAnimation(gN3DSStand.mAnimation, sprites, Vector3D(0, 0, 35));
+	else {
+		setMugenAnimationSprites(gN3DSStand.mElements[i], sprites);
+		changeMugenAnimation(gN3DSStand.mElements[i], gN3DSStand.mAnimation);
+	}
+	MugenAnimationHandlerElement* element = gN3DSStand.mElements[i];
+	const float w = float(sprite->mOriginalTextureSize.x), h = float(sprite->mOriginalTextureSize.y);
+	const float scale = std::min(1.0f, std::min(boxW * 0.9f / w, boxH * 0.9f / h));
+	// Its axis (its feet's middle) at the box's bottom, the sprite inside it.
+	const float axisX = float(sprite->mAxisOffset.x), axisY = float(sprite->mAxisOffset.y);
+	float x = boxX + boxW / 2;
+	const float left = x - axisX * scale, right = x + (w - axisX) * scale;
+	if (left < boxX) x += boxX - left;
+	if (right > boxX + boxW) x -= right - (boxX + boxW);
+	const float y = boxY + boxH - (h - axisY) * scale;
+	setMugenAnimationFaceDirection(element, i == 0);
+	setMugenAnimationPosition(element, Vector3D(x, y, 35));
+	setMugenAnimationDrawScale(element, Vector2D(scale, scale));
+	setMugenAnimationVisibility(element, 1);
+	gN3DSStand.mShown[i] = tCharacter->mSpritePath;
+}
+
+static void updateN3DSStand() {
+	if (!isN3DSSelectGridOnBottomScreen()) return;
+	for (int i = 0; i < 2; i++) {
+		const auto& selector = gCharacterSelectScreenData.mSelectors[i];
+		SelectCharacter* character = selector.mIsActive ? getCellCharacter(selector.mSelectedCharacter) : NULL;
+		if (character && character->mType != SELECT_CHARACTER_TYPE_CHARACTER) character = NULL;
+		if (character != gN3DSStand.mWanted[i]) {
+			gN3DSStand.mWanted[i] = character;
+			gN3DSStand.mRestFrames[i] = 0;
+			if (gN3DSStand.mElements[i] && (!character || gN3DSStand.mShown[i] != character->mSpritePath)) setMugenAnimationVisibility(gN3DSStand.mElements[i], 0);
+			continue;
+		}
+		if (!character || gN3DSStand.mShown[i] == character->mSpritePath) {
+			if (character && gN3DSStand.mElements[i]) setMugenAnimationVisibility(gN3DSStand.mElements[i], 1);
+			continue;
+		}
+		if (++gN3DSStand.mRestFrames[i] < N3DS_STAND_REST_FRAMES) continue;
+		showN3DSStand(i, character);
+	}
 }
 #endif
 
@@ -1897,6 +2028,7 @@ static void updateCharacterSelectScreen() {
 	updateStageSelect();
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 	updateN3DSSelectFrame();
+	updateN3DSStand();
 #endif
 }
 
