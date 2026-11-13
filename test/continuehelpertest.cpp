@@ -19,6 +19,7 @@
 #include "gamelogic.h"
 #include "fightscreen.h"
 #include "titlescreen.h"
+#include "characterselectscreen.h"
 
 /* The fight started over as at "Continue?" (arcade and free play), and each
  * root's helpers written as a tree before and after it.
@@ -432,5 +433,21 @@ TEST_F(ContinueHelperTest, ScreenTour) {
 		updatePrismWrapperScreenForDebugWithIterationsAndRender(1);
 		if (switchPrismWrapperScreenForDebugIfNeeded()) printf("frame %d: next screen\n", frame);
 	}
+	unloadPrismWrapperScreenForDebug();
+}
+
+static void selectScreenFinishedCB() {}
+
+/* The select screen (watch mode's: one player picks both, then the stage),
+ * for DOLMEXICA_FRAMES frames (default 300); pictures with N3DS_SIM_SHOT,
+ * the cursor moved with PRISM_LINUX_SCRIPT (prism's linux/input_linux.cpp). */
+TEST_F(ContinueHelperTest, SelectScreen) {
+	const int frames = getContinueIntegerSetting("DOLMEXICA_FRAMES", 300);
+	setCharacterSelectScreenModeName("Watch Mode");
+	setCharacterSelectOnePlayerSelectAll();
+	setCharacterSelectStageActive();
+	setCharacterSelectFinishedCB(selectScreenFinishedCB);
+	initPrismWrapperScreenForDebug(getCharacterSelectScreen());
+	updatePrismWrapperScreenForDebugWithIterationsAndRender(frames);
 	unloadPrismWrapperScreenForDebug();
 }

@@ -16,11 +16,12 @@ TEST_OBJS = test/main.o test/commontestfunctionality.o test/censuscommon.o test/
 	test/mediacapturetest.o test/continuehelpertest.o
 
 OBJDIR = build_sim
-ALL_OBJS = $(addprefix $(OBJDIR)/,$(GAME_OBJS) $(TEST_OBJS))
+# The characters found in chars/ (as the 3DS finds them), for the select screen.
+ALL_OBJS = $(addprefix $(OBJDIR)/,$(GAME_OBJS) characterautodetect.o $(TEST_OBJS))
 
 CXX ?= g++
 CXXFLAGS = -std=c++17 -fpermissive -O1 -g -fsanitize=address -fno-omit-frame-pointer -Wno-write-strings \
-	-DN3DS_TEXTURE_SIM -I$(PRISM_PATH)/include -I$(PRISM_PATH)/linux/n3dssim -I$(PRISM_PATH)/linux/shim -Itest/gtest-shim -I. \
+	-DN3DS_TEXTURE_SIM -DDOLMEXICA_CHARACTER_AUTODETECT -I$(PRISM_PATH)/include -I$(PRISM_PATH)/linux/n3dssim -I$(PRISM_PATH)/linux/shim -Itest/gtest-shim -I. \
 	$(shell pkg-config --cflags libpng zlib) -include cstdint -include cstring
 LDFLAGS = -fsanitize=address -L$(PRISM_PATH)/bin_n3dssim -lprism -lpng -lz -l:libzstd.so.1 -lpthread
 # LINEAR_DIAG=1: as the 3DS's linear memory diagnosis build (prism's built so too).
