@@ -65,8 +65,9 @@ extern "C" {
 // [3DS] A fight watched at once, again and again, with no menus (to run the
 // game in an emulator): autostart.txt in the game's folder, four lines: the
 // first fighter's .def and the second's (from the asset folder's chars/),
-// the stage's .def (from the asset folder), the computer's level (1 to 8).
-// Without the file, the game as always.
+// the stage's .def (from the asset folder), the computer's level (1 to 8);
+// or "select" alone, for watch mode's select screen. Without the file, the
+// game as always.
 #define N3DS_AUTOSTART_FILE "sdmc:/3ds/dolmexica/autostart.txt"
 
 static struct {
@@ -96,6 +97,22 @@ static void startN3DSAutostartFight() {
 
 static Screen gN3DSAutostartScreen;
 
+static void loadN3DSAutostartSelectScreen();
+
+// The fight chosen, then the select screen again.
+static void n3dsAutostartSelectFinishedCB() {
+	setGameModeWatch();
+	startFightScreen(loadN3DSAutostartSelectScreen, loadN3DSAutostartSelectScreen);
+}
+
+static void loadN3DSAutostartSelectScreen() {
+	setCharacterSelectScreenModeName("Watch Mode");
+	setCharacterSelectOnePlayerSelectAll();
+	setCharacterSelectStageActive();
+	setCharacterSelectFinishedCB(n3dsAutostartSelectFinishedCB);
+	setNewScreen(getCharacterSelectScreen());
+}
+
 static void loadN3DSAutostartScreen() {
 	startN3DSAutostartFight();
 }
@@ -110,6 +127,11 @@ static Screen* getN3DSAutostartScreenOrNull() {
 		while (!lines[i].empty() && (lines[i].back() == '\n' || lines[i].back() == '\r' || lines[i].back() == ' ')) lines[i].pop_back();
 	}
 	fclose(file);
+	// "select" alone: watch mode's select screen at once (to see the menus).
+	if (lines[0] == "select") {
+		gN3DSAutostartScreen = makeScreen(loadN3DSAutostartSelectScreen);
+		return &gN3DSAutostartScreen;
+	}
 	if (lines[0].empty() || lines[1].empty() || lines[2].empty()) return NULL;
 	gN3DSAutostart.mCharacters[0] = lines[0];
 	gN3DSAutostart.mCharacters[1] = lines[1];

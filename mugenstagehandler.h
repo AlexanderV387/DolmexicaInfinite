@@ -75,6 +75,9 @@ typedef struct StaticStageHandlerElement_t {
 Vector2DI getDreamMugenStageHandlerCameraCoordinates();
 int getDreamMugenStageHandlerCameraCoordinateP();
 void setDreamMugenStageHandlerCameraCoordinates(const Vector2DI& tCoordinates);
+// The screen its elements are drawn on (prism's setMugenAnimationScreen: 2,
+// a menu's background on both of the 3DS's screens).
+void setDreamMugenStageHandlerScreen(int tScreen);
 void setDreamMugenStageHandlerCameraRange(const GeoRectangle2D& tRect);
 GeoRectangle2D getDreamMugenStageHandlerCameraRange();
 // [3DS] The camera positions (x, in the elements' coordinates) in which the

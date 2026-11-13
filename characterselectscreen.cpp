@@ -27,6 +27,7 @@
 #include "storymode.h"
 #include "config.h"
 #include "mugenassignmentevaluator.h"
+#include "mugenstagehandler.h"
 
 #define SELECTOR_Z 49
 
@@ -44,6 +45,7 @@ typedef struct {
 	MugenAnimation* mBigPortraitAnimation;
 	Position2D mBigPortraitOffset;
 	Vector2D mBigPortraitScale;
+	Vector2DI mBigPortraitSprite;   // face.spr
 	int mBigPortraitIsFacingRight;
 
 	Position2D mNameOffset;
@@ -90,6 +92,7 @@ typedef struct {
 	PlayerHeader mPlayers[2];
 
 	MugenAnimation* mSmallPortraitAnimation;
+	Vector2DI mSmallPortraitSprite;   // portrait.spr
 	Position2D mSmallPortraitOffset;
 	Vector2D mSmallPortraitScale;
 
@@ -276,6 +279,7 @@ static void loadMenuPlayerHeader(const char* tPlayerName, PlayerHeader* tHeader)
 	sprintf(fullVariableName, "%s.face.spr", tPlayerName);
 	const auto bigPortraitSprite = getMugenDefVector2DIOrDefault(&gCharacterSelectScreenData.mScript, "select info", fullVariableName, Vector2DI(9000, 1));
 	tHeader->mBigPortraitAnimation = createOneFrameMugenAnimationForSprite(bigPortraitSprite.x, bigPortraitSprite.y);
+	tHeader->mBigPortraitSprite = bigPortraitSprite;
 
 	sprintf(fullVariableName, "%s.face.offset", tPlayerName);
 	tHeader->mBigPortraitOffset = getMugenDefVector2DOrDefault(&gCharacterSelectScreenData.mScript, "select info", fullVariableName, Vector2D(0, 0));
@@ -468,6 +472,7 @@ static void loadMenuHeader() {
 
 	const auto sprite = getMugenDefVector2DIOrDefault(&gCharacterSelectScreenData.mScript, "select info", "portrait.spr", Vector2DI(9000, 0));
 	gCharacterSelectScreenData.mHeader.mSmallPortraitAnimation = createOneFrameMugenAnimationForSprite(sprite.x, sprite.y);
+	gCharacterSelectScreenData.mHeader.mSmallPortraitSprite = sprite;
 
 	gCharacterSelectScreenData.mHeader.mSmallPortraitOffset = getMugenDefVector2DOrDefault(&gCharacterSelectScreenData.mScript, "select info", "portrait.offset", Vector2D(0, 0));
 	gCharacterSelectScreenData.mHeader.mSmallPortraitScale = getMugenDefVector2DOrDefault(&gCharacterSelectScreenData.mScript, "select info", "portrait.scale", Vector2D(1, 1));
@@ -580,16 +585,195 @@ static Position2D getCellScreenPosition(const Vector2DI& tCellPosition) {
 	return gCharacterSelectScreenData.mHeader.mPosition + Vector2D(dx, dy);
 }
 
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+// [3DS] The grid on the bottom screen (the game's screen over its whole
+// 320x240), as many rows and columns as the characters need, its cells as
+// big as fit, in the motif's cell shape; each portrait made to fit its
+// cell (some were drawn over their neighbours, others small in a corner).
+// The rest of the screen (its background, the big portraits, the names,
+// the title) stays on the top screen. Not the story's or the credits'.
+static const int N3DS_SELECT_GRID_SCREEN = 1;
+static const float N3DS_SELECT_GRID_MARGIN = 4;
+
+static int isN3DSSelectGridOnBottomScreen() {
+	return gCharacterSelectScreenData.mSelectScreenType != CHARACTER_SELECT_SCREEN_TYPE_STORY && gCharacterSelectScreenData.mSelectScreenType != CHARACTER_SELECT_SCREEN_TYPE_CREDITS;
+}
+
+static void putOnN3DSSelectGridScreen(MugenAnimationHandlerElement* tElement) {
+	if (isN3DSSelectGridOnBottomScreen()) setMugenAnimationScreen(tElement, N3DS_SELECT_GRID_SCREEN);
+}
+
+static void layoutN3DSSelectGrid() {
+	if (!isN3DSSelectGridOnBottomScreen()) return;
+	if (!stl_string_map_contains_array(gCharacterSelectScreenData.mCharacterScript.mGroups, "characters")) return;
+	auto& header = gCharacterSelectScreenData.mHeader;
+	const int amount = std::max(1, list_size(&gCharacterSelectScreenData.mCharacterScript.mGroups["characters"].mOrderedElementList));
+	const float cellW = std::max(1.0f, float(header.mCellSize.x)), cellH = std::max(1.0f, float(header.mCellSize.y));
+	const float spacing = std::max(0.0f, header.mCellSpacing);
+	const float width = getScreenSize().x - 2 * N3DS_SELECT_GRID_MARGIN, height = getScreenSize().y - 2 * N3DS_SELECT_GRID_MARGIN;
+
+	// The columns that make the cells biggest (the fewest rows on a tie).
+	int bestColumns = 1;
+	float bestFactor = 0;
+	for (int columns = 1; columns <= amount; columns++) {
+		const int rows = (amount + columns - 1) / columns;
+		const float factor = std::min(width / (columns * (cellW + spacing) - spacing), height / (rows * (cellH + spacing) - spacing));
+		if (factor > bestFactor + 1e-4f) {
+			bestFactor = factor;
+			bestColumns = columns;
+		}
+	}
+	const float factor = std::min(bestFactor, 3.0f);
+	const int rows = (amount + bestColumns - 1) / bestColumns;
+	header.mColumns = bestColumns;
+	header.mRows = rows;
+	header.mCellSize = Vector2D(cellW * factor, cellH * factor);
+	header.mCellSpacing = spacing * factor;
+	const float gridW = bestColumns * (header.mCellSize.x + header.mCellSpacing) - header.mCellSpacing;
+	const float gridH = rows * (header.mCellSize.y + header.mCellSpacing) - header.mCellSpacing;
+	header.mPosition = Vector2D(floorf((getScreenSize().x - gridW) / 2), floorf((getScreenSize().y - gridH) / 2));
+
+	header.mCellBackgroundScale = header.mCellBackgroundScale * factor;
+	header.mRandomSelectionScale = header.mRandomSelectionScale * factor;
+	header.mSmallPortraitScale = header.mSmallPortraitScale * factor;
+	header.mSmallPortraitOffset = header.mSmallPortraitOffset * factor;
+	for (int i = 0; i < 2; i++) {
+		header.mPlayers[i].mActiveCursorScale = header.mPlayers[i].mActiveCursorScale * factor;
+		header.mPlayers[i].mDoneCursorScale = header.mPlayers[i].mDoneCursorScale * factor;
+	}
+}
+
+// A portrait over its whole cell, keeping its shape, in the middle.
+static void fitN3DSSelectPortrait(SelectCharacter& e, const Position& tCellPosition) {
+	if (!isN3DSSelectGridOnBottomScreen()) return;
+	const auto& header = gCharacterSelectScreenData.mHeader;
+	MugenSpriteFileSprite* sprite = getMugenSpriteFileTextureReference(&e.mSprites, header.mSmallPortraitSprite.x, header.mSmallPortraitSprite.y);
+	if (!sprite || sprite->mOriginalTextureSize.x <= 0 || sprite->mOriginalTextureSize.y <= 0) return;
+	const float w = float(sprite->mOriginalTextureSize.x), h = float(sprite->mOriginalTextureSize.y);
+	const float scale = std::min(header.mCellSize.x / w, header.mCellSize.y / h);
+	const Vector2D inside((header.mCellSize.x - w * scale) / 2, (header.mCellSize.y - h * scale) / 2);
+	setMugenAnimationPosition(e.mPortraitAnimationElement, tCellPosition + (inside + sprite->mAxisOffset * scale).xyz(0));
+	setMugenAnimationDrawScale(e.mPortraitAnimationElement, Vector2D(scale, scale));
+}
+// [3DS] A frame around each cursor's cell in the color opposite the
+// menu's (the motif's cursors got lost on some backgrounds): its hue turned
+// half around and its lightness the other way, from the average color of
+// the bottom screen around the grid (its background), pulsing.
+static const float N3DS_SELECT_FRAME_WIDTH = 3;
+
+static struct {
+	int mFrames;
+	int mIsColorAsked;
+	int mHasColor;
+	Vector3D mColors[2];
+	AnimationHandlerElement* mBorders[2][4];
+} gN3DSSelectFrame;
+
+static Vector3D getN3DSOppositeColor(const Vector3D& tColor, float tHueTurn) {
+	const float r = float(tColor.x), g = float(tColor.y), b = float(tColor.z);
+	const float maximum = std::max(r, std::max(g, b)), minimum = std::min(r, std::min(g, b));
+	const float delta = maximum - minimum;
+	float hue = 0;
+	if (delta > 1e-4f) {
+		if (maximum == r) hue = 60 * fmodf((g - b) / delta, 6);
+		else if (maximum == g) hue = 60 * ((b - r) / delta + 2);
+		else hue = 60 * ((r - g) / delta + 4);
+	}
+	const float saturation = maximum > 0 ? delta / maximum : 0;
+	const float lightness = 0.299f * r + 0.587f * g + 0.114f * b;
+	// A grey one: yellow on the dark, a deep blue on the light.
+	if (saturation < 0.15f) hue = lightness < 0.5f ? 230 : 50;
+	hue = fmodf(hue + 180 + tHueTurn + 720, 360);
+	const float value = lightness < 0.55f ? 1.0f : 0.35f;
+	const float c = value, x = c * (1 - fabsf(fmodf(hue / 60, 2) - 1));
+	float rr, gg, bb;
+	if (hue < 60) { rr = c; gg = x; bb = 0; }
+	else if (hue < 120) { rr = x; gg = c; bb = 0; }
+	else if (hue < 180) { rr = 0; gg = c; bb = x; }
+	else if (hue < 240) { rr = 0; gg = x; bb = c; }
+	else if (hue < 300) { rr = x; gg = 0; bb = c; }
+	else { rr = c; gg = 0; bb = x; }
+	return Vector3D(rr, gg, bb);
+}
+
+static void resetN3DSSelectFrame() {
+	gN3DSSelectFrame.mFrames = 0;
+	gN3DSSelectFrame.mIsColorAsked = 0;
+	gN3DSSelectFrame.mHasColor = 0;
+	for (int i = 0; i < 2; i++) for (int j = 0; j < 4; j++) gN3DSSelectFrame.mBorders[i][j] = NULL;
+}
+
+static void removeN3DSSelectFrame() {
+	for (int i = 0; i < 2; i++) for (int j = 0; j < 4; j++) {
+		if (gN3DSSelectFrame.mBorders[i][j]) removeHandledAnimation(gN3DSSelectFrame.mBorders[i][j]);
+		gN3DSSelectFrame.mBorders[i][j] = NULL;
+	}
+}
+
+static void updateN3DSSelectFrame() {
+	if (!isN3DSSelectGridOnBottomScreen()) return;
+	const auto& header = gCharacterSelectScreenData.mHeader;
+	gN3DSSelectFrame.mFrames++;
+	if (!gN3DSSelectFrame.mIsColorAsked && gN3DSSelectFrame.mFrames >= 2) {
+		const float gridW = header.mColumns * (header.mCellSize.x + header.mCellSpacing) - header.mCellSpacing;
+		const float gridH = header.mRows * (header.mCellSize.y + header.mCellSpacing) - header.mCellSpacing;
+		requestDrawingScreenAverageColor(N3DS_SELECT_GRID_SCREEN, GeoRectangle2D(header.mPosition.x, header.mPosition.y, gridW, gridH));
+		gN3DSSelectFrame.mIsColorAsked = 1;
+	}
+	if (!gN3DSSelectFrame.mHasColor) {
+		Vector3D average;
+		if (!gN3DSSelectFrame.mIsColorAsked || !getDrawingScreenAverageColor(N3DS_SELECT_GRID_SCREEN, &average)) {
+			if (gN3DSSelectFrame.mFrames < 30) return;
+			average = Vector3D(0.2, 0.2, 0.5);   // not there: as on a dark blue one
+		}
+		gN3DSSelectFrame.mColors[0] = getN3DSOppositeColor(average, 0);
+		gN3DSSelectFrame.mColors[1] = getN3DSOppositeColor(average, 90);
+		gN3DSSelectFrame.mHasColor = 1;
+		for (int i = 0; i < 2; i++) for (int j = 0; j < 4; j++) {
+			AnimationHandlerElement* border = playAnimationLoop(Vector3D(0, 0, 0), &gCharacterSelectScreenData.mWhiteTexture, createOneFrameAnimation(), makeRectangleFromTexture(gCharacterSelectScreenData.mWhiteTexture));
+			setAnimationScreen(border, N3DS_SELECT_GRID_SCREEN);
+			setAnimationColor(border, float(gN3DSSelectFrame.mColors[i].x), float(gN3DSSelectFrame.mColors[i].y), float(gN3DSSelectFrame.mColors[i].z));
+			gN3DSSelectFrame.mBorders[i][j] = border;
+		}
+	}
+
+	const float pulse = 0.8f + 0.2f * sinf(gN3DSSelectFrame.mFrames * 0.15f);
+	const float w = N3DS_SELECT_FRAME_WIDTH;
+	for (int i = 0; i < 2; i++) {
+		const auto& selector = gCharacterSelectScreenData.mSelectors[i];
+		const int isShown = selector.mIsActive;
+		const Position2D p = getCellScreenPosition(selector.mSelectedCharacter);
+		const float x0 = p.x - w, y0 = p.y - w, x1 = p.x + header.mCellSize.x, y1 = p.y + header.mCellSize.y;
+		// top, bottom, left, right; above the cursors
+		const float rects[4][4] = { { x0, y0, x1 + w - x0, w }, { x0, y1, x1 + w - x0, w }, { x0, y0, w, y1 + w - y0 }, { x1, y0, w, y1 + w - y0 } };
+		for (int j = 0; j < 4; j++) {
+			AnimationHandlerElement* border = gN3DSSelectFrame.mBorders[i][j];
+			setAnimationVisibility(border, isShown);
+			if (!isShown) continue;
+			setAnimationPosition(border, Vector3D(rects[j][0], rects[j][1], SELECTOR_Z + 1));
+			setAnimationSize(border, Vector3D(rects[j][2], rects[j][3], 1), Vector3D(0, 0, 0));
+			setAnimationTransparency(border, selector.mIsDone ? 1.0f : pulse);
+		}
+	}
+}
+#else
+static void putOnN3DSSelectGridScreen(MugenAnimationHandlerElement*) {}
+static void fitN3DSSelectPortrait(SelectCharacter&, const Position&) {}
+#endif
+
 static void showMenuSelectableAnimations(MenuCharacterLoadCaller* /*tCaller*/, SelectCharacter& e) {
 	auto pos = getCellScreenPosition(e.mCellPosition).xyz(40.0);
 	if (gCharacterSelectScreenData.mHeader.mIsShowingPortraits) {
 		e.mPortraitAnimationElement = addMugenAnimation(gCharacterSelectScreenData.mHeader.mSmallPortraitAnimation, &e.mSprites, pos + gCharacterSelectScreenData.mHeader.mSmallPortraitOffset);
 		setMugenAnimationDrawScale(e.mPortraitAnimationElement, gCharacterSelectScreenData.mHeader.mSmallPortraitScale);
+		putOnN3DSSelectGridScreen(e.mPortraitAnimationElement);
+		fitN3DSSelectPortrait(e, pos);
 	}
 	if (!gCharacterSelectScreenData.mHeader.mIsShowingEmptyBoxes) {
 		pos.z = 30;
 		e.mBackgroundAnimationElement = addMugenAnimation(gCharacterSelectScreenData.mHeader.mCellBackgroundAnimation, &gCharacterSelectScreenData.mSprites, pos);
 		setMugenAnimationDrawScale(e.mBackgroundAnimationElement, gCharacterSelectScreenData.mHeader.mCellBackgroundScale);
+		putOnN3DSSelectGridScreen(e.mBackgroundAnimationElement);
 	}
 }
 
@@ -639,10 +823,12 @@ static void loadSingleRandomMenuCharacter(MenuCharacterLoadCaller* tCaller) {
 	auto pos = getCellScreenPosition(e.mCellPosition).xyz(40.0);
 	e.mPortraitAnimationElement = addMugenAnimation(gCharacterSelectScreenData.mHeader.mRandomSelectionAnimation, &gCharacterSelectScreenData.mSprites, pos + gCharacterSelectScreenData.mHeader.mSmallPortraitOffset);
 	setMugenAnimationDrawScale(e.mPortraitAnimationElement, gCharacterSelectScreenData.mHeader.mRandomSelectionScale);
+	putOnN3DSSelectGridScreen(e.mPortraitAnimationElement);
 	if (!gCharacterSelectScreenData.mHeader.mIsShowingEmptyBoxes) {
 		pos.z = 30;
 		e.mBackgroundAnimationElement = addMugenAnimation(gCharacterSelectScreenData.mHeader.mCellBackgroundAnimation, &gCharacterSelectScreenData.mSprites, pos);
 		setMugenAnimationDrawScale(e.mBackgroundAnimationElement, gCharacterSelectScreenData.mHeader.mCellBackgroundScale);
+		putOnN3DSSelectGridScreen(e.mBackgroundAnimationElement);
 	}
 
 	tCaller->i++;
@@ -772,6 +958,7 @@ static void loadSingleMenuCell(const Vector2DI& tCellPosition) {
 		const auto pos = getCellScreenPosition(e.mCellPosition).xyz(30.0);
 		e.mBackgroundAnimationElement = addMugenAnimation(gCharacterSelectScreenData.mHeader.mCellBackgroundAnimation, &gCharacterSelectScreenData.mSprites, pos);
 		setMugenAnimationDrawScale(e.mBackgroundAnimationElement, gCharacterSelectScreenData.mHeader.mCellBackgroundScale);
+		putOnN3DSSelectGridScreen(e.mBackgroundAnimationElement);
 	}
 
 	stl_list_at(gCharacterSelectScreenData.mSelectCharacters, tCellPosition.y).push_back(e);
@@ -878,6 +1065,7 @@ static void loadSingleSelector(int i, int tOwner) {
 	const auto p = getCellScreenPosition(Vector2DI(gCharacterSelectScreenData.mSelectors[i].mSelectedCharacter.y, gCharacterSelectScreenData.mSelectors[i].mSelectedCharacter.x)).xyz(SELECTOR_Z);
 	gCharacterSelectScreenData.mSelectors[i].mSelectorAnimationElement = addMugenAnimation(owner->mActiveCursorAnimation, &gCharacterSelectScreenData.mSprites, p);
 	setMugenAnimationDrawScale(gCharacterSelectScreenData.mSelectors[i].mSelectorAnimationElement, owner->mActiveCursorScale);
+	putOnN3DSSelectGridScreen(gCharacterSelectScreenData.mSelectors[i].mSelectorAnimationElement);
 	
 	SelectCharacter* character = getCellCharacter(findStartCellPosition(gCharacterSelectScreenData.mSelectors[i].mSelectedCharacter, 1, 1));
 	if (gCharacterSelectScreenData.mHeader.mIsShowingPortraits) {
@@ -1034,9 +1222,19 @@ static void loadCharacterSelectScreen() {
 
 	loadMenuHeader();
 	loadScriptBackground(&gCharacterSelectScreenData.mScript, &gCharacterSelectScreenData.mSprites, &gCharacterSelectScreenData.mAnimations, "selectbgdef", "selectbg", gCharacterSelectScreenData.mLocalCoord);
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	// The motif's background behind the grid too.
+	if (isN3DSSelectGridOnBottomScreen()) setDreamMugenStageHandlerScreen(2);
+	resetN3DSSelectFrame();
+#endif
 
 	loadStageSelectStages();
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	if (isN3DSSelectGridOnBottomScreen()) layoutN3DSSelectGrid();
+	else ensureMenuCellsForCharacters();
+#else
 	ensureMenuCellsForCharacters();
+#endif
 	loadMenuCells();
 	loadMenuSelectables();
 	loadExtraStages();
@@ -1114,6 +1312,9 @@ static void resetSelectState() {
 }
 
 static void unloadCharacterSelectScreen() {
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	removeN3DSSelectFrame();
+#endif
 	unloadMugenDefScript(&gCharacterSelectScreenData.mScript);
 	unloadMugenDefScript(&gCharacterSelectScreenData.mCharacterScript);
 
@@ -1209,6 +1410,33 @@ static void updateCharacterSelectionCredits(SelectCharacter* character) {
 	}
 }
 
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+// [3DS] A big portrait at the motif's place and size whatever its own: in
+// the box of MUGEN's usual big portrait (120x140 at 320x240, times the
+// motif's face.scale) from face.offset (to its left for one facing left),
+// as big as fits, keeping its shape, at the box's bottom and middle (some
+// characters' were drawn over the other's, others small up in a corner).
+static void fitN3DSBigPortrait(int i, SelectCharacter* tCharacter) {
+	if (!isN3DSSelectGridOnBottomScreen()) return;
+	PlayerHeader* player = &gCharacterSelectScreenData.mHeader.mPlayers[i];
+	MugenAnimationHandlerElement* element = gCharacterSelectScreenData.mSelectors[i].mBigPortraitAnimationElement;
+	MugenSpriteFileSprite* sprite = getMugenSpriteFileTextureReference(&tCharacter->mSprites, player->mBigPortraitSprite.x, player->mBigPortraitSprite.y);
+	if (!element || !sprite || sprite->mOriginalTextureSize.x <= 0 || sprite->mOriginalTextureSize.y <= 0) return;
+	const float toScreen = getScreenSize().x / float(std::max(1, gCharacterSelectScreenData.mLocalCoord.x));
+	const float motifScaleX = player->mBigPortraitScale.x > 0 ? float(player->mBigPortraitScale.x) : 1.0f;
+	const float motifScaleY = player->mBigPortraitScale.y > 0 ? float(player->mBigPortraitScale.y) : 1.0f;
+	const float boxW = 120 * motifScaleX * toScreen, boxH = 140 * motifScaleY * toScreen;
+	const float boxX = player->mBigPortraitIsFacingRight ? float(player->mBigPortraitOffset.x) : float(player->mBigPortraitOffset.x) - boxW;
+	const float boxY = float(player->mBigPortraitOffset.y);
+	const float w = float(sprite->mOriginalTextureSize.x), h = float(sprite->mOriginalTextureSize.y);
+	const float scale = std::min(boxW / w, boxH / h);
+	const float left = boxX + (boxW - w * scale) / 2, top = boxY + (boxH - h * scale);
+	const float axisX = player->mBigPortraitIsFacingRight ? float(sprite->mAxisOffset.x) : w - float(sprite->mAxisOffset.x);
+	setMugenAnimationPosition(element, Vector3D(left + axisX * scale, top + float(sprite->mAxisOffset.y) * scale, 30.0));
+	setMugenAnimationDrawScale(element, Vector2D(scale, scale));
+}
+#endif
+
 static void showSelectCharacterForSelector(int i, SelectCharacter* tCharacter) {
 	PlayerHeader* player = &gCharacterSelectScreenData.mHeader.mPlayers[i];
 
@@ -1217,6 +1445,9 @@ static void showSelectCharacterForSelector(int i, SelectCharacter* tCharacter) {
 			setMugenAnimationBaseDrawScale(gCharacterSelectScreenData.mSelectors[i].mBigPortraitAnimationElement, 1);
 			setMugenAnimationSprites(gCharacterSelectScreenData.mSelectors[i].mBigPortraitAnimationElement, &tCharacter->mSprites);
 			changeMugenAnimation(gCharacterSelectScreenData.mSelectors[i].mBigPortraitAnimationElement, player->mBigPortraitAnimation);
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+			fitN3DSBigPortrait(i, tCharacter);
+#endif
 		}
 		changeMugenText(gCharacterSelectScreenData.mSelectors[i].mNameTextID, tCharacter->mDisplayCharacterName);
 	}
@@ -1415,6 +1646,12 @@ static void flashSelection(int i) {
 	Animation anim = createAnimation(1, 2);
 	AnimationHandlerElement* element = playAnimation(pos + gCharacterSelectScreenData.mHeader.mSmallPortraitOffset, &gCharacterSelectScreenData.mWhiteTexture, anim, makeRectangleFromTexture(gCharacterSelectScreenData.mWhiteTexture), NULL, NULL);
 	setAnimationSize(element, Vector3D(25, 25, 1) * gCharacterSelectScreenData.mHeader.mSmallPortraitScale, Vector3D(0, 0, 0));
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	if (isN3DSSelectGridOnBottomScreen()) {
+		setAnimationSize(element, gCharacterSelectScreenData.mHeader.mCellSize.xyz(1), Vector3D(0, 0, 0));
+		setAnimationScreen(element, N3DS_SELECT_GRID_SCREEN);
+	}
+#endif
 }
 
 static void updateMugenTextBasedOnVector3DI(int tID, const Vector3DI& tFontData) {
@@ -1658,6 +1895,9 @@ static void updateCharacterSelectScreen() {
 	updateSelections();
 	updateSelectionInputs();
 	updateStageSelect();
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	updateN3DSSelectFrame();
+#endif
 }
 
 static Screen gCharacterSelectScreen;

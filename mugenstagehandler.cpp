@@ -323,6 +323,15 @@ int getDreamMugenStageHandlerCameraCoordinateP()
 	return gMugenStageHandlerData.mCameraCoordinates.x;
 }
 
+void setDreamMugenStageHandlerScreen(int tScreen)
+{
+	for (auto& element : gMugenStageHandlerData.mStaticElements) {
+		for (auto& animation : element.mAnimationReferences) {
+			setMugenAnimationScreen(animation.mElement, tScreen);
+		}
+	}
+}
+
 void setDreamMugenStageHandlerCameraCoordinates(const Vector2DI& tCoordinates)
 {
 	gMugenStageHandlerData.mCameraCoordinates = tCoordinates;
