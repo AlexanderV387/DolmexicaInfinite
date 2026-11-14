@@ -3984,6 +3984,18 @@ void setPlayerInvisibleFlag(DreamPlayer* p)
 	p->mInvisibilityFlag = 1;
 }
 
+static void setPlayerAndHelpersInvisibleForOneFrameCB(void* /*tCaller*/, void* tData) {
+	DreamPlayer* p = (DreamPlayer*)tData;
+	if (p->mIsDestroyed) return;
+	setPlayerInvisibleFlag(p);
+	list_map(&p->mHelpers, setPlayerAndHelpersInvisibleForOneFrameCB, NULL);
+}
+
+void setAllPlayersInvisibleForOneFrame()
+{
+	for (int i = 0; i < 2; i++) setPlayerAndHelpersInvisibleForOneFrameCB(NULL, getRootPlayer(i));
+}
+
 void setPlayerNoLandFlag(DreamPlayer* p)
 {
 	p->mNoLandFlag = 1;

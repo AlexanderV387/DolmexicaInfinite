@@ -511,6 +511,8 @@ void setPlayerSpritePriority(DreamPlayer* p, int tPriority);
 void setPlayerNoWalkFlag(DreamPlayer* p);
 void setPlayerNoAutoTurnFlag(DreamPlayer* p);
 void setPlayerInvisibleFlag(DreamPlayer* p);
+// Both fighters and all their helpers not drawn this frame (a picture of the stage).
+void setAllPlayersInvisibleForOneFrame();
 void setPlayerNoLandFlag(DreamPlayer* p);
 void setPlayerNoShadow(DreamPlayer* p);
 void setAllPlayersNoShadow();

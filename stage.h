@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include <prism/geometry.h>
 #include <prism/datastructures.h>
 #include <prism/actorhandler.h>
@@ -72,6 +74,11 @@ int getDreamScreenHeight(int tCoordinateP);
 char* getDreamStageAuthor();
 char* getDreamStageDisplayName();
 char* getDreamStageName();
+// [3DS] Where the select screen's picture of a stage is kept (taken in the
+// first fight in it): a header ("STP1", width, height) and BGRA bytes.
+#define DREAM_STAGE_PICTURE_WIDTH 192
+#define DREAM_STAGE_PICTURE_HEIGHT 144
+std::string getDreamStagePicturePath(const char* tStageDefinitionPath);
 
 int getDreamStageLeftEdgeMinimumPlayerDistance(int tCoordinateP);
 int getDreamStageRightEdgeMinimumPlayerDistance(int tCoordinateP);

@@ -1,6 +1,7 @@
 #include "stage.h"
 
 #include <stdio.h>
+#include <sys/stat.h>
 #include <assert.h>
 #include <algorithm>
 
@@ -22,6 +23,7 @@
 #include "mugensound.h"
 #include "config.h"
 #include "storyhelper.h"
+#include "fightui.h"
 
 using namespace std;
 
@@ -585,8 +587,15 @@ static void unloadStageLetterboxBands() {
 	}
 }
 
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+static void startN3DSStagePicture();
+#endif
+
 static void loadStage(void* tData)
 {
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	startN3DSStagePicture();
+#endif
 	(void)tData;
 	setProfilingSectionMarkerCurrentFunction();
 	instantiateActor(getDreamMugenStageHandler());
@@ -727,11 +736,83 @@ static void updateCameraActions() {
 	updateCameraZoom();
 }
 
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+// [3DS] A picture of each stage for the select screen, taken in the first
+// fight in it: a second after it starts (the fade in over, the camera in
+// the middle), one frame drawn without the fighters and the bars, read
+// small from the screen and kept in the SD card's cache.
+static const int N3DS_STAGE_PICTURE_FRAME = 60;
+
+static struct {
+	int mIsWanted;
+	int mFrames;
+	int mIsAsked;
+} gN3DSStagePicture;
+
+std::string getDreamStagePicturePath(const char* tStageDefinitionPath)
+{
+#if defined(N3DS_TEXTURE_SIM) && !defined(__3DS__)
+	const char* directory = getenv("N3DS_SIM_CACHE_DIR");
+	if (!directory) return "";
+	std::string folder = directory;
+#else
+	std::string folder = "sdmc:/3ds/dolmexica/cache";
+#endif
+	std::string path = tStageDefinitionPath ? tStageDefinitionPath : "";
+	cleanPathSlashes(path);
+	uint32_t hash = 2166136261u;
+	for (const char c : path) hash = (hash ^ (uint8_t)c) * 16777619u;
+	char name[64];
+	snprintf(name, sizeof(name), "/%08lx.stp", (unsigned long)hash);
+	return folder + name;
+}
+
+static void startN3DSStagePicture() {
+	gN3DSStagePicture.mFrames = 0;
+	gN3DSStagePicture.mIsAsked = 0;
+	const std::string path = getDreamStagePicturePath(gStageData.mDefinitionPath);
+	FILE* file = path.empty() ? NULL : fopen(path.c_str(), "rb");
+	gN3DSStagePicture.mIsWanted = !path.empty() && !file;
+	if (file) fclose(file);
+}
+
+static void updateN3DSStagePicture() {
+	if (!gN3DSStagePicture.mIsWanted) return;
+	gN3DSStagePicture.mFrames++;
+	if (!gN3DSStagePicture.mIsAsked) {
+		if (gN3DSStagePicture.mFrames < N3DS_STAGE_PICTURE_FRAME) return;
+		setAllPlayersInvisibleForOneFrame();
+		setDreamBarInvisibleForOneFrame();
+		requestDrawingScreenPicture(0, DREAM_STAGE_PICTURE_WIDTH, DREAM_STAGE_PICTURE_HEIGHT);
+		gN3DSStagePicture.mIsAsked = 1;
+		return;
+	}
+	std::vector<uint8_t> picture;
+	if (!getDrawingScreenPicture(0, &picture)) {
+		if (gN3DSStagePicture.mFrames > N3DS_STAGE_PICTURE_FRAME + 10) gN3DSStagePicture.mIsWanted = 0;
+		return;
+	}
+	gN3DSStagePicture.mIsWanted = 0;
+	const std::string path = getDreamStagePicturePath(gStageData.mDefinitionPath);
+	const std::string folder = path.substr(0, path.find_last_of('/'));
+	mkdir(folder.c_str(), 0777);
+	FILE* file = fopen(path.c_str(), "wb");
+	if (!file) return;
+	const uint32_t header[3] = { 0x31505453, DREAM_STAGE_PICTURE_WIDTH, DREAM_STAGE_PICTURE_HEIGHT };   // "STP1"
+	const int isWritten = fwrite(header, sizeof(header), 1, file) == 1 && fwrite(picture.data(), 1, picture.size(), file) == picture.size();
+	fclose(file);
+	if (!isWritten) remove(path.c_str());
+}
+#endif
+
 static void updateStage(void* tData) {
 	(void)tData;
 	setProfilingSectionMarkerCurrentFunction();
 	updateZOffset();
 	updateCameraActions();
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	updateN3DSStagePicture();
+#endif
 }
 
 ActorBlueprint getDreamStageBP() {
