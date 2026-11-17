@@ -5252,10 +5252,27 @@ typedef struct {
 	DreamPlayer* p;
 } PlayerBeingAttackedSearchCaller;
 
+// As MUGEN 1.1 and IKEMEN GO (char.go, hitDetectionPlayer): a player or
+// helper is an attack to guard from all through a state of movetype A, from
+// its start, not only with its HitDef active; the distance its last HitDef's
+// guard.dist (kept through the state), else its attack.dist. Only from the
+// HitDef, Kung Fu Man against Kung Fu Man at level 4 had half of MUGEN's
+// time near an attack to guard (3% of the frames against 7-8%).
+static int isPlayerAnAttackToGuard(DreamPlayer* p) {
+	if (isHitDataActive(p)) return 1;
+	if (!isGeneralPlayer(p) || p->mIsDestroyed || isPlayerProjectile(p)) return 0;
+	return getPlayerStateMoveType(p) == MUGEN_STATE_MOVE_TYPE_ATTACK;
+}
+
+static int getPlayerAttackGuardDistance(DreamPlayer* p) {
+	if (isHitDataActive(p)) return getHitDataGuardDistance(p);
+	return getDefaultPlayerAttackDistance(p, getPlayerCoordinateP(p));
+}
+
 static void searchPlayerBeingAttackedRecursive(void* tCaller, void* tData) {
 	PlayerBeingAttackedSearchCaller* caller = (PlayerBeingAttackedSearchCaller*)tCaller;
 	DreamPlayer* p = (DreamPlayer*)tData;
-	caller->mIsAttacking |= isHitDataActive(p);
+	caller->mIsAttacking |= isPlayerAnAttackToGuard(p);
 
 	list_map(&p->mHelpers, searchPlayerBeingAttackedRecursive, caller);
 	int_map_map(&p->mProjectiles, searchPlayerBeingAttackedRecursive, caller);
@@ -5273,11 +5290,11 @@ static void searchPlayerInGuardDistanceRecursive(void* tCaller, void* tData) {
 	PlayerBeingAttackedSearchCaller* caller = (PlayerBeingAttackedSearchCaller*)tCaller;
 	DreamPlayer* otherPlayer = (DreamPlayer*)tData;
 
-	int isAttacking = isHitDataActive(otherPlayer);
+	int isAttacking = isPlayerAnAttackToGuard(otherPlayer);
 	if (isAttacking) {
 		caller->mIsAttacking = 1;
 		float dist = std::fabs(getPlayerAxisDistanceForTwoReferencesX(otherPlayer, caller->p, getPlayerCoordinateP(otherPlayer)));
-		caller->mIsInDistance = dist < getHitDataGuardDistance(otherPlayer);
+		caller->mIsInDistance |= dist < getPlayerAttackGuardDistance(otherPlayer);
 	}
 
 	list_map(&otherPlayer->mHelpers, searchPlayerInGuardDistanceRecursive, caller);

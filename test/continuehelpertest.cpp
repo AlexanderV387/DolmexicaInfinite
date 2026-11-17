@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <vector>
 
+#include <prism/math.h>
 #include <prism/wrapper.h>
 #include <prism/datastructures.h>
 
@@ -216,6 +217,8 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 	}
 	const auto screen = getDreamFightScreenForTesting();
 	initPrismWrapperScreenForDebug(screen);
+	// DOLMEXICA_SEED: the random numbers' seed (another fight each).
+	if (getenv("DOLMEXICA_SEED")) setRandomSeed(unsigned(atoi(getenv("DOLMEXICA_SEED"))));
 
 	for (int frame = 0; frame < frames; frame++) {
 		// DOLMEXICA_CENTER_AT: the second player put in the middle and the
