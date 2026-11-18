@@ -3810,15 +3810,27 @@ void setPlayerPositionBasedOnScreenCenterX(DreamPlayer* p, float x, int tCoordin
 }
 
 // A helper shares its player's commands; the computer's random ones are
-// not its own (see isDreamCommandActiveFromInput).
+// not its own (see isDreamCommandActiveFromInput). Nor are the computer's
+// buttons: in MUGEN the computer presses its own at random for each helper
+// with keyctrl, so they seldom match its player's. Old characters tell the
+// computer from a person that way (2002 Rugal's helper 5999: the player
+// pressing x with the helper not means the computer, var(1) = 1, his AI
+// on); with the player's buttons shared, the helper always matched and his
+// AI never came on (pruebas 103 to 117).
+static int isPlayerHelperOfComputer(DreamPlayer* p) {
+	return isPlayerHelper(p) && getRootPlayer(p->mRootID)->mAILevel;
+}
+
 int isPlayerCommandActive(DreamPlayer* p, const char * tCommandName)
 {
+	if (isPlayerHelperOfComputer(p)) return 0;
 	if (isPlayerHelper(p)) return isDreamCommandActiveFromInput(p->mCommandID, tCommandName);
 	return isDreamCommandActive(p->mCommandID, tCommandName);
 }
 
 int isPlayerCommandActiveWithLookup(DreamPlayer* p, int tCommandLookupIndex)
 {
+	if (isPlayerHelperOfComputer(p)) return 0;
 	if (isPlayerHelper(p)) return isDreamCommandActiveFromInputByLookupIndex(p->mCommandID, tCommandLookupIndex);
 	return isDreamCommandActiveByLookupIndex(p->mCommandID, tCommandLookupIndex);
 }
