@@ -329,6 +329,7 @@ void setPlayerPreferredPalette(int i, int tPalette);
 int getMugenDefDefaultPaletteNumber(prism::MugenDefScript* tScript, int tRequested);
 void setPlayerPreferredPaletteRandom(int i);
 void setPlayerSelectedPalette(int i, int tPalette);
+int getPlayerSelectedPalette(int i);
 void setPlayerSelectedAILevel(int i, int tLevel);
 void clearPlayerSelections();
 

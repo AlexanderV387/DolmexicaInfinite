@@ -18,6 +18,7 @@
 #include "mugenassignmentevaluator.h"
 #include "stage.h"
 #include "gamelogic.h"
+#include "versusscreen.h"
 #include "fightscreen.h"
 #include "titlescreen.h"
 #include "characterselectscreen.h"
@@ -462,6 +463,27 @@ TEST_F(ContinueHelperTest, SelectScreen) {
 	setCharacterSelectStageActive();
 	setCharacterSelectFinishedCB(selectScreenFinishedCB);
 	initPrismWrapperScreenForDebug(getCharacterSelectScreen());
+	updatePrismWrapperScreenForDebugWithIterationsAndRender(frames);
+	unloadPrismWrapperScreenForDebug();
+}
+
+static void versusScreenFinishedCB() {}
+
+/* The versus screen between DOLMEXICA_CHAR1 and DOLMEXICA_CHAR (with
+ * DOLMEXICA_SELECTED's palettes), for DOLMEXICA_FRAMES frames (default 60);
+ * pictures with N3DS_SIM_SHOT. */
+TEST_F(ContinueHelperTest, VersusScreen) {
+	const int frames = getContinueIntegerSetting("DOLMEXICA_FRAMES", 60);
+	setPlayerDefinitionPath(0, getContinueCharDefPath("DOLMEXICA_CHAR1").c_str());
+	setPlayerDefinitionPath(1, getContinueCharDefPath("DOLMEXICA_CHAR").c_str());
+	if (const char* selected = getenv("DOLMEXICA_SELECTED")) {
+		int values[4] = { 0, 0, 0, 0 };
+		sscanf(selected, "%d,%d,%d,%d", &values[0], &values[1], &values[2], &values[3]);
+		for (int i = 0; i < 2; i++) setPlayerSelectedPalette(i, values[i * 2]);
+	}
+	setVersusScreenNoMatchNumber();
+	setVersusScreenFinishedCB(versusScreenFinishedCB);
+	initPrismWrapperScreenForDebug(getVersusScreen());
 	updatePrismWrapperScreenForDebugWithIterationsAndRender(frames);
 	unloadPrismWrapperScreenForDebug();
 }

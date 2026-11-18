@@ -63,6 +63,29 @@ static struct {
 	void(*mCB)();
 } gVersusScreenData;
 
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+// [3DS] Each big portrait (9000,1) fit into the box a standard one fills
+// (120x140 times the motif's p1.scale / p2.scale, from p1.pos / p2.pos,
+// toward the facing), at the bottom, in the middle, not stretched. Drawn
+// as they come (the scale was read but never used), Sub-Zero MKD's and
+// Felicia's went out of their frames and New Kyouki's (axis 0,-335) was
+// drawn under the screen.
+static void fitN3DSVersusPortrait(VersusPlayer* tPlayer) {
+	MugenSpriteFileSprite* sprite = getMugenSpriteFileTextureReference(&tPlayer->mSprites, 9000, 1);
+	if (!tPlayer->mAnimationElement || !sprite || sprite->mOriginalTextureSize.x <= 0 || sprite->mOriginalTextureSize.y <= 0) return;
+	const float boxW = 120 * float(tPlayer->mScale.x > 0 ? tPlayer->mScale.x : 1);
+	const float boxH = 140 * float(tPlayer->mScale.y > 0 ? tPlayer->mScale.y : 1);
+	const float boxX = tPlayer->mIsFacingRight ? float(tPlayer->mPosition.x) : float(tPlayer->mPosition.x) - boxW;
+	const float boxY = float(tPlayer->mPosition.y);
+	const float w = float(sprite->mOriginalTextureSize.x), h = float(sprite->mOriginalTextureSize.y);
+	const float scale = std::min(boxW / w, boxH / h);
+	const float left = boxX + (boxW - w * scale) / 2, top = boxY + boxH - h * scale;
+	const float axisX = tPlayer->mIsFacingRight ? float(sprite->mAxisOffset.x) : w - float(sprite->mAxisOffset.x);
+	setMugenAnimationPosition(tPlayer->mAnimationElement, Vector3D(left + axisX * scale, top + float(sprite->mAxisOffset.y) * scale, VERSUS_SCREEN_PLAYER_IMAGE_Z));
+	setMugenAnimationDrawScale(tPlayer->mAnimationElement, Vector2D(scale, scale));
+}
+#endif
+
 static void loadPlayerAnimationsAndName(int i) {
 	VersusPlayer* player = &gVersusScreenData.mHeader.mPlayers[i];
 
@@ -78,9 +101,11 @@ static void loadPlayerAnimationsAndName(int i) {
 	MugenDefScript script;
 	loadMugenDefScript(&script, scriptPath);
 
-	// The fight's palette (the first if random).
+	// The fight's palette: the one chosen on the select screen, else the
+	// game mode's (the first if random).
 	const int preferredPalette = getRootPlayer(i)->mPreferredPalette > 0 ? getRootPlayer(i)->mPreferredPalette - 1 : 0;
-	sprintf(name, "pal%d", getMugenDefDefaultPaletteNumber(&script, preferredPalette + 1));
+	const int selectedPalette = getPlayerSelectedPalette(i);
+	sprintf(name, "pal%d", selectedPalette ? selectedPalette : getMugenDefDefaultPaletteNumber(&script, preferredPalette + 1));
 	getMugenDefStringOrDefault(file, &script, "files", name, "");
 	int hasPalettePath = strcmp("", file);
 	sprintf(palettePath, "%s%s", path, file);
@@ -109,6 +134,9 @@ static void loadPlayerAnimationsAndName(int i) {
 	player->mAnimation = createOneFrameMugenAnimationForSprite(9000, 1);
 	player->mAnimationElement = addMugenAnimation(player->mAnimation, &player->mSprites, pos);
 	setMugenAnimationFaceDirection(player->mAnimationElement, player->mIsFacingRight);
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	fitN3DSVersusPortrait(player);
+#endif
 
 	pos = player->mNamePosition;
 	pos.z = VERSUS_SCREEN_PLAYER_TEXT_Z;

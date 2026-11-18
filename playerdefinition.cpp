@@ -3010,6 +3010,11 @@ void setPlayerSelectedPalette(int i, int tPalette)
 	gPlayerDefinition.mSelectedPalette[i] = tPalette;
 }
 
+int getPlayerSelectedPalette(int i)
+{
+	return gPlayerDefinition.mSelectedPalette[i];
+}
+
 void setPlayerSelectedAILevel(int i, int tLevel)
 {
 	gPlayerDefinition.mSelectedAILevel[i] = tLevel;
