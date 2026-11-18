@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <algorithm>
 
+#include <prism/log.h>
 #include <prism/file.h>
 #include <prism/math.h>
 #include <prism/input.h>
@@ -1204,9 +1205,17 @@ static void loadEnvironmentShakeEffects() {
 	gFightUIData.mEnvironmentShake.mIsActive = 0;
 }
 
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+static void updateN3DSFaceFits();
+static void resetN3DSFaceFits();
+#endif
+
 static void loadFightUI(void* tData) {
 	(void)tData;
 	setProfilingSectionMarkerCurrentFunction();
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	resetN3DSFaceFits();
+#endif
 
 	char defPath[1024];
 	MugenDefScript script; 
@@ -1955,6 +1964,9 @@ static void updateFightUI(void* tData) {
 	updateContinueDisplay();
 	updateEnvironmentColor();
 	updateEnvironmentShake();
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	updateN3DSFaceFits();
+#endif
 }
 
 ActorBlueprint getDreamFightUIBP() {
@@ -2574,9 +2586,72 @@ void stopKOAndWinAnimation()
 	gFightUIData.mDraw.mIsActive = 0;
 }
 
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+// [3DS] A face much larger than its frame (the motif's face bg, else MUGEN's
+// standard 25x25) drawn smaller to fit in it, not stretched, as the versus
+// screen's portraits: Sub-Zero MKD's small portrait (52x52) covered half the
+// life bar. MUGEN draws it as it comes. Checked each frame against the
+// sprite's size as known: a streamed sprite's (New Kyouki's SFF v1) is its
+// index's guess until it is first drawn.
+static struct {
+	Vector2D mBaseScale[2];
+	Vector2DI mFittedSize[2];
+	int mIsReady[2];
+} gN3DSFaceFit;
+
+static void fitN3DSFace(int i) {
+	Face* face = &gFightUIData.mFaces[i];
+	if (!gN3DSFaceFit.mIsReady[i] || !face->mFaceAnimationElement) return;
+	DreamPlayer* p = getRootPlayer(i);
+	const Vector3DI faceSprite = getMugenAnimationSprite(face->mFaceAnimationElement);
+	MugenSpriteFileSprite* sprite = getMugenSpriteFileTextureReference(getPlayerSprites(p), faceSprite.x, faceSprite.y);
+	if (!sprite || sprite->mOriginalTextureSize.x <= 0 || sprite->mOriginalTextureSize.y <= 0) return;
+	const Vector2DI size(int(sprite->mOriginalTextureSize.x), int(sprite->mOriginalTextureSize.y));
+	if (size.x == gN3DSFaceFit.mFittedSize[i].x && size.y == gN3DSFaceFit.mFittedSize[i].y) return;
+	gN3DSFaceFit.mFittedSize[i] = size;
+	float boxW = 25, boxH = 25;
+	if (face->mBGAnimationElement) {
+		const Vector3DI bgSprite = getMugenAnimationSprite(face->mBGAnimationElement);
+		MugenSpriteFileSprite* bg = getMugenSpriteFileTextureReference(&gFightUIData.mFightSprites, bgSprite.x, bgSprite.y);
+		if (bg && bg->mOriginalTextureSize.x > 8 && bg->mOriginalTextureSize.y > 8) {
+			const auto bgScale = getMugenAnimationDrawScale(face->mBGAnimationElement);
+			boxW = bg->mOriginalTextureSize.x * float(bgScale.x);
+			boxH = bg->mOriginalTextureSize.y * float(bgScale.y);
+		}
+	}
+	const Vector2D scale = gN3DSFaceFit.mBaseScale[i];
+	const float playerScale = getDreamUICoordinateP() / float(getPlayerCoordinateP(p));
+	const float w = size.x * playerScale * float(scale.x), h = size.y * playerScale * float(scale.y);
+	const float factor = (w <= boxW * 1.15f && h <= boxH * 1.15f) ? 1.0f : std::min(boxW / w, boxH / h);
+	setMugenAnimationDrawScale(face->mFaceAnimationElement, Vector2D(scale.x * factor, scale.y * factor));
+	if (factor < 1) logFormat("Face %d: %dx%d drawn %.2f times to fit its %.0fx%.0f frame.", i, size.x, size.y, factor, boxW, boxH);
+}
+
+// Until the fighters' faces are given (setUIFaces), none (a new fight's
+// elements are not the last one's).
+static void resetN3DSFaceFits() {
+	gN3DSFaceFit.mIsReady[0] = gN3DSFaceFit.mIsReady[1] = 0;
+}
+
+static void updateN3DSFaceFits() {
+	fitN3DSFace(0);
+	fitN3DSFace(1);
+}
+#endif
+
 void setUIFaces() {
 	setMugenAnimationSprites(gFightUIData.mFaces[0].mFaceAnimationElement, getPlayerSprites(getRootPlayer(0)));
 	setMugenAnimationSprites(gFightUIData.mFaces[1].mFaceAnimationElement, getPlayerSprites(getRootPlayer(1)));
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	for (int i = 0; i < 2; i++) {
+		gN3DSFaceFit.mIsReady[i] = 0;
+		if (!gFightUIData.mFaces[i].mFaceAnimationElement) continue;
+		gN3DSFaceFit.mBaseScale[i] = getMugenAnimationDrawScale(gFightUIData.mFaces[i].mFaceAnimationElement);
+		gN3DSFaceFit.mFittedSize[i] = Vector2DI(-1, -1);
+		gN3DSFaceFit.mIsReady[i] = 1;
+	}
+	updateN3DSFaceFits();
+#endif
 }
 
 void setComboUIDisplay(int i, int tAmount)
