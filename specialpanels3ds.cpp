@@ -287,25 +287,23 @@ static std::string getShortName(const std::string& tName) {
 // The specials and supers (1000 power or more asked), in the .cmd's order,
 // one for each motion: the variant asking the least power (Kung Fu Man's
 // palm with x, not its 330 power x+y listed first) and the first button.
-// Half the panels for supers if it has as many.
-static void findPanelCommands() {
-	gSpecialPanels.mCommands.clear();
-	DreamPlayer* p = getRootPlayer(0);
+static std::vector<PanelCommand> findCharacterSpecials(int tRootIndex, std::vector<std::string>* oMotions, std::vector<int>* oPowers) {
+	std::vector<PanelCommand> found;
+	DreamPlayer* p = getRootPlayer(tRootIndex);
 	char defPath[1024], folder[1024], file[300];
-	getPlayerDefinitionPath(defPath, 0);
-	if (!isFile(defPath)) return;
+	getPlayerDefinitionPath(defPath, tRootIndex);
+	if (!isFile(defPath)) return found;
 	getPathToFile(folder, defPath);
 	MugenDefScript script;
 	loadMugenDefScript(&script, defPath);
 	getMugenDefStringOrDefault(file, &script, "files", "cmd", "");
 	unloadMugenDefScript(&script);
-	if (!*file) return;
+	if (!*file) return found;
 	const auto blocks = readMinusOneChangeStates(std::string(folder) + file);
 
 	auto& commands = p->mHeader->mFiles.mCommands.mCommands;
-	std::vector<PanelCommand> found;
-	std::vector<std::string> motions;
-	std::vector<int> powers;
+	std::vector<std::string>& motions = *oMotions;
+	std::vector<int>& powers = *oPowers;
 	std::vector<std::string> namesSeen;
 	for (const auto& block : blocks) {
 		if (!block.mIsChangeState) continue;
@@ -333,6 +331,24 @@ static void findPanelCommands() {
 			}
 		}
 	}
+	return found;
+}
+
+std::vector<N3DSSpecialCommand> findN3DSSpecialCommands(int tRootIndex) {
+	std::vector<std::string> motions;
+	std::vector<int> powers;
+	const auto found = findCharacterSpecials(tRootIndex, &motions, &powers);
+	std::vector<N3DSSpecialCommand> ret;
+	for (size_t i = 0; i < found.size(); i++) ret.push_back(N3DSSpecialCommand{ found[i].mCommandName, motions[i], powers[i], found[i].mIsSuper });
+	return ret;
+}
+
+// Half the panels for supers if it has as many.
+static void findPanelCommands() {
+	gSpecialPanels.mCommands.clear();
+	std::vector<std::string> motions;
+	std::vector<int> powers;
+	auto found = findCharacterSpecials(0, &motions, &powers);
 	std::vector<PanelCommand> specials, supers;
 	for (auto& panel : found) (panel.mIsSuper ? supers : specials).push_back(panel);
 	for (size_t i = 0; i < specials.size(); i++) specials[i].mLabel = isReadableName(specials[i].mCommandName) ? getShortName(specials[i].mCommandName) : "ESPECIAL " + std::to_string(i + 1);

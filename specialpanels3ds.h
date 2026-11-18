@@ -6,6 +6,9 @@
 // command come true as if entered. Read from the character's .cmd: the
 // commands its -1 ChangeStates check, a super if its block asks for power.
 
+#include <string>
+#include <vector>
+
 #include <prism/actorhandler.h>
 
 using namespace prism;
@@ -22,3 +25,13 @@ void touchN3DSSpecialPanelForTesting(int tPanel);
 // For tests: the panels' commands, in order.
 int getN3DSSpecialPanelCommandAmount();
 const char* getN3DSSpecialPanelCommandName(int tPanel);
+
+// A character's specials and supers as the panels find them (the computer's
+// improved AI uses them too): one for each motion, in the .cmd's order.
+typedef struct {
+	std::string mName;
+	std::string mMotion;   // the arrows, '0' forward, '1' down-forward, then on round to '7' up-forward
+	int mPower;            // the power its ChangeState asks for
+	int mIsSuper;          // 1000 or more
+} N3DSSpecialCommand;
+std::vector<N3DSSpecialCommand> findN3DSSpecialCommands(int tRootIndex);

@@ -26,6 +26,7 @@
 #include "superwatchmode.h"
 #include "specialpanels3ds.h"
 #include "smoothtext3ds.h"
+#include "smartai3ds.h"
 #include "playerdefinition.h"
 
 #ifndef __3DS__
@@ -48,6 +49,7 @@ typedef enum {
 
 	// AJUSTES
 	PAUSE_MENU_CPU_LEVEL,
+	PAUSE_MENU_SMART_AI,
 	PAUSE_MENU_TIME,
 	PAUSE_MENU_MUSIC,
 	PAUSE_MENU_EFFECTS,
@@ -111,6 +113,7 @@ static void savePauseSettings() {
 	fprintf(file, "speed %d\n", getGlobalGameSpeed());
 	fprintf(file, "bars %d\n", !gPauseMenu3DSData.mAreBarsHidden);
 	fprintf(file, "fps %d\n", gPauseMenu3DSData.mIsShowingFPS);
+	fprintf(file, "smartai %d\n", isN3DSSmartAIEnabled());
 	fclose(file);
 }
 
@@ -129,6 +132,7 @@ static void loadPauseSettings() {
 		else if (!strcmp(key, "speed") && value >= -9 && value <= 9) setGlobalGameSpeed(value);
 		else if (!strcmp(key, "bars")) gPauseMenu3DSData.mAreBarsHidden = !value;
 		else if (!strcmp(key, "fps")) gPauseMenu3DSData.mIsShowingFPS = value;
+		else if (!strcmp(key, "smartai")) setN3DSSmartAIEnabled(!!value);
 	}
 	fclose(file);
 }
@@ -196,6 +200,7 @@ static std::string getItemText(PauseMenuItem tItem) {
 	case PAUSE_MENU_CHARACTER_SELECT: return "ELEGIR PERSONAJES";
 	case PAUSE_MENU_TITLE_SCREEN: return "MENÚ PRINCIPAL";
 	case PAUSE_MENU_CPU_LEVEL: snprintf(text, sizeof(text), "NIVEL CPU  < %d >", getComputerLevel()); return text;
+	case PAUSE_MENU_SMART_AI: return isN3DSSmartAIEnabled() ? "IA MEJORADA  < SÍ >" : "IA MEJORADA  < NO >";
 	case PAUSE_MENU_TIME:
 		if (isGlobalTimerInfinite()) return "TIEMPO  < SIN LÍMITE >";
 		snprintf(text, sizeof(text), "TIEMPO  < %d >", getGlobalTimerDuration());
@@ -254,6 +259,7 @@ static void showItems(int tIsSettings, int tSelected) {
 	}
 	else {
 		if (getComputerLevel()) gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_CPU_LEVEL);
+		if (getComputerLevel()) gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_SMART_AI);
 		if (getGameMode() != GAME_MODE_TRAINING) gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_TIME);
 		gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_MUSIC);
 		gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_EFFECTS);
@@ -302,6 +308,8 @@ static void changeSetting(PauseMenuItem tItem, int tDelta) {
 		}
 		break;
 	}
+	// At once: for a character with no AI of its own (smartai3ds.cpp).
+	case PAUSE_MENU_SMART_AI: setN3DSSmartAIEnabled(!isN3DSSmartAIEnabled()); break;
 	case PAUSE_MENU_TIME: {
 		int index = 0;
 		for (int i = 0; i < 4; i++) {

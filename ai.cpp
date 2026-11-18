@@ -10,6 +10,9 @@
 #include "gamelogic.h"
 #include "config.h"
 #include "mugenstagehandler.h"
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+#include "smartai3ds.h"
+#endif
 
 using namespace std;
 
@@ -195,6 +198,10 @@ static void updateSingleAI(void* /*tCaller*/, PlayerAI& tData) {
 	if (getDreamRoundStateNumber() != 2) return;
 	PlayerAI* e = &tData;
 	if (!getPlayerAILevel(e->mPlayer)) return;
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	// [3DS] The improved AI for a character with none of its own.
+	if (updateN3DSSmartAI(e->mPlayer)) return;
+#endif
 
 	updateAIButtonJamming(e);
 	updateAICheating(e);
@@ -241,6 +248,9 @@ void setDreamAIActive(DreamPlayer * p)
 	}
 
 	gAI.mHandledPlayers.push_back(e);
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	prepareN3DSSmartAI(p);
+#endif
 }
 
 typedef struct {

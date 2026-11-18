@@ -23,6 +23,7 @@
 #include "fightscreen.h"
 #include "titlescreen.h"
 #include "characterselectscreen.h"
+#include "smartai3ds.h"
 
 /* The fight started over as at "Continue?" (arcade and free play), and each
  * root's helpers written as a tree before and after it.
@@ -231,6 +232,8 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 	initPrismWrapperScreenForDebug(screen);
 	// DOLMEXICA_SEED: the random numbers' seed (another fight each).
 	if (getenv("DOLMEXICA_SEED")) setRandomSeed(unsigned(atoi(getenv("DOLMEXICA_SEED"))));
+	if (getenv("DOLMEXICA_SMARTAI")) setN3DSSmartAIEnabled(atoi(getenv("DOLMEXICA_SMARTAI")));
+	if (getenv("DOLMEXICA_SMARTAI_ONLY")) setN3DSSmartAIOnlyForTesting(atoi(getenv("DOLMEXICA_SMARTAI_ONLY")));
 
 	for (int frame = 0; frame < frames; frame++) {
 		// DOLMEXICA_CENTER_AT: the second player put in the middle and the
