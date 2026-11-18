@@ -506,6 +506,8 @@ TEST_F(ContinueHelperTest, VersusScreen) {
 		sscanf(selected, "%d,%d,%d,%d", &values[0], &values[1], &values[2], &values[3]);
 		for (int i = 0; i < 2; i++) setPlayerSelectedPalette(i, values[i * 2]);
 	}
+	const char* stageEnv = getenv("DOLMEXICA_STAGE");
+	setDreamStageMugenDefinition((getDolmexicaAssetFolder() + (stageEnv ? stageEnv : "stages/kfm.def")).c_str(), "");
 	setVersusScreenNoMatchNumber();
 	setVersusScreenFinishedCB(versusScreenFinishedCB);
 	initPrismWrapperScreenForDebug(getVersusScreen());

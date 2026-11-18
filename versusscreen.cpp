@@ -17,6 +17,12 @@
 #include "playerdefinition.h"
 #include "config.h"
 #include "stage.h"
+#include "mugenstagehandler.h"
+#include "smoothtext3ds.h"
+#include <vector>
+#include <algorithm>
+#include <prism/texture.h>
+#include <prism/animation.h>
 
 #define VERSUS_SCREEN_PLAYER_IMAGE_Z 50
 #define VERSUS_SCREEN_PLAYER_TEXT_Z 51
@@ -228,6 +234,90 @@ static void loadVersusMusic() {
 	freeMemory(path);
 }
 
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+// [3DS] The bottom screen: the stage about to be fought in, its picture
+// (taken in the first fight in it, stage.cpp; the select screen shows the
+// same) over the whole screen, and its name; without a picture yet, the
+// motif's background alone.
+static struct {
+	TextureData mTexture;
+	int mHasTexture;
+	AnimationHandlerElement* mPicture;
+	AnimationHandlerElement* mBand;
+	SmoothText mName;
+	int mHasFonts;
+} gN3DSVersusStage;
+
+static std::string getN3DSStageShownName(const char* tDefinitionPath) {
+	std::string name;
+	if (!isFile(tDefinitionPath)) return name;
+	MugenDefScript script;
+	loadMugenDefScript(&script, tDefinitionPath);
+	if (isMugenDefStringVariable(&script, "info", "displayname")) name = getSTLMugenDefStringVariable(&script, "info", "displayname");
+	if (name.empty() && isMugenDefStringVariable(&script, "info", "name")) name = getSTLMugenDefStringVariable(&script, "info", "name");
+	unloadMugenDefScript(&script);
+	return name;
+}
+
+static void showN3DSVersusStage() {
+	gN3DSVersusStage.mHasTexture = 0;
+	gN3DSVersusStage.mPicture = NULL;
+	gN3DSVersusStage.mBand = NULL;
+	gN3DSVersusStage.mName.clear();
+	gN3DSVersusStage.mHasFonts = 0;
+	const char* stagePath = getDreamStageMugenDefinitionPath();
+	if (!stagePath || !*stagePath) return;
+	const auto sz = getScreenSize();
+
+	const std::string picturePath = getDreamStagePicturePath(stagePath);
+	FILE* file = picturePath.empty() ? NULL : fopen(picturePath.c_str(), "rb");
+	if (file) {
+		uint32_t header[3];
+		std::vector<uint8_t> pixels;
+		int isRead = fread(header, sizeof(header), 1, file) == 1 && header[0] == 0x31505453 && header[1] > 0 && header[2] > 0 && header[1] <= 512 && header[2] <= 512;
+		if (isRead) {
+			pixels.resize(size_t(header[1]) * header[2] * 4);
+			isRead = fread(pixels.data(), 1, pixels.size(), file) == pixels.size();
+		}
+		fclose(file);
+		if (isRead) {
+			const int w = int(header[1]), h = int(header[2]);
+			gN3DSVersusStage.mTexture = loadTextureFromARGB32Buffer(makeBuffer(pixels.data(), uint32_t(pixels.size())), w, h);
+			gN3DSVersusStage.mHasTexture = 1;
+			// The whole screen covered, the picture's middle.
+			const float scale = std::max(float(sz.x) / w, float(sz.y) / h);
+			const float drawnW = w * scale, drawnH = h * scale;
+			gN3DSVersusStage.mPicture = playAnimationLoop(Vector3D((sz.x - drawnW) / 2, (sz.y - drawnH) / 2, 70), &gN3DSVersusStage.mTexture, createOneFrameAnimation(), makeRectangle(0, 0, w - 1, h - 1));
+			setAnimationScreen(gN3DSVersusStage.mPicture, 1);
+			setAnimationSize(gN3DSVersusStage.mPicture, Vector3D(drawnW, drawnH, 1), Vector3D(0, 0, 0));
+		}
+	}
+
+	const std::string name = getN3DSStageShownName(stagePath);
+	if (name.empty()) return;
+	acquireSmoothTextFonts();
+	gN3DSVersusStage.mHasFonts = 1;
+	gN3DSVersusStage.mBand = playOneFrameAnimationLoop(Vector3D(0, sz.y - 24, 71), getEmptyWhiteTextureReference());
+	setAnimationScreen(gN3DSVersusStage.mBand, 1);
+	setAnimationSize(gN3DSVersusStage.mBand, Vector3D(sz.x, 24, 1), Vector3D(0, 0, 0));
+	setAnimationColor(gN3DSVersusStage.mBand, 0, 0, 0);
+	setAnimationTransparency(gN3DSVersusStage.mBand, 0.7f);
+	addSmoothTextCentered(&gN3DSVersusStage.mName, SMOOTH_TEXT_LARGE, name, sz.x / 2.0f, sz.y - 22, 72, 1, Vector3D(1, 0.9, 0.5));
+}
+
+static void unloadN3DSVersusStage() {
+	if (gN3DSVersusStage.mPicture) removeHandledAnimation(gN3DSVersusStage.mPicture);
+	if (gN3DSVersusStage.mBand) removeHandledAnimation(gN3DSVersusStage.mBand);
+	removeSmoothText(&gN3DSVersusStage.mName);
+	if (gN3DSVersusStage.mHasTexture) unloadTexture(gN3DSVersusStage.mTexture);
+	if (gN3DSVersusStage.mHasFonts) releaseSmoothTextFonts();
+	gN3DSVersusStage.mPicture = NULL;
+	gN3DSVersusStage.mBand = NULL;
+	gN3DSVersusStage.mHasTexture = 0;
+	gN3DSVersusStage.mHasFonts = 0;
+}
+#endif
+
 static void screenTimeFinishedCB(void* tCaller);
 
 static void loadVersusScreen() {
@@ -245,6 +335,10 @@ static void loadVersusScreen() {
 
 	loadVersusHeader();
 	loadScriptBackground(&gVersusScreenData.mScript, &gVersusScreenData.mSprites, &gVersusScreenData.mAnimations, "versusbgdef", "versusbg", gVersusScreenData.mLocalCoord);
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	setDreamMugenStageHandlerScreen(2);   // the motif's background below too
+	showN3DSVersusStage();
+#endif
 	loadMatchText();
 	loadVersusMusic();
 
@@ -253,6 +347,9 @@ static void loadVersusScreen() {
 }
 
 static void unloadVersusScreen() {
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	unloadN3DSVersusStage();
+#endif
 	unloadMugenDefScript(&gVersusScreenData.mScript);
 	unloadMugenSpriteFile(&gVersusScreenData.mSprites);
 	unloadMugenAnimationFile(&gVersusScreenData.mAnimations);
