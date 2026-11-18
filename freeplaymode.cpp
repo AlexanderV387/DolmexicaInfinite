@@ -26,6 +26,7 @@ static void characterSelectFinishedCB() {
 static void fightFinishedCB() {
 	setCharacterSelectScreenModeName("Free Play Mode");
 	setCharacterSelectOnePlayerSelectAll();
+	setCharacterSelectComputerPlayers(0, 1);
 	setCharacterSelectStageActive();
 	setCharacterSelectFinishedCB(characterSelectFinishedCB);
 	setNewScreen(getCharacterSelectScreen());

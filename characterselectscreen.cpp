@@ -165,7 +165,22 @@ typedef struct {
 	int mHasBeenLoadedBefore;
 	Vector2DI mSelectedCharacter;
 	RandomSelector mRandom;
+
+	// [3DS] After A on a character: its color (if it has more than one),
+	// then, for the computer's side, its level.
+	int mStep;                            // SELECT_STEP_*
+	SelectCharacter* mStepCharacter;      // NULL for random
+	std::vector<int> mColors;             // its palettes (pal1 to pal12 with a file)
+	std::vector<std::string> mColorPaths;
+	int mColorIndex;
+	int mLevel;
 } Selector;
+
+typedef enum {
+	SELECT_STEP_CHARACTER,
+	SELECT_STEP_COLOR,
+	SELECT_STEP_LEVEL,
+} SelectStep;
 
 typedef struct {
 	int mModeTextID;
@@ -242,6 +257,7 @@ static struct {
 	int mCanSelectThisFrame;
 	int mIsReturnDisabled;
 	int mIsFadingOut;
+	int mIsComputer[2];   // the side the computer will play (the mode sets it after this screen)
 } gCharacterSelectScreenData;
 
 static MugenAnimation* getMugenDefMenuAnimationOrSprite(MugenDefScript* tScript, const char* tGroupName, const char* tVariableName, int& oIsOwned) {
@@ -608,6 +624,8 @@ static void getN3DSPortraitBox(int i, float* oX, float* oY, float* oW, float* oH
 static bool isSelectedStageRandomStage(int tIndex);
 static void unloadN3DSStagePreview();
 static void updateN3DSStagePreview();
+static void resetN3DSSelectStep();
+static void unloadN3DSSelectStep();
 
 static int isN3DSSelectGridOnBottomScreen() {
 	return gCharacterSelectScreenData.mSelectScreenType != CHARACTER_SELECT_SCREEN_TYPE_STORY && gCharacterSelectScreenData.mSelectScreenType != CHARACTER_SELECT_SCREEN_TYPE_CREDITS;
@@ -1116,6 +1134,8 @@ static void loadSingleSelector(int i, int tOwner) {
 	gCharacterSelectScreenData.mSelectors[i].mOwner = tOwner;
 	gCharacterSelectScreenData.mSelectors[i].mIsActive = 1;
 	gCharacterSelectScreenData.mSelectors[i].mIsDone = 0;
+	gCharacterSelectScreenData.mSelectors[i].mStep = SELECT_STEP_CHARACTER;
+	gCharacterSelectScreenData.mSelectors[i].mStepCharacter = NULL;
 
 	gCharacterSelectScreenData.mSelectors[i].mHasBeenLoadedBefore = 1;
 }
@@ -1260,7 +1280,9 @@ static void loadCharacterSelectScreen() {
 	resetN3DSSelectFrame();
 	resetN3DSStand();
 	resetN3DSStagePreview();
+	resetN3DSSelectStep();
 #endif
+	clearPlayerSelections();   // chosen again below
 
 	loadStageSelectStages();
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
@@ -1356,6 +1378,7 @@ static void unloadCharacterSelectScreen() {
 	removeN3DSSelectFrame();
 	unloadN3DSStand();
 	unloadN3DSStagePreview();
+	unloadN3DSSelectStep();
 #endif
 	unloadMugenDefScript(&gCharacterSelectScreenData.mScript);
 	unloadMugenDefScript(&gCharacterSelectScreenData.mCharacterScript);
@@ -1534,15 +1557,35 @@ static void unloadN3DSStand() {
 	gN3DSStand.mAnimation = NULL;
 }
 
-static MugenSpriteFile* getN3DSStandSprites(SelectCharacter* tCharacter, int tMaximumHeight) {
-	const std::string key = tCharacter->mSpritePath;
+// The palette its standing sprite is shown in: the one being chosen on its
+// color step or chosen, else its own default.
+static std::string getN3DSStandPalette(int i, SelectCharacter* tCharacter, int* oHasPalette) {
+	const Selector& selector = gCharacterSelectScreenData.mSelectors[i];
+	const int isChosen = selector.mStep != SELECT_STEP_CHARACTER || selector.mIsDone;
+	if (isChosen && selector.mStepCharacter == tCharacter && selector.mColorPaths.size() > 1 && selector.mColorIndex < int(selector.mColorPaths.size())) {
+		*oHasPalette = 1;
+		return selector.mColorPaths[selector.mColorIndex];
+	}
+	*oHasPalette = tCharacter->mHasPalettePath;
+	return tCharacter->mHasPalettePath ? std::string(tCharacter->mPalettePath) : std::string();
+}
+
+static std::string getN3DSStandKey(int i, SelectCharacter* tCharacter) {
+	int hasPalette;
+	return std::string(tCharacter->mSpritePath) + "|" + getN3DSStandPalette(i, tCharacter, &hasPalette);
+}
+
+static MugenSpriteFile* getN3DSStandSprites(int i, SelectCharacter* tCharacter, int tMaximumHeight) {
+	int hasPalette;
+	const std::string palette = getN3DSStandPalette(i, tCharacter, &hasPalette);
+	const std::string key = std::string(tCharacter->mSpritePath) + "|" + palette;
 	for (auto it = gN3DSStand.mKept.begin(); it != gN3DSStand.mKept.end(); ++it) {
 		if (it->first != key) continue;
 		gN3DSStand.mKept.splice(gN3DSStand.mKept.begin(), gN3DSStand.mKept, it);
 		return &gN3DSStand.mKept.front().second;
 	}
 	if (!isFile(tCharacter->mSpritePath)) return NULL;
-	gN3DSStand.mKept.push_front(std::make_pair(key, loadMugenSpriteFileSingleSprite(tCharacter->mSpritePath, tCharacter->mHasPalettePath, tCharacter->mPalettePath, 0, 0, tMaximumHeight)));
+	gN3DSStand.mKept.push_front(std::make_pair(key, loadMugenSpriteFileSingleSprite(tCharacter->mSpritePath, hasPalette, palette.c_str(), 0, 0, tMaximumHeight)));
 	// The oldest let go, but not one shown.
 	while (gN3DSStand.mKept.size() > N3DS_STAND_KEPT) {
 		auto last = std::prev(gN3DSStand.mKept.end());
@@ -1559,7 +1602,7 @@ static void showN3DSStand(int i, SelectCharacter* tCharacter) {
 	// Under the portrait, down to its name at the screen's bottom.
 	boxY += boxH * N3DS_PORTRAIT_SHARE + 2;
 	boxH = std::max(24.0f, getScreenSize().y - N3DS_STAND_NAME_ROOM - boxY);
-	MugenSpriteFile* sprites = getN3DSStandSprites(tCharacter, int(boxH));
+	MugenSpriteFile* sprites = getN3DSStandSprites(i, tCharacter, int(boxH));
 	MugenSpriteFileSprite* sprite = sprites ? getMugenSpriteFileTextureReference(sprites, 0, 0) : NULL;
 	if (!sprite || sprite->mOriginalTextureSize.x <= 0 || sprite->mOriginalTextureSize.y <= 0) {
 		if (gN3DSStand.mElements[i]) setMugenAnimationVisibility(gN3DSStand.mElements[i], 0);
@@ -1585,7 +1628,7 @@ static void showN3DSStand(int i, SelectCharacter* tCharacter) {
 	setMugenAnimationPosition(element, Vector3D(x, y, 35));
 	setMugenAnimationDrawScale(element, Vector2D(scale, scale));
 	setMugenAnimationVisibility(element, 1);
-	gN3DSStand.mShown[i] = tCharacter->mSpritePath;
+	gN3DSStand.mShown[i] = getN3DSStandKey(i, tCharacter);
 }
 
 static void updateN3DSStand() {
@@ -1594,13 +1637,16 @@ static void updateN3DSStand() {
 		const auto& selector = gCharacterSelectScreenData.mSelectors[i];
 		SelectCharacter* character = selector.mIsActive ? getCellCharacter(selector.mSelectedCharacter) : NULL;
 		if (character && character->mType != SELECT_CHARACTER_TYPE_CHARACTER) character = NULL;
+		const std::string key = character ? getN3DSStandKey(i, character) : std::string();
 		if (character != gN3DSStand.mWanted[i]) {
 			gN3DSStand.mWanted[i] = character;
 			gN3DSStand.mRestFrames[i] = 0;
-			if (gN3DSStand.mElements[i] && (!character || gN3DSStand.mShown[i] != character->mSpritePath)) setMugenAnimationVisibility(gN3DSStand.mElements[i], 0);
+			if (gN3DSStand.mElements[i] && (!character || gN3DSStand.mShown[i] != key)) setMugenAnimationVisibility(gN3DSStand.mElements[i], 0);
 			continue;
 		}
-		if (!character || gN3DSStand.mShown[i] == character->mSpritePath) {
+		// Another color of the same character: the old one shown until the
+		// new one is read.
+		if (!character || gN3DSStand.mShown[i] == key) {
 			if (character && gN3DSStand.mElements[i]) setMugenAnimationVisibility(gN3DSStand.mElements[i], 1);
 			continue;
 		}
@@ -1726,6 +1772,179 @@ static void updateN3DSStagePreview() {
 }
 #endif
 
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+// [3DS] After A on a character, for the player's side and the computer's
+// alike: its color, if it has more than one (left and right, its standing
+// sprite drawn in it), then, for the computer's side, its level from 1 to 8
+// (the options' difficulty at first), apart from the color. A goes on, B
+// back. MUGEN picks the color with the button pressed (A to Z, with start
+// 7 to 12) and has one level for all: some characters change with their
+// color (New Kyouki's 9 to 12 are stronger, its readme says), and the
+// level is what their AI reads (Sub-Zero MKD's chances grow with it).
+static int isN3DSSelectStepsUsed() {
+	if (!isN3DSSelectGridOnBottomScreen()) return 0;
+	const auto type = gCharacterSelectScreenData.mSelectScreenType;
+	return type != CHARACTER_SELECT_SCREEN_TYPE_STORY && type != CHARACTER_SELECT_SCREEN_TYPE_CREDITS;
+}
+
+static struct {
+	AnimationHandlerElement* mBackdrop[2];
+	int mTextID[2];
+	int mHintTextID[2];
+} gN3DSSelectStep;
+
+static void resetN3DSSelectStep() {
+	for (int i = 0; i < 2; i++) {
+		gN3DSSelectStep.mBackdrop[i] = NULL;
+		gN3DSSelectStep.mTextID[i] = -1;
+		gN3DSSelectStep.mHintTextID[i] = -1;
+	}
+}
+
+static void hideN3DSSelectStep(int i) {
+	if (gN3DSSelectStep.mBackdrop[i]) removeHandledAnimation(gN3DSSelectStep.mBackdrop[i]);
+	if (gN3DSSelectStep.mTextID[i] >= 0) removeMugenText(gN3DSSelectStep.mTextID[i]);
+	if (gN3DSSelectStep.mHintTextID[i] >= 0) removeMugenText(gN3DSSelectStep.mHintTextID[i]);
+	gN3DSSelectStep.mBackdrop[i] = NULL;
+	gN3DSSelectStep.mTextID[i] = -1;
+	gN3DSSelectStep.mHintTextID[i] = -1;
+}
+
+static void unloadN3DSSelectStep() {
+	for (int i = 0; i < 2; i++) hideN3DSSelectStep(i);
+}
+
+// On the bottom screen, at the bottom of its side's half, darkened.
+static void showN3DSSelectStep(int i) {
+	const Selector& selector = gCharacterSelectScreenData.mSelectors[i];
+	const float w = getScreenSize().x / 2, h = 40;
+	const float x = i == 0 ? 0 : w, y = getScreenSize().y - h;
+	if (!gN3DSSelectStep.mBackdrop[i]) {
+		gN3DSSelectStep.mBackdrop[i] = playAnimationLoop(Vector3D(x, y, 63), &gCharacterSelectScreenData.mWhiteTexture, createOneFrameAnimation(), makeRectangleFromTexture(gCharacterSelectScreenData.mWhiteTexture));
+		setAnimationScreen(gN3DSSelectStep.mBackdrop[i], N3DS_SELECT_GRID_SCREEN);
+		setAnimationSize(gN3DSSelectStep.mBackdrop[i], Vector3D(w, h, 1), Vector3D(0, 0, 0));
+		setAnimationColor(gN3DSSelectStep.mBackdrop[i], 0, 0, 0);
+		setAnimationTransparency(gN3DSSelectStep.mBackdrop[i], 0.85f);
+		const auto& font = gCharacterSelectScreenData.mHeader.mStageSelect.mActiveFont1;
+		gN3DSSelectStep.mTextID[i] = addMugenText(" ", Vector3D(x + w / 2, y + 17, 64), font.x);
+		gN3DSSelectStep.mHintTextID[i] = addMugenText("A: SI   B: ATRAS", Vector3D(x + w / 2, y + 34, 64), font.x);
+		for (int id : { gN3DSSelectStep.mTextID[i], gN3DSSelectStep.mHintTextID[i] }) {
+			setMugenTextAlignment(id, MUGEN_TEXT_ALIGNMENT_CENTER);
+			setMugenTextColor(id, getMugenTextColorFromMugenTextColorIndex(font.y));
+			setMugenTextScreen(id, N3DS_SELECT_GRID_SCREEN);
+		}
+	}
+	char text[100];
+	if (selector.mStep == SELECT_STEP_COLOR) snprintf(text, sizeof(text), "P%d COLOR < %d >", i + 1, selector.mColors[selector.mColorIndex]);
+	else snprintf(text, sizeof(text), "P%d CPU NIVEL < %d >", i + 1, selector.mLevel);
+	changeMugenText(gN3DSSelectStep.mTextID[i], text);
+}
+
+// Its pal1 to pal12 with a file, and which to start on: the side's default
+// (as the game mode would pick), not one the other side already took.
+static void loadN3DSSelectColors(int i, SelectCharacter* tCharacter) {
+	Selector& selector = gCharacterSelectScreenData.mSelectors[i];
+	selector.mColors.clear();
+	selector.mColorPaths.clear();
+	selector.mColorIndex = 0;
+	char defPath[1024], folder[1024], key[20], file[300];
+	getCharacterSelectNamePath(tCharacter->mCharacterName, defPath);
+	if (!isFile(defPath)) return;
+	getPathToFile(folder, defPath);
+	MugenDefScript script;
+	loadMugenDefScript(&script, defPath);
+	for (int n = 1; n <= 12; n++) {
+		sprintf(key, "pal%d", n);
+		getMugenDefStringOrDefault(file, &script, "files", key, "");
+		if (!*file) continue;
+		const std::string path = std::string(folder) + file;
+		if (!isFile(path.c_str())) continue;
+		selector.mColors.push_back(n);
+		selector.mColorPaths.push_back(path);
+	}
+	const int preferred = getMugenDefDefaultPaletteNumber(&script, i + 1);
+	unloadMugenDefScript(&script);
+	for (int k = 0; k < int(selector.mColors.size()); k++) {
+		if (selector.mColors[k] == preferred) selector.mColorIndex = k;
+	}
+	const Selector& other = gCharacterSelectScreenData.mSelectors[i ^ 1];
+	if (other.mIsActive && other.mIsDone && other.mStepCharacter == tCharacter && selector.mColors.size() > 1) {
+		const int taken = other.mColors[other.mColorIndex];
+		if (selector.mColors[selector.mColorIndex] == taken) selector.mColorIndex = (selector.mColorIndex + 1) % int(selector.mColors.size());
+	}
+}
+
+static void playN3DSSelectStepSound(int i) {
+	PlayerHeader* owner = &gCharacterSelectScreenData.mHeader.mPlayers[gCharacterSelectScreenData.mSelectors[i].mOwner];
+	tryPlayMugenSoundAdvanced(&gCharacterSelectScreenData.mSounds, owner->mCursorMoveSound.x, owner->mCursorMoveSound.y, parseGameMidiVolumeToPrism(getGameMidiVolume()));
+}
+
+// A on the character or on a step: the next step, 1 while still choosing;
+// 0 once all is chosen (the selection then finished as before, the color
+// and level kept for the fight).
+static int advanceN3DSSelectStepAndReturnIfChoosing(int i, SelectCharacter* tCell) {
+	if (!isN3DSSelectStepsUsed()) return 0;
+	Selector& selector = gCharacterSelectScreenData.mSelectors[i];
+	const int isComputer = gCharacterSelectScreenData.mIsComputer[i];
+	if (selector.mStep == SELECT_STEP_CHARACTER) {
+		selector.mStepCharacter = tCell->mType == SELECT_CHARACTER_TYPE_CHARACTER ? tCell : NULL;
+		selector.mColors.clear();
+		selector.mColorPaths.clear();
+		selector.mColorIndex = 0;
+		selector.mLevel = std::max(1, std::min(8, getDifficulty()));
+		if (selector.mStepCharacter) loadN3DSSelectColors(i, selector.mStepCharacter);
+		if (selector.mColors.size() > 1) selector.mStep = SELECT_STEP_COLOR;
+		else if (isComputer) selector.mStep = SELECT_STEP_LEVEL;
+		if (selector.mStep != SELECT_STEP_CHARACTER) {
+			playN3DSSelectStepSound(i);
+			showN3DSSelectStep(i);
+			return 1;
+		}
+	}
+	else if (selector.mStep == SELECT_STEP_COLOR && isComputer) {
+		selector.mStep = SELECT_STEP_LEVEL;
+		playN3DSSelectStepSound(i);
+		showN3DSSelectStep(i);
+		return 1;
+	}
+	const int hasColor = selector.mStepCharacter && selector.mColors.size() > 1;
+	setPlayerSelectedPalette(i, hasColor ? selector.mColors[selector.mColorIndex] : 0);
+	setPlayerSelectedAILevel(i, isComputer ? selector.mLevel : 0);
+	selector.mStep = SELECT_STEP_CHARACTER;
+	hideN3DSSelectStep(i);
+	return 0;
+}
+
+// B on a step: the one before (1), or nothing to go back from (0).
+static int goBackN3DSSelectStepAndReturnIfDone(int i) {
+	Selector& selector = gCharacterSelectScreenData.mSelectors[i];
+	if (selector.mStep == SELECT_STEP_CHARACTER) return 0;
+	if (selector.mStep == SELECT_STEP_LEVEL && selector.mColors.size() > 1) selector.mStep = SELECT_STEP_COLOR;
+	else selector.mStep = SELECT_STEP_CHARACTER;
+	playN3DSSelectStepSound(i);
+	if (selector.mStep == SELECT_STEP_CHARACTER) hideN3DSSelectStep(i);
+	else showN3DSSelectStep(i);
+	return 1;
+}
+
+// Left and right on a step.
+static void updateN3DSSelectStepInput(int i) {
+	Selector& selector = gCharacterSelectScreenData.mSelectors[i];
+	int delta = 0;
+	if (hasPressedRightFlankSingle(selector.mOwner)) delta = 1;
+	else if (hasPressedLeftFlankSingle(selector.mOwner)) delta = -1;
+	if (!delta) return;
+	if (selector.mStep == SELECT_STEP_COLOR) {
+		const int amount = int(selector.mColors.size());
+		selector.mColorIndex = (selector.mColorIndex + delta + amount) % amount;
+		gN3DSStand.mRestFrames[i] = 0;
+	}
+	else selector.mLevel = (selector.mLevel - 1 + delta + 8) % 8 + 1;
+	playN3DSSelectStepSound(i);
+	showN3DSSelectStep(i);
+}
+#endif
+
 static void showSelectCharacterForSelector(int i, SelectCharacter* tCharacter) {
 	PlayerHeader* player = &gCharacterSelectScreenData.mHeader.mPlayers[i];
 
@@ -1847,7 +2066,12 @@ static void updateSingleSelection(int i) {
 	if (!gCharacterSelectScreenData.mSelectors[i].mIsActive) return;
 	if (gCharacterSelectScreenData.mSelectors[i].mIsDone) return;
 
-
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	if (gCharacterSelectScreenData.mSelectors[i].mStep != SELECT_STEP_CHARACTER) {
+		updateN3DSSelectStepInput(i);
+		return;
+	}
+#endif
 	updateSingleSelectionInput(i);
 	updateSingleSelectionRandom(i);
 }
@@ -2059,6 +2283,9 @@ static void checkSetSecondPlayerInactive(int i) {
 static void setCharacterSelectionFinished(int i) {
 	SelectCharacter* character = getCellCharacter(gCharacterSelectScreenData.mSelectors[i].mSelectedCharacter);
 	if (character->mType == SELECT_CHARACTER_TYPE_EMPTY) return;
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	if (advanceN3DSSelectStepAndReturnIfChoosing(i, character)) return;
+#endif
 
 	PlayerHeader* owner = &gCharacterSelectScreenData.mHeader.mPlayers[gCharacterSelectScreenData.mSelectors[i].mOwner];
 	changeMugenAnimation(gCharacterSelectScreenData.mSelectors[i].mSelectorAnimationElement, owner->mDoneCursorAnimation);
@@ -2153,6 +2380,14 @@ static void updateSingleSelectionDeselect(int i) {
 	if (gCharacterSelectScreenData.mSelectScreenType == CHARACTER_SELECT_SCREEN_TYPE_ONE_PLAYER_SELECTS_EVERYTHING && i == 0 && gCharacterSelectScreenData.mSelectors[i].mIsDone) return;
 
 	if (hasPressedBFlankSingle(gCharacterSelectScreenData.mSelectors[i].mOwner)) {
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+		if (gCharacterSelectScreenData.mSelectors[i].mIsActive && !gCharacterSelectScreenData.mSelectors[i].mIsDone && goBackN3DSSelectStepAndReturnIfDone(i)) {
+			if (gCharacterSelectScreenData.mSelectScreenType == CHARACTER_SELECT_SCREEN_TYPE_ONE_PLAYER_SELECTS_EVERYTHING) {
+				gCharacterSelectScreenData.mCanSelectThisFrame = 0;
+			}
+			return;
+		}
+#endif
 		int isSelectorDone = gCharacterSelectScreenData.mSelectors[i].mIsDone && gCharacterSelectScreenData.mSelectScreenType != CHARACTER_SELECT_SCREEN_TYPE_CREDITS;
 		int canGoBackToFirstPlayer = i == 1 && gCharacterSelectScreenData.mSelectScreenType == CHARACTER_SELECT_SCREEN_TYPE_ONE_PLAYER_SELECTS_EVERYTHING && !gCharacterSelectScreenData.mSelectors[i].mIsDone;
 		if (isSelectorDone || canGoBackToFirstPlayer) {
@@ -2232,6 +2467,7 @@ void setCharacterSelectOnePlayer()
 {
 	for (int i = 0; i < 2; i++) {
 		gCharacterSelectScreenData.mControllerUsed[i] = i;
+		gCharacterSelectScreenData.mIsComputer[i] = 0;
 	}
 	gCharacterSelectScreenData.mSelectScreenType = CHARACTER_SELECT_SCREEN_TYPE_ONE_PLAYER_MODE;
 }
@@ -2240,14 +2476,22 @@ void setCharacterSelectOnePlayerSelectAll()
 {
 	for (int i = 0; i < 2; i++) {
 		gCharacterSelectScreenData.mControllerUsed[i] = i;
+		gCharacterSelectScreenData.mIsComputer[i] = 0;
 	}
 	gCharacterSelectScreenData.mSelectScreenType = CHARACTER_SELECT_SCREEN_TYPE_ONE_PLAYER_SELECTS_EVERYTHING;
+}
+
+void setCharacterSelectComputerPlayers(int tIsFirstComputer, int tIsSecondComputer)
+{
+	gCharacterSelectScreenData.mIsComputer[0] = tIsFirstComputer;
+	gCharacterSelectScreenData.mIsComputer[1] = tIsSecondComputer;
 }
 
 void setCharacterSelectTwoPlayers()
 {
 	for (int i = 0; i < 2; i++) {
 		gCharacterSelectScreenData.mControllerUsed[i] = i;
+		gCharacterSelectScreenData.mIsComputer[i] = 0;
 	}
 	gCharacterSelectScreenData.mSelectScreenType = CHARACTER_SELECT_SCREEN_TYPE_TWO_PLAYER_MODE;
 

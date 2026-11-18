@@ -15,6 +15,9 @@ void setCharacterSelectStageInactive();
 void setCharacterSelectOnePlayer();
 void setCharacterSelectOnePlayerSelectAll();
 void setCharacterSelectTwoPlayers();
+// After setCharacterSelectOnePlayer*/TwoPlayers: the sides the computer
+// plays, chosen with a level on the select screen.
+void setCharacterSelectComputerPlayers(int tIsFirstComputer, int tIsSecondComputer);
 void setCharacterSelectNetplay(int isHost);
 void setCharacterSelectCredits();
 void setCharacterSelectStory();

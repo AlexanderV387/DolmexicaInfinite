@@ -108,6 +108,7 @@ static void n3dsAutostartSelectFinishedCB() {
 static void loadN3DSAutostartSelectScreen() {
 	setCharacterSelectScreenModeName("Watch Mode");
 	setCharacterSelectOnePlayerSelectAll();
+	setCharacterSelectComputerPlayers(1, 1);
 	setCharacterSelectStageActive();
 	setCharacterSelectFinishedCB(n3dsAutostartSelectFinishedCB);
 	setNewScreen(getCharacterSelectScreen());

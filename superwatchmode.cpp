@@ -26,6 +26,7 @@ static void characterSelectFinishedCB() {
 static void fightFinishedCB() {
 	setCharacterSelectScreenModeName("Super Watch Mode");
 	setCharacterSelectOnePlayerSelectAll();
+	setCharacterSelectComputerPlayers(1, 1);
 	setCharacterSelectStageActive();
 	setCharacterSelectFinishedCB(characterSelectFinishedCB);
 	setNewScreen(getCharacterSelectScreen());

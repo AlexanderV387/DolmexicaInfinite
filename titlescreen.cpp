@@ -1,4 +1,5 @@
 #include "titlescreen.h"
+#include "playerdefinition.h"
 
 #include <assert.h>
 
@@ -383,6 +384,7 @@ static void updateMenuElementPositions();
 
 static void loadTitleScreen() {
 	setWrapperTitleScreen(getDreamTitleScreen());
+	clearPlayerSelections();   // colors and levels chosen in a mode before
 	
 	instantiateActor(getBoxCursorHandler());
 

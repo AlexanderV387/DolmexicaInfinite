@@ -211,6 +211,16 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 	if (getContinueIntegerSetting("DOLMEXICA_TRAINING", 0)) setGameModeTraining();
 	// DOLMEXICA_WATCH=level: both at the computer's hands, at that AI level
 	// (as MUGEN's -p1.ai and -p2.ai), one round.
+	// DOLMEXICA_SELECTED="palette1,level1,palette2,level2": as chosen on the
+	// select screen (0: none).
+	if (const char* selected = getenv("DOLMEXICA_SELECTED")) {
+		int values[4] = { 0, 0, 0, 0 };
+		sscanf(selected, "%d,%d,%d,%d", &values[0], &values[1], &values[2], &values[3]);
+		for (int i = 0; i < 2; i++) {
+			setPlayerSelectedPalette(i, values[i * 2]);
+			setPlayerSelectedAILevel(i, values[i * 2 + 1]);
+		}
+	}
 	if (const int watchLevel = getContinueIntegerSetting("DOLMEXICA_WATCH", 0)) {
 		setDifficulty(watchLevel);
 		setGameModeWatch();
@@ -448,6 +458,7 @@ TEST_F(ContinueHelperTest, SelectScreen) {
 	const int frames = getContinueIntegerSetting("DOLMEXICA_FRAMES", 300);
 	setCharacterSelectScreenModeName("Watch Mode");
 	setCharacterSelectOnePlayerSelectAll();
+	setCharacterSelectComputerPlayers(1, 1);
 	setCharacterSelectStageActive();
 	setCharacterSelectFinishedCB(selectScreenFinishedCB);
 	initPrismWrapperScreenForDebug(getCharacterSelectScreen());

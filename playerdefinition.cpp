@@ -83,6 +83,10 @@ static struct {
 	List mAllPlayers; // contains DreamPlayer
 	std::set<DreamPlayer*> mAllProjectiles;
 	std::unordered_map<int, DreamPlayer> mHelperStore;
+
+	// Chosen on the select screen (0: none), over what the game mode sets.
+	int mSelectedPalette[2];
+	int mSelectedAILevel[2];
 } gPlayerDefinition;
 
 static std::pair<int, int> getPlayerStableOrderKey(const DreamPlayer* p)
@@ -181,7 +185,10 @@ int getMugenDefDefaultPaletteNumber(MugenDefScript* tScript, int tRequested) {
 	return order[tRequested - 1];
 }
 
-static int parsePlayerPreferredPalette(int tPalette, MugenDefScript* tScript) {
+static int parsePlayerPreferredPalette(int tPalette, MugenDefScript* tScript, int tRootID) {
+	if (tRootID >= 0 && tRootID < 2 && gPlayerDefinition.mSelectedPalette[tRootID]) {
+		return gPlayerDefinition.mSelectedPalette[tRootID];
+	}
 	if (tPalette == -1) {
 		return getPlayerRandomPaletteIndex(tScript);
 	}
@@ -279,7 +286,7 @@ static void loadPlayerFiles(char* tPath, DreamPlayer* tPlayer, MugenDefScript* t
 	logMemoryState();
 
 	char palettePath[1024];
-	const auto preferredPalette = parsePlayerPreferredPalette(tPlayer->mPreferredPalette, tScript);
+	const auto preferredPalette = parsePlayerPreferredPalette(tPlayer->mPreferredPalette, tScript, tPlayer->mRootID);
 	tPlayer->mPaletteNumber = preferredPalette;
 	sprintf(name, "pal%d", preferredPalette);
 	getMugenDefStringOrDefault(file, tScript, "files", name, "");
@@ -2994,6 +3001,29 @@ void setPlayerPreferredPaletteRandom(int i)
 	gPlayerDefinition.mPlayers[i].mPreferredPalette = -1;
 }
 
+// The select screen's choices: a palette by its number (pal1 to pal12 in
+// the character's .def, not through pal.defaults) and the computer's level.
+// The game modes set palettes and levels again after the select screen
+// (watch mode before each fight); these stay over them until cleared.
+void setPlayerSelectedPalette(int i, int tPalette)
+{
+	gPlayerDefinition.mSelectedPalette[i] = tPalette;
+}
+
+void setPlayerSelectedAILevel(int i, int tLevel)
+{
+	gPlayerDefinition.mSelectedAILevel[i] = tLevel;
+	if (tLevel && getRootPlayer(i)->mAILevel) getRootPlayer(i)->mAILevel = tLevel;
+}
+
+void clearPlayerSelections()
+{
+	for (int i = 0; i < 2; i++) {
+		gPlayerDefinition.mSelectedPalette[i] = 0;
+		gPlayerDefinition.mSelectedAILevel[i] = 0;
+	}
+}
+
 DreamPlayer * getRootPlayer(int i)
 {
 	return &gPlayerDefinition.mPlayers[i];
@@ -5172,7 +5202,7 @@ void setPlayerHuman(int i, int tCustomControllerUsed)
 void setPlayerArtificial(int i, int tValue)
 {
 	DreamPlayer* p = getRootPlayer(i);
-	p->mAILevel = tValue;
+	p->mAILevel = gPlayerDefinition.mSelectedAILevel[i] ? gPlayerDefinition.mSelectedAILevel[i] : tValue;
 	setDreamCommandInputControllerUsed(i, -1);   // no controller: the computer's commands only
 }
 

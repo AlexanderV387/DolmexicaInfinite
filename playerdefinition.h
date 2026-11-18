@@ -328,6 +328,9 @@ void setPlayerPreferredPalette(int i, int tPalette);
 // its pal.defaults orders them (CvS Mai: 4,1, her original colors first).
 int getMugenDefDefaultPaletteNumber(prism::MugenDefScript* tScript, int tRequested);
 void setPlayerPreferredPaletteRandom(int i);
+void setPlayerSelectedPalette(int i, int tPalette);
+void setPlayerSelectedAILevel(int i, int tLevel);
+void clearPlayerSelections();
 
 DreamPlayer* getRootPlayer(int i);
 DreamPlayer* getPlayerRoot(DreamPlayer* p);

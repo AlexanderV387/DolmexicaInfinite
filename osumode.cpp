@@ -26,6 +26,7 @@ static void characterSelectFinishedCB() {
 static void fightFinishedCB() {
 	setCharacterSelectScreenModeName("Osu Mode");
 	setCharacterSelectOnePlayerSelectAll();
+	setCharacterSelectComputerPlayers(0, 1);
 	setCharacterSelectStageActive(1);
 	setCharacterSelectFinishedCB(characterSelectFinishedCB);
 	setNewScreen(getCharacterSelectScreen());
