@@ -767,6 +767,25 @@ std::string getDreamStagePicturePath(const char* tStageDefinitionPath)
 	return folder + name;
 }
 
+int loadDreamStagePictureTexture(const char* tStageDefinitionPath, TextureData* oTexture, Vector2DI* oSize)
+{
+	const std::string path = getDreamStagePicturePath(tStageDefinitionPath);
+	FILE* file = path.empty() ? NULL : fopen(path.c_str(), "rb");
+	if (!file) return 0;
+	uint32_t header[3];
+	std::vector<uint8_t> pixels;
+	int isRead = fread(header, sizeof(header), 1, file) == 1 && header[0] == 0x31505453 && header[1] > 0 && header[2] > 0 && header[1] <= 512 && header[2] <= 512;
+	if (isRead) {
+		pixels.resize(size_t(header[1]) * header[2] * 4);
+		isRead = fread(pixels.data(), 1, pixels.size(), file) == pixels.size();
+	}
+	fclose(file);
+	if (!isRead) return 0;
+	*oSize = Vector2DI(int(header[1]), int(header[2]));
+	*oTexture = loadTextureFromARGB32Buffer(makeBuffer(pixels.data(), uint32_t(pixels.size())), oSize->x, oSize->y);
+	return 1;
+}
+
 static void startN3DSStagePicture() {
 	gN3DSStagePicture.mFrames = 0;
 	gN3DSStagePicture.mIsAsked = 0;

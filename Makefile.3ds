@@ -18,7 +18,7 @@ OBJDIR = build_3ds_diag
 PRISM_BIN = bin_3ds_diag
 NAME = dolmexica-diag
 endif
-ALL_OBJS = $(addprefix $(OBJDIR)/,$(OBJS) pausemenu3ds.o fighttrace3ds.o characterautodetect.o specialpanels3ds.o smartai3ds.o smoothtext3ds.o titleinfo3ds.o)
+ALL_OBJS = $(addprefix $(OBJDIR)/,$(OBJS) pausemenu3ds.o fighttrace3ds.o characterautodetect.o specialpanels3ds.o smartai3ds.o watchpanel3ds.o smoothtext3ds.o titleinfo3ds.o)
 
 DEVKITPRO ?= /opt/devkitpro
 PREFIX = $(DEVKITPRO)/devkitARM/bin/arm-none-eabi-

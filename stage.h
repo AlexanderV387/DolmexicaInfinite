@@ -80,6 +80,8 @@ const char* getDreamStageMugenDefinitionPath();
 #define DREAM_STAGE_PICTURE_WIDTH 192
 #define DREAM_STAGE_PICTURE_HEIGHT 144
 std::string getDreamStagePicturePath(const char* tStageDefinitionPath);
+// The picture as a texture (1 if there is one yet), its size in oSize.
+int loadDreamStagePictureTexture(const char* tStageDefinitionPath, TextureData* oTexture, Vector2DI* oSize);
 
 int getDreamStageLeftEdgeMinimumPlayerDistance(int tCoordinateP);
 int getDreamStageRightEdgeMinimumPlayerDistance(int tCoordinateP);

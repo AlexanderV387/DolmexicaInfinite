@@ -52,6 +52,7 @@
 #include "fighttrace3ds.h"
 #endif
 #include "specialpanels3ds.h"
+#include "watchpanel3ds.h"
 #include "titleinfo3ds.h"
 #include "smoothtext3ds.h"
 
@@ -108,6 +109,7 @@ static void loadFightScreen() {
 	// sprites: after New Kyouki's, no texture memory was left for them (the
 	// menu came up without its words).
 	acquireSmoothTextFonts();
+	preloadN3DSWatchPanel();
 #endif
 
 	logMemoryState();
@@ -195,6 +197,7 @@ static void loadFightScreen() {
 #endif
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 	instantiateActor(getSpecialPanels3DS());
+	instantiateActor(getWatchPanel3DS());
 #endif
 	instantiateActor(getPostStateMachinePlayersBlueprint());
 	instantiateActor(getDreamExplodHandler());

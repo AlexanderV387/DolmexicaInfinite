@@ -269,28 +269,16 @@ static void showN3DSVersusStage() {
 	if (!stagePath || !*stagePath) return;
 	const auto sz = getScreenSize();
 
-	const std::string picturePath = getDreamStagePicturePath(stagePath);
-	FILE* file = picturePath.empty() ? NULL : fopen(picturePath.c_str(), "rb");
-	if (file) {
-		uint32_t header[3];
-		std::vector<uint8_t> pixels;
-		int isRead = fread(header, sizeof(header), 1, file) == 1 && header[0] == 0x31505453 && header[1] > 0 && header[2] > 0 && header[1] <= 512 && header[2] <= 512;
-		if (isRead) {
-			pixels.resize(size_t(header[1]) * header[2] * 4);
-			isRead = fread(pixels.data(), 1, pixels.size(), file) == pixels.size();
-		}
-		fclose(file);
-		if (isRead) {
-			const int w = int(header[1]), h = int(header[2]);
-			gN3DSVersusStage.mTexture = loadTextureFromARGB32Buffer(makeBuffer(pixels.data(), uint32_t(pixels.size())), w, h);
-			gN3DSVersusStage.mHasTexture = 1;
-			// The whole screen covered, the picture's middle.
-			const float scale = std::max(float(sz.x) / w, float(sz.y) / h);
-			const float drawnW = w * scale, drawnH = h * scale;
-			gN3DSVersusStage.mPicture = playAnimationLoop(Vector3D((sz.x - drawnW) / 2, (sz.y - drawnH) / 2, 70), &gN3DSVersusStage.mTexture, createOneFrameAnimation(), makeRectangle(0, 0, w - 1, h - 1));
-			setAnimationScreen(gN3DSVersusStage.mPicture, 1);
-			setAnimationSize(gN3DSVersusStage.mPicture, Vector3D(drawnW, drawnH, 1), Vector3D(0, 0, 0));
-		}
+	Vector2DI size;
+	if (loadDreamStagePictureTexture(stagePath, &gN3DSVersusStage.mTexture, &size)) {
+		const int w = size.x, h = size.y;
+		gN3DSVersusStage.mHasTexture = 1;
+		// The whole screen covered, the picture's middle.
+		const float scale = std::max(float(sz.x) / w, float(sz.y) / h);
+		const float drawnW = w * scale, drawnH = h * scale;
+		gN3DSVersusStage.mPicture = playAnimationLoop(Vector3D((sz.x - drawnW) / 2, (sz.y - drawnH) / 2, 70), &gN3DSVersusStage.mTexture, createOneFrameAnimation(), makeRectangle(0, 0, w - 1, h - 1));
+		setAnimationScreen(gN3DSVersusStage.mPicture, 1);
+		setAnimationSize(gN3DSVersusStage.mPicture, Vector3D(drawnW, drawnH, 1), Vector3D(0, 0, 0));
 	}
 
 	const std::string name = getN3DSStageShownName(stagePath);
