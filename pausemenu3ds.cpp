@@ -36,7 +36,7 @@ static int isN3DSScreenStretched() { return gIsSimScreenStretched; }
 #endif
 
 #define PAUSE_MENU_Z 95
-#define PAUSE_MENU_SPACING 17
+#define PAUSE_MENU_SPACING 14
 
 typedef enum {
 	PAUSE_MENU_CONTINUE,
@@ -224,7 +224,9 @@ static Vector3D getLineColor(int i) {
 
 static void showLine(int i) {
 	removeSmoothText(&gPauseMenu3DSData.mLines[i]);
-	addSmoothTextCentered(&gPauseMenu3DSData.mLines[i], SMOOTH_TEXT_LARGE, getItemText(gPauseMenu3DSData.mItems[i]), getScreenSize().x / 2.0f, getLineTop(i), PAUSE_MENU_Z + 1, 0, getLineColor(i));
+	// The small letters: the top screen stretches the game's 4:3 wider, the
+	// large ones looked coarse there.
+	addSmoothTextCentered(&gPauseMenu3DSData.mLines[i], SMOOTH_TEXT_SMALL, getItemText(gPauseMenu3DSData.mItems[i]), getScreenSize().x / 2.0f, getLineTop(i), PAUSE_MENU_Z + 1, 0, getLineColor(i));
 }
 
 static void updateItemColors() {
@@ -264,7 +266,7 @@ static void showItems(int tIsSettings, int tSelected) {
 		gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_BACK);
 	}
 	gPauseMenu3DSData.mSelected = std::min(tSelected, int(gPauseMenu3DSData.mItems.size()) - 1);
-	addSmoothTextCentered(&gPauseMenu3DSData.mHeader, SMOOTH_TEXT_SMALL, tIsSettings ? "AJUSTES" : "PAUSA", getScreenSize().x / 2.0f, getLineTop(0) - 16, PAUSE_MENU_Z + 1, 0, Vector3D(0.6, 0.8, 1));
+	addSmoothTextCentered(&gPauseMenu3DSData.mHeader, SMOOTH_TEXT_SMALL, tIsSettings ? "AJUSTES" : "PAUSA", getScreenSize().x / 2.0f, getLineTop(0) - 18, PAUSE_MENU_Z + 1, 0, Vector3D(0.6, 0.8, 1));
 	gPauseMenu3DSData.mLines.resize(gPauseMenu3DSData.mItems.size());
 	for (size_t i = 0; i < gPauseMenu3DSData.mItems.size(); i++) showLine(int(i));
 }
