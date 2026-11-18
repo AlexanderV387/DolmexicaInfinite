@@ -819,6 +819,11 @@ ActorBlueprint getDreamStageBP() {
 	return makeActorBlueprint(loadStage, unloadStage, updateStage);
 }
 
+const char* getDreamStageMugenDefinitionPath()
+{
+	return gStageData.mDefinitionPath;
+}
+
 void setDreamStageMugenDefinition(const char * tPath, const char* tCustomMusicPath)
 {
 	std::string sanitizedPath = tPath ? tPath : "";

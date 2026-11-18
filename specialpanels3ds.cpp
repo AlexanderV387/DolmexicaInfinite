@@ -22,7 +22,7 @@
 #include "mugencommandhandler.h"
 #include "mugencommandreader.h"
 #include "gamelogic.h"
-#include "panelfont.h"
+#include "smoothtext3ds.h"
 
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 
@@ -45,17 +45,10 @@ typedef struct {
 
 typedef struct {
 	AnimationHandlerElement* mBackground;
-	std::vector<AnimationHandlerElement*> mElements;   // its letters and arrows
+	SmoothText mElements;   // its letters and arrows
 	GeoRectangle2D mRectangle;
 	int mFlashFrames;
 } Panel;
-
-typedef struct {
-	TextureData mTexture;
-	const PanelFontGlyph* mGlyphs;
-	int mLineHeight;
-	int mIsLoaded;
-} PanelFont;
 
 enum { ARROW_RIGHT, ARROW_DOWN_RIGHT, ARROW_DOWN, ARROW_DOWN_LEFT, ARROW_LEFT, ARROW_UP_LEFT, ARROW_UP, ARROW_UP_RIGHT, ARROW_AMOUNT };
 
@@ -67,8 +60,7 @@ static struct {
 	std::vector<Panel> mPanels;
 	TextureData mArrowTextures[3][ARROW_AMOUNT];   // large, middle, small
 	int mHasArrowTextures;
-	PanelFont mLargeFont;
-	PanelFont mSmallFont;
+	int mHasFonts;
 	int mWasTouching;
 	int mTestTouch;
 } gSpecialPanels;
@@ -356,51 +348,8 @@ static void findPanelCommands() {
 }
 
 // --- Drawing ---
-// Smooth letters (panelfont.h: DejaVu Sans Bold, anti-aliased, at the
-// sizes drawn) and arrows made at the size drawn, anti-aliased: MUGEN's
-// debug font scaled up read badly.
-
-static void loadPanelFont(PanelFont* oFont, const uint8_t* tAlpha, int tWidth, int tHeight, const PanelFontGlyph* tGlyphs, int tLineHeight) {
-	if (oFont->mIsLoaded) return;
-	std::vector<uint8_t> pixels(size_t(tWidth) * tHeight * 4);
-	for (int i = 0; i < tWidth * tHeight; i++) {
-		pixels[i * 4 + 0] = pixels[i * 4 + 1] = pixels[i * 4 + 2] = 255;
-		pixels[i * 4 + 3] = tAlpha[i];
-	}
-	oFont->mTexture = loadTextureFromARGB32Buffer(makeBuffer(pixels.data(), uint32_t(pixels.size())), tWidth, tHeight);
-	oFont->mGlyphs = tGlyphs;
-	oFont->mLineHeight = tLineHeight;
-	oFont->mIsLoaded = 1;
-}
-
-static void loadPanelFonts() {
-	loadPanelFont(&gSpecialPanels.mLargeFont, gPanelFontLargeAlpha, gPanelFontLargeWidth, gPanelFontLargeHeight, gPanelFontLargeGlyphs, gPanelFontLargeLineHeight);
-	loadPanelFont(&gSpecialPanels.mSmallFont, gPanelFontSmallAlpha, gPanelFontSmallWidth, gPanelFontSmallHeight, gPanelFontSmallGlyphs, gPanelFontSmallLineHeight);
-}
-
-static void unloadPanelFont(PanelFont* tFont) {
-	if (!tFont->mIsLoaded) return;
-	unloadTexture(tFont->mTexture);
-	tFont->mIsLoaded = 0;
-}
-
-// Its letters from (tX, tTop), cut at tRight.
-static float addPanelText(Panel* tPanel, PanelFont& tFont, const std::string& tText, float tX, float tTop, float tRight, const Vector3D& tColor) {
-	float x = tX;
-	for (unsigned char c : tText) {
-		if (c < 32 || c > 126) c = '?';
-		const PanelFontGlyph& glyph = tFont.mGlyphs[c - 32];
-		if (x + glyph.xOffset + glyph.w > tRight) break;
-		if (c != ' ') {
-			auto element = playAnimationLoop(Vector3D(floorf(x + glyph.xOffset), floorf(tTop), PANEL_Z + 1), &tFont.mTexture, createOneFrameAnimation(), makeRectangle(glyph.x, glyph.y, glyph.w - 1, tFont.mLineHeight - 1));
-			setAnimationScreen(element, PANEL_SCREEN);
-			setAnimationColor(element, float(tColor.x), float(tColor.y), float(tColor.z));
-			tPanel->mElements.push_back(element);
-		}
-		x += glyph.advance;
-	}
-	return x;
-}
+// Smooth letters (smoothtext3ds.cpp) and arrows made at the sizes drawn,
+// anti-aliased: MUGEN's debug font scaled up read badly.
 
 static const int PANEL_ARROW_SIZES[3] = { 20, 16, 13 };
 
@@ -445,21 +394,12 @@ static void makeArrowTextures() {
 	gSpecialPanels.mHasArrowTextures = 1;
 }
 
-static float getPanelTextWidth(const PanelFont& tFont, const std::string& tText) {
-	float width = 0;
-	for (unsigned char c : tText) {
-		if (c < 32 || c > 126) c = '?';
-		width += tFont.mGlyphs[c - 32].advance;
-	}
-	return width;
-}
-
 // The arrows and buttons' row width, with arrows of size index tSize.
-static float getPanelRowWidth(const PanelCommand& tCommand, int tSize, const PanelFont& tFont) {
+static float getPanelRowWidth(const PanelCommand& tCommand, int tSize, int tFont) {
 	float width = 0;
 	for (size_t s = 0; s < tCommand.mArrows.size(); s++) {
 		if (tCommand.mArrows[s] >= 0) width += PANEL_ARROW_SIZES[tSize] + (tSize < 2 ? 1 : 0);
-		if (!tCommand.mAfterArrows[s].empty()) width += getPanelTextWidth(tFont, tCommand.mAfterArrows[s]) + 2;
+		if (!tCommand.mAfterArrows[s].empty()) width += getSmoothTextWidth(tFont, tCommand.mAfterArrows[s]) + 2;
 	}
 	return width;
 }
@@ -467,7 +407,7 @@ static float getPanelRowWidth(const PanelCommand& tCommand, int tSize, const Pan
 static void removePanels() {
 	for (auto& panel : gSpecialPanels.mPanels) {
 		if (panel.mBackground) removeHandledAnimation(panel.mBackground);
-		for (auto element : panel.mElements) removeHandledAnimation(element);
+		removeSmoothText(&panel.mElements);
 	}
 	gSpecialPanels.mPanels.clear();
 }
@@ -486,8 +426,9 @@ static void addPanels() {
 	const int rows = isLarge ? 2 : 4;
 	const float w = (sz.x - 3 * PANEL_MARGIN) / 2, h = (sz.y - (rows + 1) * PANEL_MARGIN) / rows;
 	makeArrowTextures();
-	loadPanelFonts();
-	PanelFont& labelFont = isLarge ? gSpecialPanels.mLargeFont : gSpecialPanels.mSmallFont;
+	if (!gSpecialPanels.mHasFonts) acquireSmoothTextFonts();
+	gSpecialPanels.mHasFonts = 1;
+	const int labelFont = isLarge ? SMOOTH_TEXT_LARGE : SMOOTH_TEXT_SMALL;
 	for (size_t i = 0; i < gSpecialPanels.mCommands.size(); i++) {
 		const auto& command = gSpecialPanels.mCommands[i];
 		Panel panel;
@@ -504,12 +445,12 @@ static void addPanels() {
 		// rest (small ones if the large do not fit).
 		const float pad = isLarge ? 6 : 4;
 		const Vector3D labelColor = command.mIsSuper ? Vector3D(1, 0.85, 0.35) : Vector3D(0.75, 0.9, 1);
-		addPanelText(&panel, labelFont, command.mLabel, x + pad, y + pad - 1, x + w - pad, labelColor);
+		addSmoothText(&panel.mElements, labelFont, command.mLabel, x + pad, y + pad - 1, PANEL_Z + 1, PANEL_SCREEN, labelColor, x + w - pad);
 		int sizeIndex = isLarge ? 0 : 2;
-		while (sizeIndex < 2 && getPanelRowWidth(command, sizeIndex, sizeIndex < 2 ? gSpecialPanels.mLargeFont : gSpecialPanels.mSmallFont) > w - 2 * pad) sizeIndex++;
-		PanelFont& buttonFont = sizeIndex < 2 ? gSpecialPanels.mLargeFont : gSpecialPanels.mSmallFont;
+		while (sizeIndex < 2 && getPanelRowWidth(command, sizeIndex, sizeIndex < 2 ? SMOOTH_TEXT_LARGE : SMOOTH_TEXT_SMALL) > w - 2 * pad) sizeIndex++;
+		const int buttonFont = sizeIndex < 2 ? SMOOTH_TEXT_LARGE : SMOOTH_TEXT_SMALL;
 		const int arrowSize = PANEL_ARROW_SIZES[sizeIndex];
-		const float rowTop = y + pad + labelFont.mLineHeight + 1;
+		const float rowTop = y + pad + getSmoothTextLineHeight(labelFont) + 1;
 		const float rowY = floorf(rowTop + (y + h - rowTop - arrowSize) / 2);
 		float cursor = x + pad;
 		for (size_t s = 0; s < command.mArrows.size(); s++) {
@@ -520,7 +461,7 @@ static void addPanels() {
 				cursor += arrowSize + (sizeIndex < 2 ? 1 : 0);
 			}
 			if (!command.mAfterArrows[s].empty()) {
-				cursor = addPanelText(&panel, buttonFont, command.mAfterArrows[s], cursor + 1, rowY + (arrowSize - buttonFont.mLineHeight) / 2.0f, x + w - pad, Vector3D(1, 1, 1)) + 1;
+				cursor = addSmoothText(&panel.mElements, buttonFont, command.mAfterArrows[s], cursor + 1, rowY + (arrowSize - getSmoothTextLineHeight(buttonFont)) / 2.0f, PANEL_Z + 1, PANEL_SCREEN, Vector3D(1, 1, 1), x + w - pad) + 1;
 			}
 		}
 		gSpecialPanels.mPanels.push_back(panel);
@@ -561,8 +502,7 @@ static void loadSpecialPanels(void* /*tData*/) {
 	gSpecialPanels.mPanels.clear();
 	gSpecialPanels.mCommands.clear();
 	gSpecialPanels.mHasArrowTextures = 0;
-	gSpecialPanels.mLargeFont.mIsLoaded = 0;
-	gSpecialPanels.mSmallFont.mIsLoaded = 0;
+	gSpecialPanels.mHasFonts = 0;
 	gSpecialPanels.mWasTouching = 1;   // a touch held from before the fight is not one
 	gSpecialPanels.mTestTouch = -1;
 #ifndef __3DS__
@@ -574,8 +514,8 @@ static void loadSpecialPanels(void* /*tData*/) {
 static void unloadSpecialPanels(void* /*tData*/) {
 	removePanels();
 	unloadArrowTextures();
-	unloadPanelFont(&gSpecialPanels.mLargeFont);
-	unloadPanelFont(&gSpecialPanels.mSmallFont);
+	if (gSpecialPanels.mHasFonts) releaseSmoothTextFonts();
+	gSpecialPanels.mHasFonts = 0;
 	gSpecialPanels.mIsActive = 0;
 }
 

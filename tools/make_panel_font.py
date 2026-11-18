@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-# Makes panelfont.h: DejaVu Sans Bold's printable ASCII as smooth (anti-
-# aliased) alpha atlases at the pixel sizes the 3DS's touch panels draw, so
+# Makes panelfont.h: DejaVu Sans Bold's printable ASCII and Latin-1 (accents,
+# ñ, ¿, ¡) as smooth (anti-aliased) alpha atlases at the pixel sizes the 3DS's touch panels draw, so
 # the text is not scaled up from a pixel font.
 # Usage: make_panel_font.py DejaVuSans-Bold.ttf panelfont.h
 import sys
 from PIL import Image, ImageDraw, ImageFont
 
 SIZES = [(16, "Large"), (11, "Small")]
-FIRST, LAST = 32, 126
+CODES = list(range(32, 127)) + list(range(160, 256))
 
 def make(ttf, pixels):
     font = ImageFont.truetype(ttf, pixels)
@@ -15,7 +15,7 @@ def make(ttf, pixels):
     height = ascent + descent
     glyphs = []
     x, y, row_width = 1, 1, 256
-    for code in range(FIRST, LAST + 1):
+    for code in CODES:
         ch = chr(code)
         advance = int(round(font.getlength(ch)))
         box = font.getbbox(ch)
@@ -35,7 +35,8 @@ def make(ttf, pixels):
 def main():
     ttf, out = sys.argv[1], sys.argv[2]
     lines = ["// Made by tools/make_panel_font.py from DejaVu Sans Bold (Bitstream Vera",
-             "// license: free to use and redistribute). Alpha atlases of ASCII 32-126.",
+             "// license: free to use and redistribute). Alpha atlases of ASCII 32-126,",
+             "// then Latin-1 160-255 (glyph 95 on).",
              "#pragma once", "#include <stdint.h>", "",
              "typedef struct { int16_t x, y, w, xOffset, advance; } PanelFontGlyph;", ""]
     for pixels, name in SIZES:

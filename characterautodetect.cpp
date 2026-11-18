@@ -284,3 +284,14 @@ void addAutoDetectedCharactersToSelectScript(MugenDefScript* tSelectScript)
 		addMugenDefScriptGroupStringStatement(tSelectScript, "characters", entry.c_str());
 	}
 }
+
+// [3DS] What chars/ and stages/ hold (searched once): the characters' folders
+// and the stages' .def paths, for the title's bottom screen.
+void getAutoDetectedContent(std::vector<std::string>* oCharacterFolders, std::vector<std::string>* oStages)
+{
+	if (!gCharacterAutoDetectData.mHasSearched) searchCharacters();
+	if (!gStageAutoDetectData.mHasSearched) searchStages();
+	oCharacterFolders->clear();
+	for (const auto& entry : gCharacterAutoDetectData.mFound) oCharacterFolders->push_back(entry.substr(0, entry.find('/')));
+	*oStages = gStageAutoDetectData.mFound;
+}

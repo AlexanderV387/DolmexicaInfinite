@@ -512,3 +512,16 @@ TEST_F(ContinueHelperTest, VersusScreen) {
 	updatePrismWrapperScreenForDebugWithIterationsAndRender(frames);
 	unloadPrismWrapperScreenForDebug();
 }
+
+/* The title screen, for DOLMEXICA_FRAMES frames (default 120); pictures
+ * with N3DS_SIM_SHOT, the menu moved with PRISM_LINUX_SCRIPT. */
+TEST_F(ContinueHelperTest, TitleScreen) {
+	const int frames = getContinueIntegerSetting("DOLMEXICA_FRAMES", 120);
+	initPrismWrapperScreenForDebug(getDreamTitleScreen());
+	for (int frame = 0; frame < frames; frame++) {
+		updatePrismWrapperScreenForDebugWithIterationsAndRender(1);
+		// Into the next screen when asked (Y: the last fight again).
+		if (switchPrismWrapperScreenForDebugIfNeeded()) printf("frame %d: next screen\n", frame);
+	}
+	unloadPrismWrapperScreenForDebug();
+}

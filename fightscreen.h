@@ -14,3 +14,6 @@ void stopFightScreenToFixedScreen(Screen* tNextScreen);
 void stopFightScreenToFunction(void(*tFunc)());
 
 Screen* getDreamFightScreenForTesting();
+
+// The options' game speed (MUGEN's GameSpeed, -9 to 9) applied to the fight now.
+void applyFightScreenGameSpeed();

@@ -44,6 +44,7 @@ extern "C" {
 #ifdef __3DS__
 #include "pausemenu3ds.h"
 #include "specialpanels3ds.h"
+#include "titleinfo3ds.h"
 #include "gamelogic.h"
 #include "characterselectscreen.h"
 #endif
@@ -192,6 +193,7 @@ int main(int argc, char** argv) {
 #ifdef __3DS__
 	loadN3DSScreenSetting();
 	loadN3DSSpecialPanelSetting();
+	loadN3DSTitleInfoSetting();
 #endif
 	loadMugenConfig();
 	loadGlobalVariables(PrismSaveSlot::AMOUNT);

@@ -45,11 +45,15 @@
 #include "dolmexicastoryscreen.h"
 #include "fightnetplay.h"
 #include "loadprofile.h"
-#ifdef __3DS__
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 #include "pausemenu3ds.h"
+#endif
+#ifdef __3DS__
 #include "fighttrace3ds.h"
 #endif
 #include "specialpanels3ds.h"
+#include "titleinfo3ds.h"
+#include "smoothtext3ds.h"
 
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 namespace prism {
@@ -77,6 +81,15 @@ static void setFightScreenGameSpeed() {
 		float speedFactor = 1 + baseFactor;
 		setWrapperTimeDilatation(speedFactor * getConfigGameSpeedTimeFactor());
 	}
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	// Back to normal too (the 3DS's pause menu changes the speed in a
+	// fight: from fast to normal it stayed fast).
+	else setWrapperTimeDilatation(getConfigGameSpeedTimeFactor());
+#endif
+}
+
+void applyFightScreenGameSpeed() {
+	setFightScreenGameSpeed();
 }
 
 extern int gDebugAssignmentAmount;
@@ -90,6 +103,12 @@ static void exitFightScreenCB(void* tCaller);
 
 static void loadFightScreen() {
 	setWrapperBetweenScreensCB(exitFightScreenCB, NULL);
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	// The pause menu's and touch panels' letters before the characters'
+	// sprites: after New Kyouki's, no texture memory was left for them (the
+	// menu came up without its words).
+	acquireSmoothTextFonts();
+#endif
 
 	logMemoryState();
 	logg("create mem stack");
@@ -156,6 +175,9 @@ static void loadFightScreen() {
 	loadPlayerSprites();
 	logg("[Fightscreen] Set ui faces");
 	setUIFaces();
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	recordN3DSLastFight();
+#endif
 
 	logg("[Fightscreen] Play stage music");
 	playDreamStageMusic();
@@ -165,8 +187,10 @@ static void loadFightScreen() {
 
 	logg("[Fightscreen] Init post-load actors");
 	instantiateActor(getPauseControllerHandler());
-#ifdef __3DS__
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 	setActorUnpausable(instantiateActor(getPauseMenu3DS()));
+#endif
+#ifdef __3DS__
 	instantiateActor(getFightTrace3DS());
 #endif
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
@@ -217,6 +241,9 @@ static void loadFightScreen() {
 }
 
 static void unloadFightScreen() {
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	releaseSmoothTextFonts();
+#endif
 	endCompatSection();
 	unloadPlayers();
 	resetGameMode();

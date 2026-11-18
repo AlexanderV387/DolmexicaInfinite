@@ -11,8 +11,13 @@
 
 using namespace prism;
 
+#include <string>
+#include <vector>
+
 #ifdef DOLMEXICA_CHARACTER_AUTODETECT
 void addAutoDetectedCharactersToSelectScript(MugenDefScript* tSelectScript);
+void getAutoDetectedContent(std::vector<std::string>* oCharacterFolders, std::vector<std::string>* oStages);
 #else
 inline void addAutoDetectedCharactersToSelectScript(MugenDefScript*) {}
+inline void getAutoDetectedContent(std::vector<std::string>* oCharacterFolders, std::vector<std::string>* oStages) { oCharacterFolders->clear(); oStages->clear(); }
 #endif

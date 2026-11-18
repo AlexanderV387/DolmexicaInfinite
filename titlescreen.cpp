@@ -1,5 +1,7 @@
 #include "titlescreen.h"
 #include "playerdefinition.h"
+#include "titleinfo3ds.h"
+#include "mugenstagehandler.h"
 
 #include <assert.h>
 
@@ -48,6 +50,8 @@ typedef struct {
 	Position mOffset;
 
 	int mTextID;
+	const char* mKey;   // [3DS] its motif variable, for the bottom screen's description
+	char mName[64];
 } MenuText;
 
 typedef struct {
@@ -298,6 +302,8 @@ static void addMenuPoint(const char* tVariableName, void(*tCB)()) {
 	int index = vector_size(&gTitleScreenData.mMenus);
 	MenuText* e = (MenuText*)allocMemory(sizeof(MenuText));
 	e->mCB = tCB;
+	e->mKey = tVariableName;
+	snprintf(e->mName, sizeof(e->mName), "%s", text);
 	e->mOffset = Vector3D(gTitleScreenData.mHeader.mItemSpacing.x*index, gTitleScreenData.mHeader.mItemSpacing.y*index, 50);
 	Position position = vecAdd(gTitleScreenData.mHeader.mMenuPosition, e->mOffset);
 	position = transformDreamCoordinatesVectorXY(position, gTitleScreenData.mLocalCoord.x, getScreenSize().x);
@@ -409,6 +415,11 @@ static void loadTitleScreen() {
 	loadMenuHeader();
 	loadDemoHeader();
 	loadScriptBackground(&gTitleScreenData.mScript, &gTitleScreenData.mSprites, &gTitleScreenData.mAnimations, "titlebgdef", "titlebg", gTitleScreenData.mLocalCoord);
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	// The motif's background on the bottom screen too, under its information.
+	setDreamMugenStageHandlerScreen(2);
+	loadN3DSTitleInfo();
+#endif
 
 	gTitleScreenData.mMenus = new_vector();
 	addMenuPoint("menu.itemname.story", storyCB);
@@ -454,6 +465,9 @@ static void loadTitleScreen() {
 }
 
 static void unloadTitleScreen() {
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	unloadN3DSTitleInfo();
+#endif
 	unloadMugenDefScript(&gTitleScreenData.mScript);
 	unloadMugenSpriteFile(&gTitleScreenData.mSprites);
 	unloadMugenAnimationFile(&gTitleScreenData.mAnimations);
@@ -531,7 +545,16 @@ static void updateDemoMode() {
 }
 
 static void updateTitleScreen() {
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	if (startN3DSLastFightIfWanted()) return;
+#endif
 	updateItemSelection();
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	{
+		MenuText* e = (MenuText*)vector_get(&gTitleScreenData.mMenus, gTitleScreenData.mSelected);
+		updateN3DSTitleInfo(e->mKey, e->mName);
+	}
+#endif
 	updateMenuBasePosition();
 	updateMenuElementPositions();
 	updateSelectionBox();

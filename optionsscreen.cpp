@@ -20,6 +20,7 @@
 #include "scriptbackground.h"
 #include "boxcursorhandler.h"
 #include "config.h"
+#include "titleinfo3ds.h"
 
 using namespace std;
 
@@ -41,6 +42,9 @@ typedef enum {
 	GENERAL_SETTING_LOAD_SAVE_OPTIONS,
 	GENERAL_SETTING_LOAD_SAVE_VARS,
 	GENERAL_SETTING_DEFAULT_VALUES,
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	GENERAL_SETTING_BOTTOM_INFO,   // [3DS] the characters and stages' count under the title
+#endif
 	GENERAL_SETTING_RETURN,
 	GENERAL_SETTING_AMOUNT
 } GeneralSettingType;
@@ -311,6 +315,11 @@ static void loadGeneralOptionsScreen() {
 
 	gOptionsScreenData.mGeneral.mSelectableTextID[GENERAL_SETTING_DEFAULT_VALUES] = addMugenTextMugenStyle("Default Values", Vector3D(offsetX, startY + offsetY * 11, 45), Vector3DI(gOptionsScreenData.mTextFontID, 8, 1));
 	gOptionsScreenData.mGeneral.mSettingTextID[GENERAL_SETTING_DEFAULT_VALUES] = addMugenTextMugenStyle("", Vector3D(320 - offsetX, startY + offsetY * 11, 45), Vector3DI(gOptionsScreenData.mTextFontID, 8, -1));
+
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	gOptionsScreenData.mGeneral.mSelectableTextID[GENERAL_SETTING_BOTTOM_INFO] = addMugenTextMugenStyle("Title Bottom Info", Vector3D(offsetX, startY + offsetY * 12, 45), Vector3DI(gOptionsScreenData.mTextFontID, 8, 1));
+	gOptionsScreenData.mGeneral.mSettingTextID[GENERAL_SETTING_BOTTOM_INFO] = addMugenTextMugenStyle(isN3DSTitleContentShown() ? "On" : "Off", Vector3D(320 - offsetX, startY + offsetY * 12, 45), Vector3DI(gOptionsScreenData.mTextFontID, 8, -1));
+#endif
 
 	gOptionsScreenData.mGeneral.mSelectableTextID[GENERAL_SETTING_RETURN] = addMugenTextMugenStyle("Return to Main Menu", Vector3D(offsetX, startY + offsetY * 13, 45), Vector3DI(gOptionsScreenData.mTextFontID, 8, 1));
 	if (!isUsingController()) {
@@ -1164,6 +1173,12 @@ static void changeSelectedGeneralOption(int tDelta) {
 	else if (gOptionsScreenData.mGeneral.mSelected == GENERAL_SETTING_LOAD_SAVE_VARS) {
 		toggleLoadSaveOption(GENERAL_SETTING_LOAD_SAVE_VARS);
 	}
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	else if (gOptionsScreenData.mGeneral.mSelected == GENERAL_SETTING_BOTTOM_INFO) {
+		setN3DSTitleContentShown(!isN3DSTitleContentShown());
+		changeMugenText(gOptionsScreenData.mGeneral.mSettingTextID[GENERAL_SETTING_BOTTOM_INFO], isN3DSTitleContentShown() ? "On" : "Off");
+	}
+#endif
 }
 
 static void updateOptionScreenGeneral() {
