@@ -67,13 +67,69 @@ static std::string toLowerText(const char* tData, size_t tLength) {
 	return s;
 }
 
-// "AILevel" (MUGEN 1.0's) or a helper reading the buttons (keyctrl = 1:
-// Winane's AI helpers, 2002 Rugal's), out of comments.
-static int doesFileShowOwnAI(const std::string& tPath) {
+// Commands no one can enter (three steps or more within 2 frames): those
+// that tell the computer (MUGEN's AI.Cheat sets them true), as 2002 Rugal's
+// "cpu", Galactus's "AI1"... "AI40", Leilei's "cpu1". Lowercase.
+static std::vector<std::string> getImpossibleCommandNames(DreamPlayer* p) {
+	std::vector<std::string> names;
+	for (auto& entry : p->mHeader->mFiles.mCommands.mCommands) {
+		for (int i = 0; i < vector_size(&entry.second.mInputs); i++) {
+			auto input = (DreamMugenCommandInput*)vector_get(&entry.second.mInputs, i);
+			if (vector_size(&input->mInputSteps) >= 3 && input->mTime <= 2) {
+				names.push_back(toLowerText(entry.first.data(), entry.first.size()));
+				break;
+			}
+		}
+	}
+	return names;
+}
+
+// A line asking for one of those commands (command = "cpu").
+static int doesLineAskForCommand(const std::string& tLine, const std::vector<std::string>& tNames) {
+	size_t at = 0;
+	while ((at = tLine.find("command", at)) != std::string::npos) {
+		at += 7;
+		size_t q = at;
+		while (q < tLine.size() && isspace((unsigned char)tLine[q])) q++;
+		if (q >= tLine.size() || tLine[q] != '=') continue;
+		q = tLine.find('"', q);
+		if (q == std::string::npos) return 0;
+		const size_t end = tLine.find('"', q + 1);
+		if (end == std::string::npos) return 0;
+		if (std::find(tNames.begin(), tNames.end(), tLine.substr(q + 1, end - q - 1)) != tNames.end()) return 1;
+	}
+	return 0;
+}
+
+static int isParentCommandInLine(const std::string& tLine) {
+	for (const char* who : { "parent", "root" }) {
+		size_t at = 0;
+		while ((at = tLine.find(who, at)) != std::string::npos) {
+			at += strlen(who);
+			size_t q = at;
+			while (q < tLine.size() && isspace((unsigned char)tLine[q])) q++;
+			if (q >= tLine.size() || tLine[q] != ',') continue;
+			q++;
+			while (q < tLine.size() && isspace((unsigned char)tLine[q])) q++;
+			if (tLine.compare(q, 7, "command") == 0) return 1;
+		}
+	}
+	return 0;
+}
+
+// "AILevel" (MUGEN 1.0's), a state asking for a command no one can enter,
+// or a helper telling its player it is the computer: a ParentVarSet (or
+// RootVarSet) on its player's commands against its own, which only the
+// computer's differ in (2002 Rugal's helper 5999, Winane's 9741/9742).
+// Out of comments. Neither the commands only defined (CvS Morrigan's three
+// "impossible", never asked for) nor a helper reading its player's buttons
+// for something else (her groove choice's arrows) are an AI.
+static int doesFileShowOwnAI(const std::string& tPath, const std::vector<std::string>& tImpossibleNames) {
 	if (!isFile(tPath.c_str())) return 0;
 	Buffer buffer = fileToBuffer(tPath.c_str());
 	const std::string text = toLowerText((const char*)buffer.mData, buffer.mLength);
 	freeBuffer(buffer);
+	int isParentVariableBlock = 0, hasParentCommand = 0;
 	size_t lineStart = 0;
 	while (lineStart < text.size()) {
 		size_t lineEnd = text.find('\n', lineStart);
@@ -82,34 +138,23 @@ static int doesFileShowOwnAI(const std::string& tPath) {
 		lineStart = lineEnd + 1;
 		const size_t comment = line.find(';');
 		if (comment != std::string::npos) line.resize(comment);
+		size_t first = 0;
+		while (first < line.size() && isspace((unsigned char)line[first])) first++;
+		if (first < line.size() && line[first] == '[') {
+			isParentVariableBlock = hasParentCommand = 0;
+			continue;
+		}
 		if (line.find("ailevel") != std::string::npos) return 1;
-		const size_t key = line.find("keyctrl");
-		if (key != std::string::npos) {
-			size_t q = line.find('=', key);
-			if (q == std::string::npos) continue;
-			q++;
-			while (q < line.size() && isspace((unsigned char)line[q])) q++;
-			if (q < line.size() && line[q] == '1') return 1;
-		}
-	}
-	return 0;
-}
-
-// Commands no one can enter (three steps or more within 2 frames): those
-// that tell the computer (MUGEN's AI.Cheat sets them true), as 2002 Rugal's
-// "cpu", Galactus's "AI1"... "AI40", Leilei's "cpu1".
-static int hasImpossibleCommand(DreamPlayer* p) {
-	for (auto& entry : p->mHeader->mFiles.mCommands.mCommands) {
-		for (int i = 0; i < vector_size(&entry.second.mInputs); i++) {
-			auto input = (DreamMugenCommandInput*)vector_get(&entry.second.mInputs, i);
-			if (vector_size(&input->mInputSteps) >= 3 && input->mTime <= 2) return 1;
-		}
+		if (!tImpossibleNames.empty() && doesLineAskForCommand(line, tImpossibleNames)) return 1;
+		if (line.compare(first, 4, "type") == 0 && (line.find("parentvar") != std::string::npos || line.find("rootvar") != std::string::npos)) isParentVariableBlock = 1;
+		if (isParentCommandInLine(line)) hasParentCommand = 1;
+		if (isParentVariableBlock && hasParentCommand) return 1;
 	}
 	return 0;
 }
 
 static int hasOwnAI(DreamPlayer* p) {
-	if (hasImpossibleCommand(p)) return 1;
+	const auto impossibleNames = getImpossibleCommandNames(p);
 	char defPath[1024], folder[1024], file[300];
 	getPlayerDefinitionPath(defPath, p->mRootID);
 	if (!isFile(defPath)) return 1;
@@ -124,7 +169,7 @@ static int hasOwnAI(DreamPlayer* p) {
 		getMugenDefStringOrDefault(file, &script, "files", key.c_str(), "");
 		if (!*file || std::find(read.begin(), read.end(), std::string(file)) != read.end()) continue;
 		read.push_back(file);
-		if (doesFileShowOwnAI(std::string(folder) + file)) {
+		if (doesFileShowOwnAI(std::string(folder) + file, impossibleNames)) {
 			isOwn = 1;
 			break;
 		}

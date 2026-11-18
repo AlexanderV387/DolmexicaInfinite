@@ -1,8 +1,8 @@
 #pragma once
 
 // [3DS] "IA MEJORADA": the computer's play for a character with no AI of
-// its own (no AILevel, no humanly impossible commands, no AI helper with
-// keyctrl). MUGEN's computer for those presses buttons at random, its moves
+// its own (no AILevel, no humanly impossible command asked for, no helper
+// telling its player from its commands it is the computer). MUGEN's computer for those presses buttons at random, its moves
 // whatever the buttons make; this one plays: it walks in, attacks when near,
 // guards the other's attacks, stops jumps with its uppercut-like specials,
 // throws its forward specials from afar, follows a hit with a special and
