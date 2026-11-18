@@ -19,6 +19,7 @@
 #include "stage.h"
 #include "gamelogic.h"
 #include "versusscreen.h"
+#include "specialpanels3ds.h"
 #include "fightscreen.h"
 #include "titlescreen.h"
 #include "characterselectscreen.h"
@@ -252,6 +253,21 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 				DreamPlayer* second = getRootPlayer(1);
 				printf("frame %d: second player from state %d (ctrl %d, facing %s) into %d\n", frame, getPlayerState(second), getPlayerControl(second), getPlayerIsFacingRight(second) ? "right" : "left", atoi(strchr(change, ':') + 1));
 				changePlayerState(second, atoi(strchr(change, ':') + 1));
+			}
+		}
+		// DOLMEXICA_TOUCH="frame:panel,frame:panel": the special panels
+		// touched at those frames; their commands written at the first.
+		if (const char* touch = getenv("DOLMEXICA_TOUCH")) {
+			for (const char* q = touch; q && *q; ) {
+				int touchFrame = -1, panel = -1;
+				if (sscanf(q, "%d:%d", &touchFrame, &panel) == 2 && touchFrame == frame) {
+					printf("frame %d: panel %d touched;", frame, panel);
+					for (int k = 0; k < getN3DSSpecialPanelCommandAmount(); k++) printf(" [%d] %s", k, getN3DSSpecialPanelCommandName(k));
+					printf("\n");
+					touchN3DSSpecialPanelForTesting(panel);
+				}
+				q = strchr(q, ',');
+				if (q) q++;
 			}
 		}
 		if (frame == behindAt) {

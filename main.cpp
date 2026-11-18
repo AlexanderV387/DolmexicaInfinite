@@ -43,6 +43,7 @@ extern "C" {
 
 #ifdef __3DS__
 #include "pausemenu3ds.h"
+#include "specialpanels3ds.h"
 #include "gamelogic.h"
 #include "characterselectscreen.h"
 #endif
@@ -90,8 +91,15 @@ static void startN3DSAutostartFight() {
 	}
 	char noMusic[2] = "";
 	setDreamStageMugenDefinition((getDolmexicaAssetFolder() + gN3DSAutostart.mStage).c_str(), noMusic);
-	setDifficulty(gN3DSAutostart.mLevel);
-	setGameModeWatch();
+	// Level 0: the first one at the controls (free play, the computer at 4).
+	if (gN3DSAutostart.mLevel <= 0) {
+		setDifficulty(4);
+		setGameModeFreePlay();
+	}
+	else {
+		setDifficulty(gN3DSAutostart.mLevel);
+		setGameModeWatch();
+	}
 	startFightScreen(n3dsAutostartFightFinishedCB, n3dsAutostartFightFinishedCB);
 }
 
@@ -183,6 +191,7 @@ int main(int argc, char** argv) {
 	initPrismWrapperWithMugenFlags();
 #ifdef __3DS__
 	loadN3DSScreenSetting();
+	loadN3DSSpecialPanelSetting();
 #endif
 	loadMugenConfig();
 	loadGlobalVariables(PrismSaveSlot::AMOUNT);

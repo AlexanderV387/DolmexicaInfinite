@@ -22,6 +22,8 @@
 #include "survivalmode.h"
 #include "watchmode.h"
 #include "superwatchmode.h"
+#include "specialpanels3ds.h"
+#include "playerdefinition.h"
 
 #define PAUSE_MENU_Z 95
 
@@ -29,6 +31,7 @@ typedef enum {
 	PAUSE_MENU_CONTINUE,
 	PAUSE_MENU_SCREEN,
 	PAUSE_MENU_WIDE_STAGES,
+	PAUSE_MENU_SPECIAL_PANELS,
 	PAUSE_MENU_CHARACTER_SELECT,
 	PAUSE_MENU_TITLE_SCREEN,
 } PauseMenuItem;
@@ -100,6 +103,7 @@ static const char* getItemText(PauseMenuItem tItem) {
 	case PAUSE_MENU_CHARACTER_SELECT: return "ELEGIR PERSONAJES";
 	case PAUSE_MENU_SCREEN: return isN3DSScreenStretched() ? "PANTALLA: COMPLETA" : "PANTALLA: NORMAL 4:3";
 	case PAUSE_MENU_WIDE_STAGES: return isDreamWideStageLetterboxed() ? "ESCENARIOS 16:9: CON FRANJAS" : "ESCENARIOS 16:9: RECORTADOS";
+	case PAUSE_MENU_SPECIAL_PANELS: return getN3DSSpecialPanelAmount() == 0 ? "PANELES TACTILES: NO" : getN3DSSpecialPanelAmount() == 8 ? "PANELES TACTILES: 8" : "PANELES TACTILES: 4";
 	default: return "MENU PRINCIPAL";
 	}
 }
@@ -127,6 +131,7 @@ static void openPauseMenu() {
 	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_CONTINUE);
 	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_SCREEN);
 	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_WIDE_STAGES);
+	if (isPlayerHuman(getRootPlayer(0))) gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_SPECIAL_PANELS);
 	if (getCharacterSelectStart()) gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_CHARACTER_SELECT);
 	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_TITLE_SCREEN);
 
@@ -171,6 +176,14 @@ static void selectItem() {
 	if (item == PAUSE_MENU_WIDE_STAGES) {
 		setDreamWideStageLetterboxed(!isDreamWideStageLetterboxed());
 		saveN3DSWideStagesSetting();
+		changeMugenText(gPauseMenu3DSData.mTextIDs[gPauseMenu3DSData.mSelected], getItemText(item));
+		return;
+	}
+
+	// 4, 8, none: the panels change at once (specialpanels3ds.cpp).
+	if (item == PAUSE_MENU_SPECIAL_PANELS) {
+		const int amount = getN3DSSpecialPanelAmount();
+		setN3DSSpecialPanelAmount(amount == 4 ? 8 : amount == 8 ? 0 : 4);
 		changeMugenText(gPauseMenu3DSData.mTextIDs[gPauseMenu3DSData.mSelected], getItemText(item));
 		return;
 	}

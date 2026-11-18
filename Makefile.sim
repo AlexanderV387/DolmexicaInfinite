@@ -17,7 +17,7 @@ TEST_OBJS = test/main.o test/commontestfunctionality.o test/censuscommon.o test/
 
 OBJDIR = build_sim
 # The characters found in chars/ (as the 3DS finds them), for the select screen.
-ALL_OBJS = $(addprefix $(OBJDIR)/,$(GAME_OBJS) characterautodetect.o $(TEST_OBJS))
+ALL_OBJS = $(addprefix $(OBJDIR)/,$(GAME_OBJS) characterautodetect.o specialpanels3ds.o $(TEST_OBJS))
 
 CXX ?= g++
 CXXFLAGS = -std=c++17 -fpermissive -O1 -g -fsanitize=address -fno-omit-frame-pointer -Wno-write-strings \

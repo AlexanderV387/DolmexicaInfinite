@@ -49,6 +49,7 @@
 #include "pausemenu3ds.h"
 #include "fighttrace3ds.h"
 #endif
+#include "specialpanels3ds.h"
 
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 namespace prism {
@@ -167,6 +168,9 @@ static void loadFightScreen() {
 #ifdef __3DS__
 	setActorUnpausable(instantiateActor(getPauseMenu3DS()));
 	instantiateActor(getFightTrace3DS());
+#endif
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	instantiateActor(getSpecialPanels3DS());
 #endif
 	instantiateActor(getPostStateMachinePlayersBlueprint());
 	instantiateActor(getDreamExplodHandler());
