@@ -29,6 +29,8 @@
 
 typedef enum {
 	PAUSE_MENU_CONTINUE,
+	PAUSE_MENU_RESTART_ROUND,
+	PAUSE_MENU_RESTART_FIGHT,
 	PAUSE_MENU_SCREEN,
 	PAUSE_MENU_WIDE_STAGES,
 	PAUSE_MENU_SPECIAL_PANELS,
@@ -100,6 +102,8 @@ static void (*getCharacterSelectStart())() {
 static const char* getItemText(PauseMenuItem tItem) {
 	switch (tItem) {
 	case PAUSE_MENU_CONTINUE: return "CONTINUAR";
+	case PAUSE_MENU_RESTART_ROUND: return "REINICIAR ROUND";
+	case PAUSE_MENU_RESTART_FIGHT: return "REINICIAR COMBATE";
 	case PAUSE_MENU_CHARACTER_SELECT: return "ELEGIR PERSONAJES";
 	case PAUSE_MENU_SCREEN: return isN3DSScreenStretched() ? "PANTALLA: COMPLETA" : "PANTALLA: NORMAL 4:3";
 	case PAUSE_MENU_WIDE_STAGES: return isDreamWideStageLetterboxed() ? "ESCENARIOS 16:9: CON FRANJAS" : "ESCENARIOS 16:9: RECORTADOS";
@@ -129,6 +133,8 @@ static void openPauseMenu() {
 
 	gPauseMenu3DSData.mItems.clear();
 	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_CONTINUE);
+	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_RESTART_ROUND);
+	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_RESTART_FIGHT);
 	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_SCREEN);
 	gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_WIDE_STAGES);
 	if (isPlayerHuman(getRootPlayer(0))) gPauseMenu3DSData.mItems.push_back(PAUSE_MENU_SPECIAL_PANELS);
@@ -162,6 +168,14 @@ static void selectItem() {
 	const auto item = gPauseMenu3DSData.mItems[gPauseMenu3DSData.mSelected];
 	if (item == PAUSE_MENU_CONTINUE) {
 		closePauseMenu();
+		return;
+	}
+	// The round again (as MUGEN's F4: life and position as at its start),
+	// or the fight from its first round (gamelogic.cpp's restartFight).
+	if (item == PAUSE_MENU_RESTART_ROUND || item == PAUSE_MENU_RESTART_FIGHT) {
+		closePauseMenu();
+		if (item == PAUSE_MENU_RESTART_ROUND) resetRound();
+		else restartFight();
 		return;
 	}
 	// Changed at once (the stage's edges as seen fit from the next fight).

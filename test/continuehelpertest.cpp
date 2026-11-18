@@ -270,6 +270,15 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 				if (q) q++;
 			}
 		}
+		// DOLMEXICA_RESTART="frame:round" or "frame:fight": the pause menu's
+		// restarts at that frame.
+		if (const char* restart = getenv("DOLMEXICA_RESTART")) {
+			if (frame == atoi(restart) && strchr(restart, ':')) {
+				printf("frame %d: restart %s\n", frame, strchr(restart, ':') + 1);
+				if (!strcmp(strchr(restart, ':') + 1, "fight")) restartFight();
+				else resetRound();
+			}
+		}
 		if (frame == behindAt) {
 			DreamPlayer* first = getRootPlayer(0);
 			DreamPlayer* second = getRootPlayer(1);

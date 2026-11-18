@@ -742,6 +742,12 @@ void resetRound() {
 	addFadeOut(30,  resetRoundData, NULL);
 }
 
+// [3DS pause menu] The fight again from its first round, with the same
+// characters and stage and nothing read again (as a continue does).
+void restartFight() {
+	addFadeOut(30, resetGameLogic, NULL);
+}
+
 void reloadFight()
 {
 	reloadFightScreen();

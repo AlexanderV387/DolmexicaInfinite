@@ -22,6 +22,7 @@
 #include "mugencommandhandler.h"
 #include "mugencommandreader.h"
 #include "gamelogic.h"
+#include "panelfont.h"
 
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 
@@ -44,12 +45,17 @@ typedef struct {
 
 typedef struct {
 	AnimationHandlerElement* mBackground;
-	int mLabelTextID;
-	std::vector<AnimationHandlerElement*> mArrowElements;
-	int mButtonsTextID;
+	std::vector<AnimationHandlerElement*> mElements;   // its letters and arrows
 	GeoRectangle2D mRectangle;
 	int mFlashFrames;
 } Panel;
+
+typedef struct {
+	TextureData mTexture;
+	const PanelFontGlyph* mGlyphs;
+	int mLineHeight;
+	int mIsLoaded;
+} PanelFont;
 
 enum { ARROW_RIGHT, ARROW_DOWN_RIGHT, ARROW_DOWN, ARROW_DOWN_LEFT, ARROW_LEFT, ARROW_UP_LEFT, ARROW_UP, ARROW_UP_RIGHT, ARROW_AMOUNT };
 
@@ -59,8 +65,10 @@ static struct {
 	int mShownAmount;
 	std::vector<PanelCommand> mCommands;
 	std::vector<Panel> mPanels;
-	TextureData mArrowTextures[ARROW_AMOUNT];
+	TextureData mArrowTextures[3][ARROW_AMOUNT];   // large, middle, small
 	int mHasArrowTextures;
+	PanelFont mLargeFont;
+	PanelFont mSmallFont;
 	int mWasTouching;
 	int mTestTouch;
 } gSpecialPanels;
@@ -348,38 +356,118 @@ static void findPanelCommands() {
 }
 
 // --- Drawing ---
+// Smooth letters (panelfont.h: DejaVu Sans Bold, anti-aliased, at the
+// sizes drawn) and arrows made at the size drawn, anti-aliased: MUGEN's
+// debug font scaled up read badly.
 
-// A white arrow pointing its way, 16x16, made once.
+static void loadPanelFont(PanelFont* oFont, const uint8_t* tAlpha, int tWidth, int tHeight, const PanelFontGlyph* tGlyphs, int tLineHeight) {
+	if (oFont->mIsLoaded) return;
+	std::vector<uint8_t> pixels(size_t(tWidth) * tHeight * 4);
+	for (int i = 0; i < tWidth * tHeight; i++) {
+		pixels[i * 4 + 0] = pixels[i * 4 + 1] = pixels[i * 4 + 2] = 255;
+		pixels[i * 4 + 3] = tAlpha[i];
+	}
+	oFont->mTexture = loadTextureFromARGB32Buffer(makeBuffer(pixels.data(), uint32_t(pixels.size())), tWidth, tHeight);
+	oFont->mGlyphs = tGlyphs;
+	oFont->mLineHeight = tLineHeight;
+	oFont->mIsLoaded = 1;
+}
+
+static void loadPanelFonts() {
+	loadPanelFont(&gSpecialPanels.mLargeFont, gPanelFontLargeAlpha, gPanelFontLargeWidth, gPanelFontLargeHeight, gPanelFontLargeGlyphs, gPanelFontLargeLineHeight);
+	loadPanelFont(&gSpecialPanels.mSmallFont, gPanelFontSmallAlpha, gPanelFontSmallWidth, gPanelFontSmallHeight, gPanelFontSmallGlyphs, gPanelFontSmallLineHeight);
+}
+
+static void unloadPanelFont(PanelFont* tFont) {
+	if (!tFont->mIsLoaded) return;
+	unloadTexture(tFont->mTexture);
+	tFont->mIsLoaded = 0;
+}
+
+// Its letters from (tX, tTop), cut at tRight.
+static float addPanelText(Panel* tPanel, PanelFont& tFont, const std::string& tText, float tX, float tTop, float tRight, const Vector3D& tColor) {
+	float x = tX;
+	for (unsigned char c : tText) {
+		if (c < 32 || c > 126) c = '?';
+		const PanelFontGlyph& glyph = tFont.mGlyphs[c - 32];
+		if (x + glyph.xOffset + glyph.w > tRight) break;
+		if (c != ' ') {
+			auto element = playAnimationLoop(Vector3D(floorf(x + glyph.xOffset), floorf(tTop), PANEL_Z + 1), &tFont.mTexture, createOneFrameAnimation(), makeRectangle(glyph.x, glyph.y, glyph.w - 1, tFont.mLineHeight - 1));
+			setAnimationScreen(element, PANEL_SCREEN);
+			setAnimationColor(element, float(tColor.x), float(tColor.y), float(tColor.z));
+			tPanel->mElements.push_back(element);
+		}
+		x += glyph.advance;
+	}
+	return x;
+}
+
+static const int PANEL_ARROW_SIZES[3] = { 20, 16, 13 };
+
+static void unloadArrowTextures() {
+	if (!gSpecialPanels.mHasArrowTextures) return;
+	for (int k = 0; k < 3; k++) for (int a = 0; a < ARROW_AMOUNT; a++) unloadTexture(gSpecialPanels.mArrowTextures[k][a]);
+	gSpecialPanels.mHasArrowTextures = 0;
+}
+
+// White arrows pointing their ways at the sizes drawn, each pixel's
+// coverage from 4x4 samples (smooth edges).
 static void makeArrowTextures() {
 	if (gSpecialPanels.mHasArrowTextures) return;
-	const int size = 16;
-	std::vector<uint8_t> pixels(size * size * 4);
-	for (int a = 0; a < ARROW_AMOUNT; a++) {
-		const float angle = a * float(M_PI) / 4;   // clockwise from right, y down
-		const float cs = cosf(angle), sn = sinf(angle);
-		for (int y = 0; y < size; y++) {
-			for (int x = 0; x < size; x++) {
-				// Into the arrow's frame: u along it, v across.
-				const float px = x + 0.5f - size / 2.0f, py = y + 0.5f - size / 2.0f;
-				const float u = px * cs + py * sn, v = -px * sn + py * cs;
-				const int isShaft = u >= -7 && u <= 1 && fabsf(v) <= 1.6f;
-				const int isHead = u >= 0 && u <= 7 && fabsf(v) <= (7 - u) * 0.9f;
-				uint8_t* q = &pixels[(y * size + x) * 4];
-				q[0] = q[1] = q[2] = 255;
-				q[3] = (isShaft || isHead) ? 255 : 0;
+	for (int k = 0; k < 3; k++) {
+		const int size = PANEL_ARROW_SIZES[k];
+		const float half = size / 2.0f, reach = size * 0.45f, shaft = size * 0.11f;
+		std::vector<uint8_t> pixels(size_t(size) * size * 4);
+		for (int a = 0; a < ARROW_AMOUNT; a++) {
+			const float angle = a * float(M_PI) / 4;   // clockwise from right, y down
+			const float cs = cosf(angle), sn = sinf(angle);
+			for (int y = 0; y < size; y++) {
+				for (int x = 0; x < size; x++) {
+					int inside = 0;
+					for (int sy = 0; sy < 4; sy++) {
+						for (int sx = 0; sx < 4; sx++) {
+							// Into the arrow's frame: u along it, v across.
+							const float px = x + (sx + 0.5f) / 4 - half, py = y + (sy + 0.5f) / 4 - half;
+							const float u = px * cs + py * sn, v = -px * sn + py * cs;
+							const int isShaft = u >= -reach && u <= 0.1f * size && fabsf(v) <= shaft;
+							const int isHead = u >= -0.05f * size && u <= reach && fabsf(v) <= (reach - u) * 0.95f;
+							inside += isShaft || isHead;
+						}
+					}
+					uint8_t* q = &pixels[(size_t(y) * size + x) * 4];
+					q[0] = q[1] = q[2] = 255;
+					q[3] = uint8_t(inside * 255 / 16);
+				}
 			}
+			gSpecialPanels.mArrowTextures[k][a] = loadTextureFromARGB32Buffer(makeBuffer(pixels.data(), uint32_t(pixels.size())), size, size);
 		}
-		gSpecialPanels.mArrowTextures[a] = loadTextureFromARGB32Buffer(makeBuffer(pixels.data(), uint32_t(pixels.size())), size, size);
 	}
 	gSpecialPanels.mHasArrowTextures = 1;
+}
+
+static float getPanelTextWidth(const PanelFont& tFont, const std::string& tText) {
+	float width = 0;
+	for (unsigned char c : tText) {
+		if (c < 32 || c > 126) c = '?';
+		width += tFont.mGlyphs[c - 32].advance;
+	}
+	return width;
+}
+
+// The arrows and buttons' row width, with arrows of size index tSize.
+static float getPanelRowWidth(const PanelCommand& tCommand, int tSize, const PanelFont& tFont) {
+	float width = 0;
+	for (size_t s = 0; s < tCommand.mArrows.size(); s++) {
+		if (tCommand.mArrows[s] >= 0) width += PANEL_ARROW_SIZES[tSize] + (tSize < 2 ? 1 : 0);
+		if (!tCommand.mAfterArrows[s].empty()) width += getPanelTextWidth(tFont, tCommand.mAfterArrows[s]) + 2;
+	}
+	return width;
 }
 
 static void removePanels() {
 	for (auto& panel : gSpecialPanels.mPanels) {
 		if (panel.mBackground) removeHandledAnimation(panel.mBackground);
-		for (auto element : panel.mArrowElements) removeHandledAnimation(element);
-		removeMugenText(panel.mLabelTextID);
-		removeMugenText(panel.mButtonsTextID);
+		for (auto element : panel.mElements) removeHandledAnimation(element);
 	}
 	gSpecialPanels.mPanels.clear();
 }
@@ -393,12 +481,13 @@ static void setPanelColor(Panel& tPanel, const PanelCommand& tCommand) {
 static void addPanels() {
 	removePanels();
 	if (gSpecialPanels.mCommands.empty()) return;
-	makeArrowTextures();
 	const auto sz = getScreenSize();
-	const int rows = gSpecialPanels.mShownAmount > 4 ? 4 : 2;
+	const int isLarge = gSpecialPanels.mShownAmount <= 4;
+	const int rows = isLarge ? 2 : 4;
 	const float w = (sz.x - 3 * PANEL_MARGIN) / 2, h = (sz.y - (rows + 1) * PANEL_MARGIN) / rows;
-	const float arrowSize = rows > 2 ? 12 : 18;
-	const int font = -1;
+	makeArrowTextures();
+	loadPanelFonts();
+	PanelFont& labelFont = isLarge ? gSpecialPanels.mLargeFont : gSpecialPanels.mSmallFont;
 	for (size_t i = 0; i < gSpecialPanels.mCommands.size(); i++) {
 		const auto& command = gSpecialPanels.mCommands[i];
 		Panel panel;
@@ -411,29 +500,29 @@ static void addPanels() {
 		setAnimationTransparency(panel.mBackground, 0.85f);
 		setPanelColor(panel, command);
 
-		// The name at the top, the arrows and buttons under it.
-		panel.mLabelTextID = addMugenText(command.mLabel.c_str(), Vector3D(x + 5, y + (rows > 2 ? 11 : 20), PANEL_Z + 1), font);
-		setMugenTextScreen(panel.mLabelTextID, PANEL_SCREEN);
-		if (rows <= 2) setMugenTextScale(panel.mLabelTextID, 2);
-		if (command.mIsSuper) setMugenTextColorRGB(panel.mLabelTextID, 1, 0.85f, 0.3f);
-		else setMugenTextColorRGB(panel.mLabelTextID, 0.75f, 0.9f, 1);
-
-		float cursor = x + 5;
-		const float rowY = y + (rows > 2 ? 16 : 26) + (rows > 2 ? 0 : (h - 26 - arrowSize) / 2 - 4);
-		std::string trailing;
+		// The name at the top, the arrows and buttons in the middle of the
+		// rest (small ones if the large do not fit).
+		const float pad = isLarge ? 6 : 4;
+		const Vector3D labelColor = command.mIsSuper ? Vector3D(1, 0.85, 0.35) : Vector3D(0.75, 0.9, 1);
+		addPanelText(&panel, labelFont, command.mLabel, x + pad, y + pad - 1, x + w - pad, labelColor);
+		int sizeIndex = isLarge ? 0 : 2;
+		while (sizeIndex < 2 && getPanelRowWidth(command, sizeIndex, sizeIndex < 2 ? gSpecialPanels.mLargeFont : gSpecialPanels.mSmallFont) > w - 2 * pad) sizeIndex++;
+		PanelFont& buttonFont = sizeIndex < 2 ? gSpecialPanels.mLargeFont : gSpecialPanels.mSmallFont;
+		const int arrowSize = PANEL_ARROW_SIZES[sizeIndex];
+		const float rowTop = y + pad + labelFont.mLineHeight + 1;
+		const float rowY = floorf(rowTop + (y + h - rowTop - arrowSize) / 2);
+		float cursor = x + pad;
 		for (size_t s = 0; s < command.mArrows.size(); s++) {
-			if (command.mArrows[s] >= 0 && cursor + arrowSize <= x + w - 4) {
-				auto element = playOneFrameAnimationLoop(Vector3D(cursor, rowY, PANEL_Z + 1), &gSpecialPanels.mArrowTextures[command.mArrows[s]]);
+			if (command.mArrows[s] >= 0 && cursor + arrowSize <= x + w - pad) {
+				auto element = playOneFrameAnimationLoop(Vector3D(cursor, rowY, PANEL_Z + 1), &gSpecialPanels.mArrowTextures[sizeIndex][command.mArrows[s]]);
 				setAnimationScreen(element, PANEL_SCREEN);
-				setAnimationSize(element, Vector3D(arrowSize, arrowSize, 1), Vector3D(0, 0, 0));
-				panel.mArrowElements.push_back(element);
-				cursor += arrowSize + 1;
+				panel.mElements.push_back(element);
+				cursor += arrowSize + (sizeIndex < 2 ? 1 : 0);
 			}
-			trailing += command.mAfterArrows[s];
+			if (!command.mAfterArrows[s].empty()) {
+				cursor = addPanelText(&panel, buttonFont, command.mAfterArrows[s], cursor + 1, rowY + (arrowSize - buttonFont.mLineHeight) / 2.0f, x + w - pad, Vector3D(1, 1, 1)) + 1;
+			}
 		}
-		panel.mButtonsTextID = addMugenText(trailing.c_str(), Vector3D(cursor + 2, rowY + arrowSize / 2 + 4, PANEL_Z + 1), font);
-		setMugenTextScreen(panel.mButtonsTextID, PANEL_SCREEN);
-		if (rows <= 2) setMugenTextScale(panel.mButtonsTextID, 2);
 		gSpecialPanels.mPanels.push_back(panel);
 	}
 }
@@ -472,6 +561,8 @@ static void loadSpecialPanels(void* /*tData*/) {
 	gSpecialPanels.mPanels.clear();
 	gSpecialPanels.mCommands.clear();
 	gSpecialPanels.mHasArrowTextures = 0;
+	gSpecialPanels.mLargeFont.mIsLoaded = 0;
+	gSpecialPanels.mSmallFont.mIsLoaded = 0;
 	gSpecialPanels.mWasTouching = 1;   // a touch held from before the fight is not one
 	gSpecialPanels.mTestTouch = -1;
 #ifndef __3DS__
@@ -482,10 +573,9 @@ static void loadSpecialPanels(void* /*tData*/) {
 
 static void unloadSpecialPanels(void* /*tData*/) {
 	removePanels();
-	if (gSpecialPanels.mHasArrowTextures) {
-		for (int a = 0; a < ARROW_AMOUNT; a++) unloadTexture(gSpecialPanels.mArrowTextures[a]);
-	}
-	gSpecialPanels.mHasArrowTextures = 0;
+	unloadArrowTextures();
+	unloadPanelFont(&gSpecialPanels.mLargeFont);
+	unloadPanelFont(&gSpecialPanels.mSmallFont);
 	gSpecialPanels.mIsActive = 0;
 }
 
