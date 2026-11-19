@@ -30,6 +30,7 @@
 #include "mugenstagehandler.h"
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 #include "smoothtext3ds.h"
+#include "pausemenu3ds.h"
 #endif
 
 #define SELECTOR_Z 49
@@ -635,6 +636,7 @@ static bool isSelectedStageRandomStage(int tIndex);
 static int consumeN3DSVirtualA(int i);
 static int consumeN3DSVirtualB(int i);
 static void clearN3DSVirtualButtons();
+static void changeN3DSStageTime(int tDelta);
 static void loadN3DSSelectTouch();
 static void unloadN3DSSelectTouch();
 #define N3DS_SELECT_BAR_HEIGHT 20.0f
@@ -1675,112 +1677,130 @@ static void updateN3DSStand() {
 #endif
 
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
-// [3DS] Choosing the stage: over the grid on the bottom screen, darkened,
-// a picture of the stage (taken in the first fight in it, stage.cpp; kept
-// in the SD card's cache: read at once) and its name between arrows. (A
-// picture made from its background elements looked wrong in some stages
-// and was slow to read in others.)
-// [3DS] The stages while one is chosen: a grid of their pictures (taken in
-// their first fight; a stage not fought in yet, its name alone) over the
-// bottom screen, the one marked framed. A touch marks one, a second the
-// marked one chooses it (as A); left and right as before.
-static const float N3DS_STAGE_NAME_HEIGHT = 12, N3DS_STAGE_GAP = 4, N3DS_STAGE_FRAME = 2;
+// [3DS] Choosing the stage, over the grid on the bottom screen, darkened:
+// the stage's picture big (taken in its first fight, stage.cpp; a stage not
+// fought in yet, its name alone) between two arrows to touch (as left and
+// right), its name under it, the round's time between its own arrows (up
+// and down too: 30, 45, 60, 75, 90, 99 and none, as the pause menu's
+// TIEMPO) and LISTO (as A).
+static const float N3DS_STAGE_PICTURE_TOP = 16, N3DS_STAGE_PICTURE_HEIGHT = 128, N3DS_STAGE_ARROW_WIDTH = 36;
+static const float N3DS_STAGE_TIME_TOP = 164, N3DS_STAGE_ROW_HEIGHT = 22;
+static const int N3DS_STAGE_PICTURE_REST_FRAMES = 4;
 
 static struct {
 	int mIsShown;
-	std::vector<TextureData> mTextures;
+	TextureData mTexture;
+	int mHasTexture;
+	AnimationHandlerElement* mPicture;
 	std::vector<AnimationHandlerElement*> mElements;
-	SmoothText mTexts;
-	std::vector<GeoRectangle2D> mCells;
-	AnimationHandlerElement* mFrame[4];
-	int mFramedStage;
+	SmoothText mTexts;       // the arrows, the titles and LISTO
+	SmoothText mNameText;
+	SmoothText mMissingText;
+	SmoothText mTimeText;
+	GeoRectangle2D mPrevious, mNext, mTimeDown, mTimeUp, mTime, mReady;
+	int mWantedStage;
+	int mShownStage;
+	int mRestFrames;
 } gN3DSStageGrid;
 
 static void resetN3DSStagePreview() {
 	gN3DSStageGrid.mIsShown = 0;
-	gN3DSStageGrid.mTextures.clear();
+	gN3DSStageGrid.mHasTexture = 0;
+	gN3DSStageGrid.mPicture = NULL;
 	gN3DSStageGrid.mElements.clear();
 	gN3DSStageGrid.mTexts.clear();
-	gN3DSStageGrid.mCells.clear();
-	for (auto& e : gN3DSStageGrid.mFrame) e = NULL;
-	gN3DSStageGrid.mFramedStage = -1;
+	gN3DSStageGrid.mNameText.clear();
+	gN3DSStageGrid.mMissingText.clear();
+	gN3DSStageGrid.mTimeText.clear();
+	const GeoRectangle2D none(-10, -10, 0, 0);
+	gN3DSStageGrid.mPrevious = gN3DSStageGrid.mNext = gN3DSStageGrid.mTimeDown = gN3DSStageGrid.mTimeUp = gN3DSStageGrid.mTime = gN3DSStageGrid.mReady = none;
+	gN3DSStageGrid.mWantedStage = -1;
+	gN3DSStageGrid.mShownStage = -1;
+	gN3DSStageGrid.mRestFrames = 0;
+}
+
+static void letN3DSStagePictureGo() {
+	if (gN3DSStageGrid.mPicture) removeHandledAnimation(gN3DSStageGrid.mPicture);
+	gN3DSStageGrid.mPicture = NULL;
+	if (gN3DSStageGrid.mHasTexture) unloadTexture(gN3DSStageGrid.mTexture);
+	gN3DSStageGrid.mHasTexture = 0;
 }
 
 static void unloadN3DSStagePreview() {
+	letN3DSStagePictureGo();
 	for (auto e : gN3DSStageGrid.mElements) removeHandledAnimation(e);
-	for (auto e : gN3DSStageGrid.mFrame) if (e) removeHandledAnimation(e);
 	removeSmoothText(&gN3DSStageGrid.mTexts);
-	for (auto& texture : gN3DSStageGrid.mTextures) unloadTexture(texture);
+	removeSmoothText(&gN3DSStageGrid.mNameText);
+	removeSmoothText(&gN3DSStageGrid.mMissingText);
+	removeSmoothText(&gN3DSStageGrid.mTimeText);
 	resetN3DSStagePreview();
 }
 
-// The columns making the pictures (4:3, a name under each) biggest.
-static void layoutN3DSStageGrid(int tAmount, float tWidth, float tHeight, int* oColumns, float* oCellW) {
-	*oColumns = 1;
-	*oCellW = 0;
-	for (int columns = 1; columns <= tAmount; columns++) {
-		const int rows = (tAmount + columns - 1) / columns;
-		const float byWidth = (tWidth - (columns - 1) * N3DS_STAGE_GAP) / columns;
-		const float byHeight = ((tHeight - (rows - 1) * N3DS_STAGE_GAP) / rows - N3DS_STAGE_NAME_HEIGHT) / 0.75f;
-		const float cellW = std::min(byWidth, byHeight);
-		if (cellW > *oCellW) {
-			*oCellW = cellW;
-			*oColumns = columns;
-		}
-	}
+static GeoRectangle2D addN3DSStageButton(float x, float y, float w, float h, const std::string& tLabel, const Vector3D& tColor, int tFont) {
+	gN3DSStageGrid.mElements.push_back(addN3DSSelectRectangle(x, y, w, h, 61, tColor, 0.95f));
+	addSmoothTextCentered(&gN3DSStageGrid.mTexts, tFont, tLabel, x + w / 2, y + (h - getSmoothTextLineHeight(tFont)) / 2, 63, N3DS_SELECT_GRID_SCREEN, Vector3D(1, 1, 1));
+	return GeoRectangle2D(x, y, w, h);
 }
 
-static void showN3DSStageGrid() {
+static void showN3DSStageTime() {
+	removeSmoothText(&gN3DSStageGrid.mTimeText);
+	const auto& r = gN3DSStageGrid.mTime;
+	const std::string text = "TIEMPO: " + getN3DSRoundTimeText();
+	addSmoothTextCentered(&gN3DSStageGrid.mTimeText, SMOOTH_TEXT_SMALL, text, (r.mTopLeft.x + r.mBottomRight.x) / 2, r.mTopLeft.y + (N3DS_STAGE_ROW_HEIGHT - getSmoothTextLineHeight(SMOOTH_TEXT_SMALL)) / 2, 63, N3DS_SELECT_GRID_SCREEN, Vector3D(1, 1, 1));
+}
+
+static void showN3DSStageScreen() {
 	gN3DSStageGrid.mIsShown = 1;
 	const auto sz = getScreenSize();
+	const Vector3D arrowColor(0.22, 0.28, 0.45);
 	gN3DSStageGrid.mElements.push_back(addN3DSSelectRectangle(0, 0, sz.x, sz.y - N3DS_SELECT_BAR_HEIGHT, 60, Vector3D(0, 0, 0), 0.85f));
-	const int amount = vector_size(&gCharacterSelectScreenData.mSelectStages);
-	const float areaX = 4, areaY = 4, areaW = sz.x - 8, areaH = sz.y - N3DS_SELECT_BAR_HEIGHT - 8;
-	int columns;
-	float cellW;
-	layoutN3DSStageGrid(std::max(1, amount), areaW, areaH, &columns, &cellW);
-	const float pictureH = cellW * 0.75f, cellH = pictureH + N3DS_STAGE_NAME_HEIGHT;
-	const int rows = (amount + columns - 1) / std::max(1, columns);
-	const float gridW = columns * cellW + (columns - 1) * N3DS_STAGE_GAP, gridH = rows * cellH + (rows - 1) * N3DS_STAGE_GAP;
-	const float left = areaX + (areaW - gridW) / 2, top = areaY + (areaH - gridH) / 2;
-	gN3DSStageGrid.mTextures.reserve(amount);   // the pictures' animations point into it
-	for (int k = 0; k < amount; k++) {
-		const float x = left + (k % columns) * (cellW + N3DS_STAGE_GAP), y = top + (k / columns) * (cellH + N3DS_STAGE_GAP);
-		gN3DSStageGrid.mCells.push_back(GeoRectangle2D(x, y, cellW, cellH));
-		gN3DSStageGrid.mElements.push_back(addN3DSSelectRectangle(x, y, cellW, pictureH, 61, Vector3D(0.15, 0.17, 0.25), 1));
-		SelectStage* stage = (SelectStage*)vector_get(&gCharacterSelectScreenData.mSelectStages, k);
-		const int isRandom = isSelectedStageRandomStage(k);
-		TextureData texture;
-		Vector2DI size;
-		if (!isRandom && loadDreamStagePictureTexture(stage->mPath, &texture, &size)) {
-			gN3DSStageGrid.mTextures.push_back(texture);
-			AnimationHandlerElement* picture = playAnimationLoop(Vector3D(x, y, 62), &gN3DSStageGrid.mTextures.back(), createOneFrameAnimation(), makeRectangle(0, 0, size.x - 1, size.y - 1));
-			setAnimationScreen(picture, N3DS_SELECT_GRID_SCREEN);
-			setAnimationSize(picture, Vector3D(cellW, pictureH, 1), Vector3D(0, 0, 0));
-			gN3DSStageGrid.mElements.push_back(picture);
-		}
-		else if (isRandom) {
-			addSmoothTextCentered(&gN3DSStageGrid.mTexts, SMOOTH_TEXT_LARGE, "?", x + cellW / 2, y + (pictureH - getSmoothTextLineHeight(SMOOTH_TEXT_LARGE)) / 2, 63, N3DS_SELECT_GRID_SCREEN, Vector3D(1, 0.9, 0.5));
-		}
-		const std::string name = isRandom ? "AL AZAR" : stage->mName;
-		const float nameW = std::min(cellW, getSmoothTextWidth(SMOOTH_TEXT_SMALL, name));
-		addSmoothText(&gN3DSStageGrid.mTexts, SMOOTH_TEXT_SMALL, name, x + (cellW - nameW) / 2, y + pictureH + 1, 63, N3DS_SELECT_GRID_SCREEN, Vector3D(1, 1, 1), x + cellW);
-	}
-	for (auto& e : gN3DSStageGrid.mFrame) e = addN3DSSelectRectangle(0, 0, 1, 1, 64, Vector3D(1, 0.85, 0.2), 1);
+	addSmoothTextCentered(&gN3DSStageGrid.mTexts, SMOOTH_TEXT_SMALL, "ESCENARIO", sz.x / 2, 2, 63, N3DS_SELECT_GRID_SCREEN, Vector3D(1, 0.9, 0.5));
+	const float arrowY = N3DS_STAGE_PICTURE_TOP, arrowH = N3DS_STAGE_PICTURE_HEIGHT;
+	gN3DSStageGrid.mPrevious = addN3DSStageButton(4, arrowY, N3DS_STAGE_ARROW_WIDTH, arrowH, "<", arrowColor, SMOOTH_TEXT_LARGE);
+	gN3DSStageGrid.mNext = addN3DSStageButton(sz.x - 4 - N3DS_STAGE_ARROW_WIDTH, arrowY, N3DS_STAGE_ARROW_WIDTH, arrowH, ">", arrowColor, SMOOTH_TEXT_LARGE);
+
+	const float timeW = 150, timeX = (sz.x - timeW) / 2, timeArrowW = 30, y = N3DS_STAGE_TIME_TOP, h = N3DS_STAGE_ROW_HEIGHT;
+	gN3DSStageGrid.mTimeDown = addN3DSStageButton(timeX - 3 - timeArrowW, y, timeArrowW, h, "<", arrowColor, SMOOTH_TEXT_SMALL);
+	gN3DSStageGrid.mTimeUp = addN3DSStageButton(timeX + timeW + 3, y, timeArrowW, h, ">", arrowColor, SMOOTH_TEXT_SMALL);
+	gN3DSStageGrid.mElements.push_back(addN3DSSelectRectangle(timeX, y, timeW, h, 61, Vector3D(0.12, 0.13, 0.18), 0.95f));
+	gN3DSStageGrid.mTime = GeoRectangle2D(timeX, y, timeW, h);
+	showN3DSStageTime();
+
+	const float readyW = timeW + 2 * (timeArrowW + 3), readyY = y + h + 5;
+	const float readyH = std::max(16.0f, sz.y - N3DS_SELECT_BAR_HEIGHT - 4 - readyY);
+	gN3DSStageGrid.mReady = addN3DSStageButton((sz.x - readyW) / 2, readyY, readyW, readyH, "LISTO", Vector3D(0.2, 0.55, 0.3), SMOOTH_TEXT_LARGE);
 }
 
-static void frameN3DSStage(int tStage) {
-	gN3DSStageGrid.mFramedStage = tStage;
-	if (tStage < 0 || tStage >= int(gN3DSStageGrid.mCells.size())) return;
-	const auto& r = gN3DSStageGrid.mCells[tStage];
-	const float x = r.mTopLeft.x - N3DS_STAGE_FRAME, y = r.mTopLeft.y - N3DS_STAGE_FRAME;
-	const float w = r.mBottomRight.x - r.mTopLeft.x + 2 * N3DS_STAGE_FRAME, h = r.mBottomRight.y - r.mTopLeft.y + 2 * N3DS_STAGE_FRAME;
-	const float f = N3DS_STAGE_FRAME;
-	const Vector3D places[4][2] = { { Vector3D(x, y, 64), Vector3D(w, f, 1) }, { Vector3D(x, y + h - f, 64), Vector3D(w, f, 1) }, { Vector3D(x, y, 64), Vector3D(f, h, 1) }, { Vector3D(x + w - f, y, 64), Vector3D(f, h, 1) } };
-	for (int j = 0; j < 4; j++) {
-		setAnimationPosition(gN3DSStageGrid.mFrame[j], places[j][0]);
-		setAnimationSize(gN3DSStageGrid.mFrame[j], places[j][1], Vector3D(0, 0, 0));
-	}
+static void showN3DSStageName(int tStage) {
+	removeSmoothText(&gN3DSStageGrid.mNameText);
+	SelectStage* stage = (SelectStage*)vector_get(&gCharacterSelectScreenData.mSelectStages, tStage);
+	const std::string name = isSelectedStageRandomStage(tStage) ? "AL AZAR" : stage->mName;
+	const float left = 4 + N3DS_STAGE_ARROW_WIDTH + 4, right = getScreenSize().x - left;
+	const float y = N3DS_STAGE_PICTURE_TOP + N3DS_STAGE_PICTURE_HEIGHT + 2;
+	const float w = std::min(right - left, getSmoothTextWidth(SMOOTH_TEXT_LARGE, name));
+	addSmoothText(&gN3DSStageGrid.mNameText, SMOOTH_TEXT_LARGE, name, (left + right - w) / 2, y, 63, N3DS_SELECT_GRID_SCREEN, Vector3D(1, 1, 1), right);
+	// "?" in the picture's place until it is read (none: at random or not
+	// fought in yet).
+	removeSmoothText(&gN3DSStageGrid.mMissingText);
+	addSmoothTextCentered(&gN3DSStageGrid.mMissingText, SMOOTH_TEXT_LARGE, "?", getScreenSize().x / 2, N3DS_STAGE_PICTURE_TOP + (N3DS_STAGE_PICTURE_HEIGHT - getSmoothTextLineHeight(SMOOTH_TEXT_LARGE)) / 2, 63, N3DS_SELECT_GRID_SCREEN, Vector3D(1, 0.9, 0.5));
+}
+
+static void showN3DSStagePicture(int tStage) {
+	letN3DSStagePictureGo();
+	gN3DSStageGrid.mShownStage = tStage;
+	if (isSelectedStageRandomStage(tStage)) return;
+	SelectStage* stage = (SelectStage*)vector_get(&gCharacterSelectScreenData.mSelectStages, tStage);
+	Vector2DI size;
+	if (!loadDreamStagePictureTexture(stage->mPath, &gN3DSStageGrid.mTexture, &size)) return;
+	gN3DSStageGrid.mHasTexture = 1;
+	removeSmoothText(&gN3DSStageGrid.mMissingText);
+	const float roomW = getScreenSize().x - 2 * (4 + N3DS_STAGE_ARROW_WIDTH + 4);
+	const float scale = std::min(roomW / size.x, N3DS_STAGE_PICTURE_HEIGHT / size.y);
+	const float drawnW = size.x * scale, drawnH = size.y * scale;
+	const Position p((getScreenSize().x - drawnW) / 2, N3DS_STAGE_PICTURE_TOP + (N3DS_STAGE_PICTURE_HEIGHT - drawnH) / 2, 62);
+	gN3DSStageGrid.mPicture = playAnimationLoop(p, &gN3DSStageGrid.mTexture, createOneFrameAnimation(), makeRectangle(0, 0, size.x - 1, size.y - 1));
+	setAnimationScreen(gN3DSStageGrid.mPicture, N3DS_SELECT_GRID_SCREEN);
+	setAnimationSize(gN3DSStageGrid.mPicture, Vector3D(drawnW, drawnH, 1), Vector3D(0, 0, 0));
 }
 
 static void updateN3DSStagePreview() {
@@ -1791,8 +1811,20 @@ static void updateN3DSStagePreview() {
 		if (gN3DSStageGrid.mIsShown) unloadN3DSStagePreview();
 		return;
 	}
-	if (!gN3DSStageGrid.mIsShown) showN3DSStageGrid();
-	if (stageSelect.mSelectedStage != gN3DSStageGrid.mFramedStage) frameN3DSStage(stageSelect.mSelectedStage);
+	if (!gN3DSStageGrid.mIsShown) showN3DSStageScreen();
+	const int stage = stageSelect.mSelectedStage;
+	if (stage != gN3DSStageGrid.mWantedStage) {
+		// Its name at once, its picture once the stage stays (one read
+		// for a run of presses).
+		gN3DSStageGrid.mWantedStage = stage;
+		gN3DSStageGrid.mRestFrames = 0;
+		showN3DSStageName(stage);
+		if (gN3DSStageGrid.mPicture) setAnimationVisibility(gN3DSStageGrid.mPicture, 0);
+		return;
+	}
+	if (gN3DSStageGrid.mShownStage == stage) return;
+	if (++gN3DSStageGrid.mRestFrames < N3DS_STAGE_PICTURE_REST_FRAMES) return;
+	showN3DSStagePicture(stage);
 }
 #endif
 
@@ -1818,6 +1850,7 @@ static int isN3DSSelectStepsUsed() {
 #define N3DS_SELECT_TOUCH_Z 66
 
 enum { N3DS_TOUCH_COLOR, N3DS_TOUCH_LEVEL, N3DS_TOUCH_OK, N3DS_TOUCH_BACK };
+static const int N3DS_STEP_COLOR_COLUMNS = 6, N3DS_STEP_LEVEL_COLUMNS = 4;
 
 typedef struct {
 	GeoRectangle2D mRectangle;
@@ -1843,6 +1876,8 @@ static struct {
 	int mIsVirtualB[2];
 	std::vector<AnimationHandlerElement*> mBarRectangles;
 	SmoothText mBarTexts;
+	SmoothText mHintTexts;
+	int mHintKind;   // -1 none shown, 0 the characters', 1 the stage's
 	GeoRectangle2D mBackButton;
 } gN3DSSelectTouch;
 
@@ -1906,7 +1941,7 @@ static void showN3DSSelectStep(int i) {
 	const Selector& selector = gCharacterSelectScreenData.mSelectors[i];
 	const int isColor = selector.mStep == SELECT_STEP_COLOR;
 	const int amount = isColor ? int(selector.mColors.size()) : 8;
-	const int columns = isColor ? 6 : 4;
+	const int columns = isColor ? N3DS_STEP_COLOR_COLUMNS : N3DS_STEP_LEVEL_COLUMNS;
 	const int rows = (amount + columns - 1) / columns;
 	const float pad = 4, gap = 3, cellH = 20, buttonH = 20, titleH = 14;
 	const float w = getScreenSize().x / 2, x = i == 0 ? 0 : w;
@@ -2016,19 +2051,41 @@ static int goBackN3DSSelectStepAndReturnIfDone(int i) {
 	return 1;
 }
 
-// Left and right on a step.
+// The panel's button tDelta rows (of tColumns) from tIndex, in its column
+// (round to the other end; a last row shorter skipped in that column).
+static int moveN3DSStepRow(int tIndex, int tDelta, int tColumns, int tAmount) {
+	const int rows = (tAmount + tColumns - 1) / tColumns;
+	if (rows <= 1) return tIndex;
+	int row = tIndex / tColumns;
+	const int column = tIndex % tColumns;
+	for (int k = 0; k < rows; k++) {
+		row = (row + tDelta + rows) % rows;
+		if (row * tColumns + column < tAmount) return row * tColumns + column;
+	}
+	return tIndex;
+}
+
+// Left and right on a step: the next or the one before; up and down: the
+// one above or under it in the panel.
 static void updateN3DSSelectStepInput(int i) {
 	Selector& selector = gCharacterSelectScreenData.mSelectors[i];
-	int delta = 0;
+	int delta = 0, rowDelta = 0;
 	if (hasPressedRightFlankSingle(selector.mOwner)) delta = 1;
 	else if (hasPressedLeftFlankSingle(selector.mOwner)) delta = -1;
-	if (!delta) return;
-	if (selector.mStep == SELECT_STEP_COLOR) {
-		const int amount = int(selector.mColors.size());
-		selector.mColorIndex = (selector.mColorIndex + delta + amount) % amount;
+	else if (hasPressedDownFlankSingle(selector.mOwner)) rowDelta = 1;
+	else if (hasPressedUpFlankSingle(selector.mOwner)) rowDelta = -1;
+	if (!delta && !rowDelta) return;
+	const int isColor = selector.mStep == SELECT_STEP_COLOR;
+	const int amount = isColor ? int(selector.mColors.size()) : 8;
+	const int columns = isColor ? N3DS_STEP_COLOR_COLUMNS : N3DS_STEP_LEVEL_COLUMNS;
+	const int index = isColor ? selector.mColorIndex : selector.mLevel - 1;
+	const int next = rowDelta ? moveN3DSStepRow(index, rowDelta, columns, amount) : (index + delta + amount) % amount;
+	if (next == index) return;
+	if (isColor) {
+		selector.mColorIndex = next;
 		gN3DSStand.mRestFrames[i] = 0;
 	}
-	else selector.mLevel = (selector.mLevel - 1 + delta + 8) % 8 + 1;
+	else selector.mLevel = next + 1;
 	playN3DSSelectStepSound(i);
 	showN3DSSelectStep(i);
 }
@@ -2199,6 +2256,13 @@ static void updateSingleStageSelection(int i) {
 	}
 
 	if (updateCreditStageSelectionAndReturnIfStageSelectionOver(i)) return;
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	// Up and down: the round's time (shown on the bottom screen).
+	if (isN3DSSelectStepsUsed()) {
+		if (hasPressedUpFlankSingle(gCharacterSelectScreenData.mSelectors[i].mOwner)) changeN3DSStageTime(1);
+		else if (hasPressedDownFlankSingle(gCharacterSelectScreenData.mSelectors[i].mOwner)) changeN3DSStageTime(-1);
+	}
+#endif
 
 	if (target == gCharacterSelectScreenData.mStageSelect.mSelectedStage) return;
 	updateStageSelection(i, target, 1);
@@ -2531,13 +2595,28 @@ static void showN3DSSelectBar() {
 	gN3DSSelectTouch.mBarRectangles.push_back(addN3DSSelectRectangle(3, y + 2, buttonW, h - 4, 66, Vector3D(0.22, 0.28, 0.45), 0.95f));
 	const float textTop = y + (h - getSmoothTextLineHeight(SMOOTH_TEXT_SMALL)) / 2;
 	addSmoothTextCentered(&gN3DSSelectTouch.mBarTexts, SMOOTH_TEXT_SMALL, "ATRÁS", 3 + buttonW / 2, textTop, 67, N3DS_SELECT_GRID_SCREEN, Vector3D(1, 1, 1));
-	addSmoothTextCentered(&gN3DSSelectTouch.mBarTexts, SMOOTH_TEXT_SMALL, "Toca para marcar, otra vez para elegir", (3 + buttonW + sz.x) / 2, textTop, 67, N3DS_SELECT_GRID_SCREEN, Vector3D(0.85, 0.85, 0.85));
+	gN3DSSelectTouch.mHintKind = -1;
+}
+
+// The bar's hint: for the characters or for the stage.
+static void updateN3DSSelectHint() {
+	if (!isN3DSSelectStepsUsed()) return;
+	const auto& stageSelect = gCharacterSelectScreenData.mStageSelect;
+	const int kind = stageSelect.mIsUsing && stageSelect.mIsActive;
+	if (kind == gN3DSSelectTouch.mHintKind) return;
+	gN3DSSelectTouch.mHintKind = kind;
+	removeSmoothText(&gN3DSSelectTouch.mHintTexts);
+	const auto sz = getScreenSize();
+	const float buttonW = 64, h = N3DS_SELECT_BAR_HEIGHT, textTop = sz.y - h + (h - getSmoothTextLineHeight(SMOOTH_TEXT_SMALL)) / 2;
+	const char* hint = kind ? "Cruz: escenario y tiempo" : "Toca para marcar, otra vez para elegir";
+	addSmoothTextCentered(&gN3DSSelectTouch.mHintTexts, SMOOTH_TEXT_SMALL, hint, (3 + buttonW + sz.x) / 2, textTop, 67, N3DS_SELECT_GRID_SCREEN, Vector3D(0.85, 0.85, 0.85));
 }
 
 static void unloadN3DSSelectBar() {
 	for (auto e : gN3DSSelectTouch.mBarRectangles) removeHandledAnimation(e);
 	gN3DSSelectTouch.mBarRectangles.clear();
 	removeSmoothText(&gN3DSSelectTouch.mBarTexts);
+	removeSmoothText(&gN3DSSelectTouch.mHintTexts);
 }
 
 // The side choosing a character now: the first one not done.
@@ -2604,17 +2683,29 @@ static int touchN3DSSelectStep(int i) {
 	return 1;
 }
 
-// A stage: marked or, marked already, chosen (A for the sides done).
+// The stage screen's arrows, time and LISTO (A for the sides done).
+static void stepN3DSStage(int tDelta) {
+	const int amount = vector_size(&gCharacterSelectScreenData.mSelectStages);
+	if (amount <= 0) return;
+	const int stage = (gCharacterSelectScreenData.mStageSelect.mSelectedStage + tDelta + amount) % amount;
+	updateStageSelection(0, stage, 1);
+}
+
+static void changeN3DSStageTime(int tDelta) {
+	stepN3DSRoundTime(tDelta);
+	if (gN3DSStageGrid.mIsShown) showN3DSStageTime();
+	playN3DSSelectStepSound(0);
+}
+
 static void touchN3DSSelectStage() {
-	for (int k = 0; k < int(gN3DSStageGrid.mCells.size()); k++) {
-		if (!isN3DSSelectTapIn(gN3DSStageGrid.mCells[k])) continue;
-		if (k != gCharacterSelectScreenData.mStageSelect.mSelectedStage) updateStageSelection(0, k, 1);
-		else {
-			for (int i = 0; i < 2; i++) {
-				if (gCharacterSelectScreenData.mSelectors[i].mIsActive && gCharacterSelectScreenData.mSelectors[i].mIsDone) gN3DSSelectTouch.mIsVirtualA[i] = 1;
-			}
+	if (isN3DSSelectTapIn(gN3DSStageGrid.mPrevious)) stepN3DSStage(-1);
+	else if (isN3DSSelectTapIn(gN3DSStageGrid.mNext)) stepN3DSStage(1);
+	else if (isN3DSSelectTapIn(gN3DSStageGrid.mTimeDown)) changeN3DSStageTime(-1);
+	else if (isN3DSSelectTapIn(gN3DSStageGrid.mTimeUp) || isN3DSSelectTapIn(gN3DSStageGrid.mTime)) changeN3DSStageTime(1);
+	else if (isN3DSSelectTapIn(gN3DSStageGrid.mReady)) {
+		for (int i = 0; i < 2; i++) {
+			if (gCharacterSelectScreenData.mSelectors[i].mIsActive && gCharacterSelectScreenData.mSelectors[i].mIsDone) gN3DSSelectTouch.mIsVirtualA[i] = 1;
 		}
-		return;
 	}
 }
 
@@ -2684,6 +2775,7 @@ static void updateCharacterSelectScreen() {
 	updateN3DSSelectFrame();
 	updateN3DSStand();
 	updateN3DSStagePreview();
+	updateN3DSSelectHint();
 #endif
 }
 

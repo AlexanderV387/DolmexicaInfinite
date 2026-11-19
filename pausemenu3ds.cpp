@@ -76,7 +76,8 @@ typedef enum {
 // "key value" lines; over mugen.cfg's where they are the same.
 #define PAUSE_SETTINGS_PATH "sdmc:/3ds/dolmexica/ajustes.txt"
 
-static const int TIME_CHOICES[] = { 99, 60, 30, -1 };   // -1: none
+static const int TIME_CHOICES[] = { 30, 45, 60, 75, 90, 99, -1 };   // -1: none
+static const int TIME_CHOICE_AMOUNT = int(sizeof(TIME_CHOICES) / sizeof(TIME_CHOICES[0]));
 static const int SPEED_CHOICES[] = { -6, -3, 0, 3, 6 };   // MUGEN's GameSpeed
 static const char* SPEED_NAMES[] = { "MUY LENTA", "LENTA", "NORMAL", "RÁPIDA", "MUY RÁPIDA" };
 
@@ -115,6 +116,27 @@ static void savePauseSettings() {
 	fprintf(file, "fps %d\n", gPauseMenu3DSData.mIsShowingFPS);
 	fprintf(file, "smartai %d\n", isN3DSSmartAIEnabled());
 	fclose(file);
+}
+
+// The choice now: the one with the time, or the nearest under it.
+static int getTimeChoiceIndex() {
+	if (isGlobalTimerInfinite()) return TIME_CHOICE_AMOUNT - 1;
+	int index = 0;
+	for (int i = 0; i < TIME_CHOICE_AMOUNT - 1; i++) {
+		if (TIME_CHOICES[i] <= getGlobalTimerDuration()) index = i;
+	}
+	return index;
+}
+
+void stepN3DSRoundTime(int tDelta) {
+	const int index = (getTimeChoiceIndex() + tDelta + TIME_CHOICE_AMOUNT) % TIME_CHOICE_AMOUNT;
+	if (TIME_CHOICES[index] < 0) setGlobalTimerInfinite();
+	else setGlobalTimerDuration(TIME_CHOICES[index]);
+	savePauseSettings();
+}
+
+std::string getN3DSRoundTimeText() {
+	return isGlobalTimerInfinite() ? "SIN LÍMITE" : std::to_string(getGlobalTimerDuration());
 }
 
 static void loadPauseSettings() {
@@ -202,8 +224,7 @@ static std::string getItemText(PauseMenuItem tItem) {
 	case PAUSE_MENU_CPU_LEVEL: snprintf(text, sizeof(text), "NIVEL CPU  < %d >", getComputerLevel()); return text;
 	case PAUSE_MENU_SMART_AI: return isN3DSSmartAIEnabled() ? "IA MEJORADA  < SÍ >" : "IA MEJORADA  < NO >";
 	case PAUSE_MENU_TIME:
-		if (isGlobalTimerInfinite()) return "TIEMPO  < SIN LÍMITE >";
-		snprintf(text, sizeof(text), "TIEMPO  < %d >", getGlobalTimerDuration());
+		snprintf(text, sizeof(text), "TIEMPO  < %s >", getN3DSRoundTimeText().c_str());
 		return text;
 	case PAUSE_MENU_MUSIC: snprintf(text, sizeof(text), "MÚSICA  < %d >", getUnscaledGameWavVolume()); return text;
 	case PAUSE_MENU_EFFECTS: snprintf(text, sizeof(text), "EFECTOS  < %d >", getUnscaledGameMidiVolume()); return text;
@@ -311,13 +332,7 @@ static void changeSetting(PauseMenuItem tItem, int tDelta) {
 	// At once: for a character with no AI of its own (smartai3ds.cpp).
 	case PAUSE_MENU_SMART_AI: setN3DSSmartAIEnabled(!isN3DSSmartAIEnabled()); break;
 	case PAUSE_MENU_TIME: {
-		int index = 0;
-		for (int i = 0; i < 4; i++) {
-			if ((TIME_CHOICES[i] < 0) == !!isGlobalTimerInfinite() && (TIME_CHOICES[i] < 0 || TIME_CHOICES[i] == getGlobalTimerDuration())) index = i;
-		}
-		index = (index + tDelta + 4) % 4;
-		if (TIME_CHOICES[index] < 0) setGlobalTimerInfinite();
-		else setGlobalTimerDuration(TIME_CHOICES[index]);
+		stepN3DSRoundTime(tDelta);
 		// The round's clock from the new time now.
 		resetDreamTimer();
 		setTimerFinite();
