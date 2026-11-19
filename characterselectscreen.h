@@ -29,3 +29,6 @@ void getCharacterSelectNamePath(const char* tName, char* oDst);
 
 int setCharacterRandomAndReturnIfSuccessful(MugenDefScript* tScript, int i);
 void setStageRandom(MugenDefScript* tScript);
+// [3DS] For tests (the simulator has no touch screen): a tap at (x, y) on
+// the bottom screen, in the game's coordinates, in the next frame.
+void tapN3DSSelectScreenForTesting(float x, float y);

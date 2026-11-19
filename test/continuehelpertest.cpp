@@ -25,6 +25,8 @@
 #include "characterselectscreen.h"
 #include "smartai3ds.h"
 
+namespace prism { void printN3DSSimulationSummary(); }
+
 /* The fight started over as at "Continue?" (arcade and free play), and each
  * root's helpers written as a tree before and after it.
  * Configuration via environment:
@@ -320,6 +322,8 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 		list_map(&root->mHelpers, printFacingTreeCB, &depth);
 	}
 	fflush(stdout);
+	// N3DS_SIM_SUMMARY: the textures made when drawn and let go, as the console's load-log.
+	if (getenv("N3DS_SIM_SUMMARY")) prism::printN3DSSimulationSummary();
 	unloadPrismWrapperScreenForDebug();
 }
 
@@ -478,7 +482,7 @@ TEST_F(ContinueHelperTest, ScreenTour) {
 	unloadPrismWrapperScreenForDebug();
 }
 
-static void selectScreenFinishedCB() {}
+static void selectScreenFinishedCB() { printf("select finished: stage %s\n", getDreamStageMugenDefinitionPath()); }
 
 /* The select screen (watch mode's: one player picks both, then the stage),
  * for DOLMEXICA_FRAMES frames (default 300); pictures with N3DS_SIM_SHOT,
@@ -491,7 +495,21 @@ TEST_F(ContinueHelperTest, SelectScreen) {
 	setCharacterSelectStageActive();
 	setCharacterSelectFinishedCB(selectScreenFinishedCB);
 	initPrismWrapperScreenForDebug(getCharacterSelectScreen());
-	updatePrismWrapperScreenForDebugWithIterationsAndRender(frames);
+	// DOLMEXICA_TAPS="frame:x,y;frame:x,y": taps on the bottom screen.
+	const char* taps = getenv("DOLMEXICA_TAPS");
+	for (int frame = 0; frame < frames; frame++) {
+		for (const char* q = taps; q && *q; ) {
+			int tapFrame = 0;
+			float x = 0, y = 0;
+			if (sscanf(q, "%d:%f,%f", &tapFrame, &x, &y) == 3 && tapFrame == frame) {
+				tapN3DSSelectScreenForTesting(x, y);
+				printf("frame %d: tap at %.0f,%.0f\n", frame, x, y);
+			}
+			q = strchr(q, ';');
+			if (q) q++;
+		}
+		updatePrismWrapperScreenForDebugWithIterationsAndRender(1);
+	}
 	unloadPrismWrapperScreenForDebug();
 }
 
