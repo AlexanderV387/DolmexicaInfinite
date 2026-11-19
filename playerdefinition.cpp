@@ -1607,18 +1607,22 @@ static void updatePlayerPhysicsClamp(DreamPlayer* p) {
 
 static void clearPlayerReceivedHits(DreamPlayer* p);
 
+// The updates counted before: a projectile hit by another can be removed in
+// it (its hit animation's end), and the loop read its count after (only
+// with more than one update a frame, the game sped up).
 static void updateSingleProjectilePreStateMachine(DreamPlayer* p) {
 	p->mTimeDilatationNow += p->mTimeDilatation;
 	p->mTimeDilatationUpdates = (int)p->mTimeDilatationNow;
 	p->mTimeDilatationNow -= p->mTimeDilatationUpdates;
-	for (int currentUpdate = 0; currentUpdate < p->mTimeDilatationUpdates; currentUpdate++) {
+	const int updates = p->mTimeDilatationUpdates;
+	for (int currentUpdate = 0; currentUpdate < updates; currentUpdate++) {
 		if (!isValidPlayerOrProjectile(p)) break;
 		updatePlayerReceivedHits(p);
 	}
 }
 
-static void updateSingleProjectilePreStateMachineCB(void* /*tCaller*/, void* tData) {
-	updateSingleProjectilePreStateMachine((DreamPlayer*)tData);
+static void collectProjectileCB(void* tCaller, void* tData) {
+	((std::vector<DreamPlayer*>*)tCaller)->push_back((DreamPlayer*)tData);
 }
 
 static void updateSingleProjectile(DreamPlayer* p) {
@@ -1943,7 +1947,12 @@ static int updateSinglePlayerPreStateMachine(DreamPlayer* p) {
 	}
 
 	list_remove_predicate(&p->mHelpers, updateSinglePlayerPreStateMachineCB, NULL);
-	int_map_map(&p->mProjectiles, updateSingleProjectilePreStateMachineCB, NULL);
+	// From a copy, each still there: one's hits can remove another.
+	std::vector<DreamPlayer*> projectiles;
+	int_map_map(&p->mProjectiles, collectProjectileCB, &projectiles);
+	for (DreamPlayer* projectile : projectiles) {
+		if (isValidPlayerOrProjectile(projectile)) updateSingleProjectilePreStateMachine(projectile);
+	}
 	return 0;
 }
 
