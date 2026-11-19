@@ -2838,11 +2838,21 @@ static void handleReversalDefHit(DreamPlayer* p, DreamPlayer* tOtherPlayer) {
 		changePlayerStateToSelf(p, getReversalDefP1StateNo(p));
 	}
 
-	playPlayerHitSound(p, getReversalDefHitSound);
-	playPlayerHitSpark(p, tOtherPlayer, p, isReversalDefSparkInPlayerFile(p), getReversalDefSparkNumber(p), getActiveHitDataSparkXY(p) + getReversalDefSparkXY(p));
-	addPlayerAsActiveTarget(p, tOtherPlayer);
+	// Either may be gone in its new state (a helper destroying itself): the
+	// rest only for those still there. Wonder Woman's reversal of a Poison
+	// Ivy helper's attack went on with the helper destroyed (its hit data
+	// read after it was let go: the simulator's assertion; on the console,
+	// what was left there, the fight frozen).
+	if (!isGeneralPlayer(p)) return;
+	const int isOtherStillThere = isGeneralPlayer(tOtherPlayer);
 
-	if (hitShakeDuration && isPlayerAlive(tOtherPlayer)) {
+	playPlayerHitSound(p, getReversalDefHitSound);
+	if (isOtherStillThere) {
+		playPlayerHitSpark(p, tOtherPlayer, p, isReversalDefSparkInPlayerFile(p), getReversalDefSparkNumber(p), getActiveHitDataSparkXY(p) + getReversalDefSparkXY(p));
+		addPlayerAsActiveTarget(p, tOtherPlayer);
+	}
+
+	if (isOtherStillThere && hitShakeDuration && isPlayerAlive(tOtherPlayer)) {
 		setPlayerHitPaused(tOtherPlayer, hitShakeDuration);
 	}
 
@@ -2850,6 +2860,7 @@ static void handleReversalDefHit(DreamPlayer* p, DreamPlayer* tOtherPlayer) {
 		setPlayerHitPaused(p, hitPauseDuration);
 	}
 
+	if (!isOtherStillThere) return;
 	tOtherPlayer->mMoveReversed = 1;
 	tOtherPlayer->mWereMoveCountersJustSet = 1;
 }
