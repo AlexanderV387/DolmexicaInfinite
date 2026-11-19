@@ -25,6 +25,15 @@
 #include "storyhelper.h"
 #include "fightui.h"
 
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+namespace prism {
+	void setN3DSTextureLoadReserve(size_t tReserve);   // 3ds/texture_3ds.cpp
+}
+// What a stage's textures made at load leave free (of about 69 MB): the
+// fighters' sounds need 44 MB free to be loaded at all.
+#define N3DS_STAGE_LOAD_RESERVE (56 * 1024 * 1024)
+#endif
+
 using namespace std;
 
 typedef struct {
@@ -510,9 +519,17 @@ static void loadStageTextures(char* tPath) {
 	// 3072x2100 background took 25 MB, the game closed for want of memory).
 	const int downscale = max(1, gStageData.mStageInfo.mLocalCoordinates.y / 240);
 	setMugenSpriteFileReaderDownscale(downscale);
+	// The stage's textures made at load: at most what leaves the fighters
+	// and their sounds N3DS_STAGE_LOAD_RESERVE; the rest made when first
+	// drawn (and let go when another needs the room), as the fighters'. The
+	// MvC2 Circus Carnival made its 3714 at load: 12 MB were left, the
+	// fighters' sounds (loaded only above 44 MB free) all left out, no
+	// voices, and the fighters' textures made again and again.
+	setN3DSTextureLoadReserve(N3DS_STAGE_LOAD_RESERVE);
 #endif
 	gStageData.mSprites = loadMugenSpriteFileWithoutPalette(sffFile);
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	setN3DSTextureLoadReserve(0);
 	setMugenSpriteFileReaderDownscale(1);
 #endif
 	setMugenSpriteFileReaderToNotUsePalette();
