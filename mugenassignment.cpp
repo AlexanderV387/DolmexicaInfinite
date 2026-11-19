@@ -1317,11 +1317,33 @@ DreamMugenAssignment* parseDreamMugenAssignmentFromString(char * tText)
 	return parseDreamMugenAssignmentFromStringInParts(tText);
 }
 
+// A lone '!' after an expression ("time!"): no expression ends in one, a
+// prefix '!' put after it; read as that ("!time"). Read as a word no
+// trigger knows, it was true every frame: Wonder Woman's crouching kick
+// (state 400, its animation set by "trigger1 = time!") started its
+// animation again every frame, and she stayed in it until hit.
+static int isMisplacedNegation(const char* tText) {
+	const int n = int(strlen(tText));
+	return n > 1 && tText[n - 1] == '!' && tText[n - 2] != '!' && tText[n - 2] != '=' && tText[n - 2] != '"';
+}
+
+static DreamMugenAssignment* parseMugenMisplacedNegationFromString(char* tText) {
+	std::string text(tText);
+	text.pop_back();
+	text = "!(" + text + ")";
+	std::vector<char> negated(text.begin(), text.end());
+	negated.push_back('\0');
+	return parseDreamMugenAssignmentFromStringInParts(negated.data());
+}
+
 static DreamMugenAssignment* parseDreamMugenAssignmentFromStringInParts(char * tText)
 {
 	sanitizeText(&tText);
 
-	if (isEmpty(tText)) {
+	if (isMisplacedNegation(tText)) {
+		return parseMugenMisplacedNegationFromString(tText);
+	}
+	else if (isEmpty(tText)) {
 		return parseMugenNullFromString();
 	}
 	else if (isVector(tText)) {
