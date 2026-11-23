@@ -682,22 +682,29 @@ static float getDreamCameraTargetPositionX(int tCoordinateP)
 	return p.x;
 }
 
+// The players and helpers the camera follows this tick (their
+// mIsCameraFollowing): the players, and helpers with ScreenBound's
+// movecamera, as in MUGEN 1.1 and Ikemen.
+static std::vector<DreamPlayer*> getCameraFollowedPlayers(int tAxis) {
+	std::vector<DreamPlayer*> ret;
+	const int amount = getTotalPlayerAmount();
+	for (int i = 0; i < amount; i++) {
+		DreamPlayer* p = getPlayerByIndex(i);
+		if (!p || p->mIsDestroyed) continue;
+		if (tAxis == 0 ? p->mIsCameraFollowing.x : p->mIsCameraFollowing.y) ret.push_back(p);
+	}
+	return ret;
+}
+
 static void updateCameraMovementX() {
 	std::vector<float> xPositions;
-	if (getRootPlayer(0)->mIsCameraFollowing.x) {
-		xPositions.push_back(getPlayerPositionX(getRootPlayer(0), gStageData.mStageInfo.mLocalCoordinates.x));
-	}
-	if (getRootPlayer(1)->mIsCameraFollowing.x) {
-		xPositions.push_back(getPlayerPositionX(getRootPlayer(1), gStageData.mStageInfo.mLocalCoordinates.x));
+	for (DreamPlayer* p : getCameraFollowedPlayers(0)) {
+		xPositions.push_back(getPlayerPositionX(p, gStageData.mStageInfo.mLocalCoordinates.x));
 	}
 	if (xPositions.empty()) return;
 
-	float minX = xPositions[0];
-	float maxX = xPositions[0];
-	if (xPositions.size() > 1) {
-		minX = std::min(minX, xPositions[1]);
-		maxX = std::max(maxX, xPositions[1]);
-	}
+	float minX = *std::min_element(xPositions.begin(), xPositions.end());
+	float maxX = *std::max_element(xPositions.begin(), xPositions.end());
 	minX -= gStageData.mStageInfo.mLocalCoordinates.x / 2;
 	maxX -= gStageData.mStageInfo.mLocalCoordinates.x / 2;
 
@@ -723,18 +730,12 @@ static void updateCameraMovementX() {
 
 static void updateCameraMovementY() {
 	std::vector<float> yPositions;
-	if (getRootPlayer(0)->mIsCameraFollowing.y) {
-		yPositions.push_back(getPlayerPositionY(getRootPlayer(0), getDreamMugenStageHandlerCameraCoordinateP()));
-	}
-	if (getRootPlayer(1)->mIsCameraFollowing.y) {
-		yPositions.push_back(getPlayerPositionY(getRootPlayer(1), getDreamMugenStageHandlerCameraCoordinateP()));
+	for (DreamPlayer* p : getCameraFollowedPlayers(1)) {
+		yPositions.push_back(getPlayerPositionY(p, getDreamMugenStageHandlerCameraCoordinateP()));
 	}
 	if (yPositions.empty()) return;
 
-	float mini = yPositions[0];
-	if (yPositions.size() > 1) {
-		mini = std::min(mini, yPositions[1]);
-	}
+	const float mini = *std::min_element(yPositions.begin(), yPositions.end());
 
 	const auto cameraY = mini * gStageData.mCamera.mVerticalFollow + gStageData.mCamera.mStartPosition.y;
 	setDreamMugenStageHandlerCameraPositionY(cameraY);

@@ -1896,8 +1896,14 @@ static void updatePlayerDrawOffset(DreamPlayer* tPlayer) {
 	setMugenAnimationPosition(tPlayer->mAnimationElement, newPos.xyz(pos.z));
 }
 
+// As in MUGEN 1.1 (and Ikemen): each tick the players and the helpers of
+// helpertype = player move the camera, other helpers only when a ScreenBound
+// of theirs says so that tick (Wonder Woman's two camera helpers in her
+// invisible jet super: the camera between them, her jet's hits on the
+// screen's middle where her opponent was left; it stayed put, they missed).
 static void updateCameraFollowingFlags(DreamPlayer* p) {
-	p->mIsCameraFollowing.x = p->mIsCameraFollowing.y = 1;
+	const int isFollowing = !p->mIsHelper || p->mIsPlayerTypeHelper;
+	p->mIsCameraFollowing.x = p->mIsCameraFollowing.y = isFollowing;
 }
 
 static int updateSinglePlayerPreStateMachine(DreamPlayer* p) {
@@ -5539,6 +5545,8 @@ DreamPlayer * clonePlayerAsHelper(DreamPlayer* p)
 
 	helper->mParent = p;
 	helper->mIsHelper = 1;
+	helper->mIsPlayerTypeHelper = 0;
+	helper->mIsCameraFollowing.x = helper->mIsCameraFollowing.y = 0;
 	helper->mUniqueID = ++gPlayerDefinition.mUniqueIDCounter;
 	helper->mHelperIDInParent = list_push_back(&p->mHelpers, helper);
 	helper->mHelperIDInRoot = list_push_back(&gPlayerDefinition.mAllPlayers, helper);

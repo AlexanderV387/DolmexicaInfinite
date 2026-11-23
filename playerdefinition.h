@@ -126,6 +126,7 @@ struct DreamPlayer {
 	int mID;
 	int mUniqueID; // MUGEN's ID trigger (see resetPlayerUniqueIDs)
 	int mIsHelper;
+	int mIsPlayerTypeHelper; // a helper of helpertype = player (the camera follows it as a player)
 	int mIsProjectile;
 	int mProjectileID;
 	int mProjectileDataID;
@@ -278,7 +279,7 @@ struct DreamPlayer {
 
 	int mIsBoundToScreenForever;
 	int mIsBoundToScreenForTick;
-	Vector3DI mIsCameraFollowing;
+	Vector3DI mIsCameraFollowing; // this tick (stage.cpp: the camera follows each player and helper with it)
 
 	float mStartLifePercentage;
 

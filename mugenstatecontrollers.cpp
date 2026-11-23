@@ -4516,6 +4516,8 @@ static int handleHelper(DreamMugenStateController* tController, DreamPlayer* tPl
 	evaluateDreamAssignmentAndReturnAsString(type, &e->mType, tPlayer);
 	turnStringLowercase(type);
 	if ("player" == type) {
+		helper->mIsPlayerTypeHelper = 1;
+		helper->mIsCameraFollowing.x = helper->mIsCameraFollowing.y = 1;
 		setPlayerScreenBoundForever(helper, 1);
 		setDreamRegisteredStateToPlayerHelperMode(helper->mRegisteredStateMachine);
 	}

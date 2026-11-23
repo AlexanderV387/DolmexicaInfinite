@@ -247,6 +247,10 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 			setPlayerPositionX(second, 0, getPlayerCoordinateP(second));
 			setPlayerPositionX(first, -(float)getContinueIntegerSetting("DOLMEXICA_CENTER_GAP", 100) * getPlayerCoordinateP(first) / 320, getPlayerCoordinateP(first));
 		}
+		// DOLMEXICA_P1_POWER=frame:power: the first player's power set then.
+		if (const char* power = getenv("DOLMEXICA_P1_POWER")) {
+			if (frame == atoi(power) && strchr(power, ':')) setPlayerPower(getRootPlayer(0), atoi(strchr(power, ':') + 1));
+		}
 		// DOLMEXICA_P1_CHANGE=frame:state: the same for the first player.
 		if (const char* change = getenv("DOLMEXICA_P1_CHANGE")) {
 			if (frame == atoi(change) && strchr(change, ':')) changePlayerState(getRootPlayer(0), atoi(strchr(change, ':') + 1));
