@@ -251,6 +251,20 @@ TEST_F(ContinueHelperTest, JumpedOver) {
 		if (const char* power = getenv("DOLMEXICA_P1_POWER")) {
 			if (frame == atoi(power) && strchr(power, ':')) setPlayerPower(getRootPlayer(0), atoi(strchr(power, ':') + 1));
 		}
+		// DOLMEXICA_P1_MOVE=frame:dx: the first player moved dx forward (stage units) then.
+		if (const char* px = getenv("DOLMEXICA_P1_MOVE")) {
+			// Its helpers moved as much (New Kyouki's own x follows its helper 10001's).
+			if (frame == atoi(px) && strchr(px, ':')) {
+				DreamPlayer* first = getRootPlayer(0);
+				const int coordP = getPlayerCoordinateP(first);
+				const float delta = (float)atof(strchr(px, ':') + 1) * coordP / 320 * (getPlayerIsFacingRight(first) ? 1 : -1);
+				for (int i = 0; i < getTotalPlayerAmount(); i++) {
+					DreamPlayer* p = getPlayerByIndex(i);
+					if (p != first && (!isPlayerHelper(p) || getPlayerRoot(p) != first)) continue;
+					setPlayerPositionX(p, getPlayerPositionX(p, coordP) + delta, coordP);
+				}
+			}
+		}
 		// DOLMEXICA_P1_CHANGE=frame:state: the same for the first player.
 		if (const char* change = getenv("DOLMEXICA_P1_CHANGE")) {
 			if (frame == atoi(change) && strchr(change, ':')) changePlayerState(getRootPlayer(0), atoi(strchr(change, ':') + 1));
