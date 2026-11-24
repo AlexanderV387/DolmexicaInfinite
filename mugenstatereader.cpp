@@ -431,6 +431,11 @@ static void loadMugenConstantsHeader(DreamMugenConstantsHeader* tHeader, MugenDe
 	loadSingleSparkNumber(&tHeader->mIsGuardSparkNoInPlayerFile, &tHeader->mGuardSparkNo, tScript, "data", "guard.sparkno", 40);
 	tHeader->mKOEcho = getMugenDefIntegerOrDefault(tScript, "data", "ko.echo", 0);
 	tHeader->mVolume = getMugenDefIntegerOrDefault(tScript, "data", "volume", 0);
+	// As MUGEN (and Ikemen): volume in halves of 1/256 over the usual
+	// (-100 is 80%; Orochi's, taken as -100%, left all his sounds silent),
+	// volumescale (MUGEN 1.1) in percent.
+	tHeader->mSoundVolumeFactor = (tHeader->mVolume / 2 + 256) / 256.0f;
+	if (isMugenDefVariable(tScript, "data", "volumescale")) tHeader->mSoundVolumeFactor = getMugenDefFloatOrDefault(tScript, "data", "volumescale", 100) / 100.0f;
 
 	tHeader->mIntPersistIndex = getMugenDefIntegerOrDefault(tScript, "data", "intpersistindex", 60);
 	tHeader->mFloatPersistIndex = getMugenDefIntegerOrDefault(tScript, "data", "floatpersistindex", 40);

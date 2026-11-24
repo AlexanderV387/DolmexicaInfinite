@@ -288,6 +288,7 @@ static void loadStageStageInfo(MugenDefScript* s) {
 		{
 			gStageData.mStageInfo.mLocalCoordinates = Vector2DI(640, 480);
 			gStageData.mStageInfo.mZOffset *= 2; // based on tekken vs street fighter sfxtk stages among others
+			gStageData.mCamera.mFloorTension *= 2; // MUGEN 1.1 reads it in 320 wide units (Carnival's 90: the camera 38 up, not 88, for one 125 up)
 		}
 	}
 	sanitizeLocalCoordinates();
@@ -737,7 +738,11 @@ static void updateCameraMovementY() {
 
 	const float mini = *std::min_element(yPositions.begin(), yPositions.end());
 
-	const auto cameraY = mini * gStageData.mCamera.mVerticalFollow + gStageData.mCamera.mStartPosition.y;
+	// As MUGEN (and Ikemen): the highest player is followed only above the
+	// floor tension (Kyouki's ultimate leaves its foe 125 up, invisible: on
+	// Carnival, floor tension 90, the camera went 137 up instead of 38).
+	const float floorTension = transformDreamCoordinates(gStageData.mCamera.mFloorTension, gStageData.mStageInfo.mLocalCoordinates.x, getDreamMugenStageHandlerCameraCoordinateP());
+	const auto cameraY = min(0.0f, (mini + floorTension) * gStageData.mCamera.mVerticalFollow) + gStageData.mCamera.mStartPosition.y;
 	setDreamMugenStageHandlerCameraPositionY(cameraY);
 }
 

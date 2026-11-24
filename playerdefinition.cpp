@@ -6369,7 +6369,7 @@ int parsePlayerSoundEffectChannel(int tChannel, DreamPlayer* tPlayer) {
 
 float getPlayerVolumeModifier(DreamPlayer* tPlayer)
 {
-	return clamp((tPlayer->mHeader->mFiles.mConstants.mHeader.mVolume + 100) / float(100), 0.0f, 1.0f);
+	return clamp(tPlayer->mHeader->mFiles.mConstants.mHeader.mSoundVolumeFactor, 0.0f, 1.0f);
 }
 
 float getPlayerMidiVolumeForPrism(DreamPlayer* tPlayer)

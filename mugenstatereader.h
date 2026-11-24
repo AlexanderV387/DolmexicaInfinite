@@ -213,6 +213,7 @@ typedef struct {
 	int mGuardSparkNo;
 	int mKOEcho; // unused due to technical limitations
 	int mVolume;
+	float mSoundVolumeFactor; // its sounds' volume, 1 the usual (from volume or volumescale)
 
 	int mIntPersistIndex;
 	int mFloatPersistIndex;
