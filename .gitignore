@@ -93,3 +93,9 @@ dolmexica-diag.3dsx
 build_3ds_diag/
 DolmexicaInfiniteSimDiag
 build_sim_diag/
+build_sim_prof/
+DolmexicaInfiniteSimProf
+build_3ds_force/
+dolmexica-force.3dsx
+dolmexica-force.elf
+dolmexica-force.smdh

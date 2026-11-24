@@ -10,6 +10,7 @@
 #include <prism/animation.h>
 #include <prism/screeneffect.h>
 #include <prism/system.h>
+#include <prism/log.h>
 
 #include "fightscreen.h"
 #include "fightui.h"
@@ -451,7 +452,41 @@ static void unloadPauseMenu(void* /*tData*/) {
 	releaseSmoothTextFonts();
 }
 
+#ifdef N3DS_FORCE_TEST
+// [3DS] Test builds only (N3DS_FORCE_TEST, never released): forzar.txt in
+// the game's folder, "power frame value" and "state frame state" lines, the
+// first player's power and state set at that frame of each round's fight
+// (to see a super in an emulator).
+static void updateN3DSForceTest() {
+	static int isRead = 0;
+	static std::vector<std::vector<int>> orders;   // kind (0 power, 1 state), frame, value
+	static int frame = 0;
+	if (!isRead) {
+		isRead = 1;
+		FILE* file = fopen("sdmc:/3ds/dolmexica/forzar.txt", "r");
+		char kind[16];
+		int when, value;
+		while (file && fscanf(file, "%15s %d %d", kind, &when, &value) == 3) orders.push_back({ strcmp(kind, "power") ? 1 : 0, when, value });
+		if (file) fclose(file);
+	}
+	if (getDreamRoundStateNumber() != 2) {
+		frame = 0;
+		return;
+	}
+	for (const auto& order : orders) {
+		if (order[1] != frame) continue;
+		logFormat("forced at %d: %s %d", frame, order[0] ? "state" : "power", order[2]);
+		if (order[0]) changePlayerState(getRootPlayer(0), order[2]);
+		else setPlayerPower(getRootPlayer(0), order[2]);
+	}
+	frame++;
+}
+#endif
+
 static void updatePauseMenu(void* /*tData*/) {
+#ifdef N3DS_FORCE_TEST
+	if (!isWrapperPaused()) updateN3DSForceTest();
+#endif
 	if (gPauseMenu3DSData.mAreBarsHidden) setDreamBarInvisibleForOneFrame();
 	updateFPS();
 
