@@ -50,6 +50,7 @@ typedef struct {
 
 	int mIsHitPaused;
 	int mHasChangedState;
+	int mIsSpecialState;   // -3, -2 or -1
 } MugenStateControllerCaller;
 
 static int isStateMachineInHitPause(RegisteredMugenStateMachine* tRegisteredState) {
@@ -75,13 +76,21 @@ static void updateSingleController(void* tCaller, void* tData) {
 	// mAccessAmount is the ticks left before it may run again. Counted
 	// as "once every n times the triggers held", New Kyouki's Y (a
 	// projectile on every third tick, persistent = 2) threw half of them.
-	if (controller->mAccessAmount != INT16_MAX) {
-		if (controller->mAccessAmount > INT16_MIN) controller->mAccessAmount--;
-		if (controller->mAccessAmount > 0) return;
+	// In states -3, -2 and -1 persistent counts for nothing: their
+	// controllers run every tick their triggers hold, as MUGEN 1.1 does
+	// (tried there: persistent = 0, 5 or none, each ran every tick).
+	// Run once for the whole fight (as Ikemen does), Wonder Woman's damage
+	// dampener reset (-3, persistent = 0) left all her hits after the first
+	// combo at 15%.
+	if (!caller->mIsSpecialState) {
+		if (controller->mAccessAmount != INT16_MAX) {
+			if (controller->mAccessAmount > INT16_MIN) controller->mAccessAmount--;
+			if (controller->mAccessAmount > 0) return;
+		}
+		else return;
 	}
-	else return;
 	if (!evaluateTrigger(&controller->mTrigger, caller->mRegisteredState->mPlayer)) return;
-	controller->mAccessAmount = controller->mPersistence ? controller->mPersistence : INT16_MAX;
+	if (!caller->mIsSpecialState) controller->mAccessAmount = controller->mPersistence ? controller->mPersistence : INT16_MAX;
 
 	DreamPlayer* target;
 	switch (controller->mTarget)
@@ -159,6 +168,7 @@ static void updateSingleStateUnguarded(RegisteredMugenStateMachine* tRegisteredS
 		caller.mState = state;
 		caller.mIsHitPaused = tIsHitPaused;
 		caller.mHasChangedState = 0;
+		caller.mIsSpecialState = tState < 0;
 		vector_map(&state->mControllers, updateSingleController, &caller);
 
 		if (!caller.mHasChangedState) break;
@@ -636,13 +646,6 @@ static void applyRegisteredStateMachineStateChange(RegisteredMugenStateMachine* 
 	
 	DreamMugenState* newState = &states->mStates[e->mState];
 	resetStateControllers(newState);
-	static int isResettingNegative = -1;
-	if (isResettingNegative < 0) isResettingNegative = getenv("DOLMEXICA_NEG_PERSIST_RESET") ? 1 : 0;
-	if (isResettingNegative) {
-		for (int negative = -3; negative <= -1; negative++) {
-			if (stl_map_contains(e->mStates->mStates, negative)) resetStateControllers(&e->mStates->mStates[negative]);
-		}
-	}
 
 	e->mHasPendingStateInit = 0;
 	if (!e->mPlayer || e->mIsInStoryMode) return;
