@@ -44,6 +44,8 @@ typedef struct {
 	int mButton;             // pressed now, -1 none
 	int mButtonTime;         // frames left holding it, then releasing
 	int mGuardChosen;        // the other's attack near: -1 not to guard it, 1 to
+	int mGuardOtherState;    // the other's state and its time when chosen (a new attack: chosen again)
+	int mGuardOtherTime;
 	int mComboTried;         // this attack's hit followed (or not) already
 	int mAirAttackDone;      // this jump's attack pressed
 } SmartAI;
@@ -309,7 +311,10 @@ static void applyInput(DreamPlayer* p, SmartAI* e) {
 
 // The other's attack near: guard it (back, low if it crouches) as long as
 // it is near, chosen once for each attack, the more likely the higher the
-// level (a quarter of them at 1, four in five at 8).
+// level (a quarter of them at 1, four in five at 8). Each attack: chosen
+// again when the other goes into another state or starts one over (once
+// for a whole string of blocked attacks, Chun Li xi blocked Scream's chain
+// in the corner forever).
 static int updateGuarding(DreamPlayer* p, DreamPlayer* tOther, SmartAI* e, float tLevel) {
 	const int state = getPlayerState(p);
 	const int isGuardState = state >= 120 && state <= 155;
@@ -317,6 +322,10 @@ static int updateGuarding(DreamPlayer* p, DreamPlayer* tOther, SmartAI* e, float
 		e->mGuardChosen = 0;
 		return 0;
 	}
+	const int otherState = getPlayerState(tOther), otherTime = getPlayerTimeInState(tOther);
+	if (otherState != e->mGuardOtherState || otherTime < e->mGuardOtherTime) e->mGuardChosen = 0;
+	e->mGuardOtherState = otherState;
+	e->mGuardOtherTime = otherTime;
 	if (!e->mGuardChosen) e->mGuardChosen = chance(0.25f + 0.55f * tLevel) ? 1 : -1;
 	if (e->mGuardChosen < 0) return 0;
 	const int isLow = getPlayerStateType(tOther) == MUGEN_STATE_TYPE_CROUCHING;

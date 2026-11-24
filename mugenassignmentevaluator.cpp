@@ -278,7 +278,7 @@ static int convertAssignmentReturnToNumber(AssignmentReturnValue* tAssignmentRet
 		break;
 	case MUGEN_ASSIGNMENT_RETURN_TYPE_FLOAT:
 		valueF = getFloatAssignmentReturnValue(tAssignmentReturn);
-		ret = valueF != 0;   // any nonzero float true (0.5 too), as in MUGEN and Ikemen
+		ret = (int)valueF;
 		break;
 	case MUGEN_ASSIGNMENT_RETURN_TYPE_BOOLEAN:
 		valueI = getBooleanAssignmentReturnValue(tAssignmentReturn);

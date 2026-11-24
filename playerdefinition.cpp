@@ -1489,20 +1489,28 @@ static void updatePushFlags() {
 
 #define CORNER_CHECK_EPSILON 1
 
-static int isPlayerInCorner(DreamPlayer* p, int tIsCheckingRightCorner) {
-	float back = getPlayerBackXStage(p, getPlayerCoordinateP(p));
-	float front = getPlayerFrontXStage(p, getPlayerCoordinateP(p));
-
+// At the screen's side, by its body as bound there (a Width of this tick's)
+// or by its own size: Chun Li xi's guard sets a narrower Width some ticks,
+// then not in the corner while she stood at the wall, no corner push for
+// the one hitting her, Scream's blocked chain went on forever (Ikemen
+// checks the position alone).
+static int isPlayerInCornerWithEdges(DreamPlayer* p, int tIsCheckingRightCorner, float tBack, float tFront) {
 	if (tIsCheckingRightCorner) {
 		float right = getDreamStageRightOfPlayfield(getPlayerCoordinateP(p)) - getDreamStageRightEdgeMinimumPlayerDistance(getPlayerCoordinateP(p));
-		float maxX = max(back, front);
+		float maxX = max(tBack, tFront);
 		return (maxX > right - CORNER_CHECK_EPSILON);
 	}
 	else {
 		float left = getDreamStageLeftOfPlayfield(getPlayerCoordinateP(p)) + getDreamStageLeftEdgeMinimumPlayerDistance(getPlayerCoordinateP(p));
-		float minX = min(back, front);
+		float minX = min(tBack, tFront);
 		return (minX < left + CORNER_CHECK_EPSILON);
 	}
+}
+
+static int isPlayerInCorner(DreamPlayer* p, int tIsCheckingRightCorner) {
+	const int coordinateP = getPlayerCoordinateP(p);
+	if (isPlayerInCornerWithEdges(p, tIsCheckingRightCorner, getPlayerBackXStage(p, coordinateP), getPlayerFrontXStage(p, coordinateP))) return 1;
+	return isPlayerInCornerWithEdges(p, tIsCheckingRightCorner, getPlayerBackX(p, coordinateP), getPlayerFrontX(p, coordinateP));
 }
 
 static void updateStageBorderPost(DreamPlayer* p) {
