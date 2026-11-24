@@ -450,5 +450,12 @@ int canProjectileHit(DreamPlayer* p)
 {
 	assert(int_map_contains(&gProjectileData.mProjectileList, p->mProjectileDataID));
 	Projectile* e = (Projectile*)int_map_get(&gProjectileData.mProjectileList, p->mProjectileDataID);
-	return e->mMissHitNow >= e->mMissTime;
+	// As in MUGEN and Ikemen, it hits again pausetime + misstime ticks after
+	// a hit, never during its own hit pause. The check sees it as it was
+	// before this tick's update: one tick ahead is counted (New Kyouki's
+	// 26000 projectiles, pausetime 2 and misstime 2, hit every 5 ticks, 4 in
+	// MUGEN 1.1: 67 damage instead of 97).
+	if (e->mHitPauseLeft > 1) return 0;
+	if (e->mHitPauseLeft == 1) return e->mMissHitNow >= e->mMissTime;
+	return e->mMissHitNow + 1 >= e->mMissTime;
 }
