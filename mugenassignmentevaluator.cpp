@@ -239,7 +239,7 @@ static int convertAssignmentReturnToBool(AssignmentReturnValue* tAssignmentRetur
 		break;
 	case MUGEN_ASSIGNMENT_RETURN_TYPE_FLOAT:
 		valueF = getFloatAssignmentReturnValue(tAssignmentReturn);
-		ret = (int)valueF;
+		ret = valueF != 0;   // any nonzero float true (0.5 too), as in MUGEN and Ikemen
 		break;
 	case MUGEN_ASSIGNMENT_RETURN_TYPE_BOOLEAN:
 		valueI = getBooleanAssignmentReturnValue(tAssignmentReturn);
@@ -278,7 +278,7 @@ static int convertAssignmentReturnToNumber(AssignmentReturnValue* tAssignmentRet
 		break;
 	case MUGEN_ASSIGNMENT_RETURN_TYPE_FLOAT:
 		valueF = getFloatAssignmentReturnValue(tAssignmentReturn);
-		ret = (int)valueF;
+		ret = valueF != 0;   // any nonzero float true (0.5 too), as in MUGEN and Ikemen
 		break;
 	case MUGEN_ASSIGNMENT_RETURN_TYPE_BOOLEAN:
 		valueI = getBooleanAssignmentReturnValue(tAssignmentReturn);
@@ -2551,7 +2551,7 @@ static AssignmentReturnValue* evaluateCondArrayAssignment(DreamMugenAssignment**
 	AssignmentReturnValue* ret = NULL;
 
 	AssignmentReturnValue* truthValue = evaluateAssignmentDependency(&firstV->a, tPlayer, tIsStatic);
-	int isTrue = convertAssignmentReturnToNumber(truthValue);
+	int isTrue = convertAssignmentReturnToBool(truthValue);   // a nonzero float true (0.5 too)
 	if (isTrue) {
 		ret = evaluateAssignmentDependency(&secondV->a, tPlayer, tIsStatic);
 	}
@@ -3564,7 +3564,7 @@ enum FastTriggerOp : uint8_t {
 	FAST_TRIGGER_MOVE_TYPE,      // movetype = letters (the mask of a, h, i)
 	FAST_TRIGGER_ARRAY,          // an array function returning a number or a boolean, on its own index
 	FAST_TRIGGER_REDIRECT,       // a: the part on another player (p2, parent...), b: the general evaluation when there is none
-	FAST_TRIGGER_FVAR_TRUTH,     // fvar(a) as a truth: the float cut to a whole number
+	FAST_TRIGGER_FVAR_TRUTH,     // fvar(a) as a truth: nonzero (0.5 too)
 	FAST_TRIGGER_GENERAL,        // the general evaluation's truth of a part
 };
 
@@ -3993,7 +3993,7 @@ static int runFastTriggerStep(const FastTriggerStep* tSteps, int tIndex, DreamPl
 		return 0;
 	}
 	case FAST_TRIGGER_FVAR_TRUTH:
-		return (int)getPlayerFloatVariable(tPlayer, runFastTriggerStep(tSteps, step.a, tPlayer));
+		return getPlayerFloatVariable(tPlayer, runFastTriggerStep(tSteps, step.a, tPlayer)) != 0;
 	case FAST_TRIGGER_ARRAY: {
 		int isStatic;
 		return convertAssignmentReturnToNumber(((ArrayFunction)step.mPointer2)((DreamMugenAssignment**)step.mPointer, tPlayer, &isStatic));

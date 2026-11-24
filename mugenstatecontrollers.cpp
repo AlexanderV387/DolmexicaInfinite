@@ -4404,6 +4404,10 @@ static void handleHelperFacing(DreamMugenAssignment** tAssignment, DreamPlayer* 
 
 }
 
+// A helper's place. With postype front, back, left, right or none its y
+// is the one given, from the ground, not from the player's (as in Ikemen:
+// Wonder Woman's amazons, made by her up in the air, ran in the air and
+// hit nothing).
 static Position2D getFinalHelperPositionFromPositionType(DreamExplodPositionType tPositionType, Position2D mOffset, DreamPlayer* tPlayer) {
 	const auto p1 = getPlayerPosition(tPlayer, getActiveStateMachineCoordinateP());
 
@@ -4422,25 +4426,25 @@ static Position2D getFinalHelperPositionFromPositionType(DreamExplodPositionType
 	}
 	else if (tPositionType == EXPLOD_POSITION_TYPE_RELATIVE_TO_FRONT) {
 		DreamPlayer* target = tPlayer;
-		const auto p = Vector2D(getPlayerScreenEdgeInFrontX(target, getActiveStateMachineCoordinateP()), p1.y);
+		const auto p = Vector2D(getPlayerScreenEdgeInFrontX(target, getActiveStateMachineCoordinateP()), 0);
 		int isReversed = getPlayerIsFacingRight(target);
 		if (isReversed) mOffset.x *= -1;
 		return p + mOffset;
 	}
 	else if (tPositionType == EXPLOD_POSITION_TYPE_RELATIVE_TO_BACK) {
 		DreamPlayer* target = tPlayer;
-		const auto p = Vector2D(getPlayerScreenEdgeInBackX(target, getActiveStateMachineCoordinateP()), p1.y);
+		const auto p = Vector2D(getPlayerScreenEdgeInBackX(target, getActiveStateMachineCoordinateP()), 0);
 		int isReversed = !getPlayerIsFacingRight(target);
 		if (isReversed) mOffset.x *= -1;
 		return p + mOffset;
 	}
 	else if (tPositionType == EXPLOD_POSITION_TYPE_RELATIVE_TO_LEFT) {
 		if (getPlayerIsFacingRight(tPlayer)) {
-			const auto p = Vector2D(getDreamStageLeftOfScreenBasedOnPlayer(getActiveStateMachineCoordinateP()), p1.y);
+			const auto p = Vector2D(getDreamStageLeftOfScreenBasedOnPlayer(getActiveStateMachineCoordinateP()), 0);
 			return p + mOffset;
 		}
 		else {
-			auto p = Vector2D(getDreamStageRightOfScreenBasedOnPlayer(getActiveStateMachineCoordinateP()), p1.y);
+			auto p = Vector2D(getDreamStageRightOfScreenBasedOnPlayer(getActiveStateMachineCoordinateP()), 0);
 			p.x -= mOffset.x;
 			p.y += mOffset.y;
 			return p;
@@ -4448,18 +4452,18 @@ static Position2D getFinalHelperPositionFromPositionType(DreamExplodPositionType
 	}
 	else if (tPositionType == EXPLOD_POSITION_TYPE_RELATIVE_TO_RIGHT) {
 		if (getPlayerIsFacingRight(tPlayer)) {
-			const auto p = Vector2D(getDreamStageRightOfScreenBasedOnPlayer(getActiveStateMachineCoordinateP()), p1.y);
+			const auto p = Vector2D(getDreamStageRightOfScreenBasedOnPlayer(getActiveStateMachineCoordinateP()), 0);
 			return p + mOffset;
 		}
 		else {
-			auto p = Vector2D(getDreamStageLeftOfScreenBasedOnPlayer(getActiveStateMachineCoordinateP()), p1.y);
+			auto p = Vector2D(getDreamStageLeftOfScreenBasedOnPlayer(getActiveStateMachineCoordinateP()), 0);
 			p.x -= mOffset.x;
 			p.y += mOffset.y;
 			return p;
 		}
 	}
 	else if (tPositionType == EXPLOD_POSITION_TYPE_NONE) {
-		const auto p = Vector2D(getDreamGameWidth(getActiveStateMachineCoordinateP()) / 2, p1.y);
+		const auto p = Vector2D(getDreamGameWidth(getActiveStateMachineCoordinateP()) / 2, 0);
 		return p + mOffset;
 	}
 	else {

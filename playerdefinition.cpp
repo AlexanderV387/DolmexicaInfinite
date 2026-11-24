@@ -2561,6 +2561,9 @@ static void setPlayerHit(DreamPlayer* p, DreamPlayer* tOtherPlayer, void* tHitDa
 	}
 	else {
 		damage = scaleHitDamage(getActiveHitDataDamage(p), getPlayerAttackMultiplier(tOtherPlayer) * getInvertedPlayerDefenseMultiplier(p));
+#ifdef N3DS_TEXTURE_SIM
+		if (getenv("DOLMEXICA_PRINT_DAMAGE")) printf("DAMAGEDBG attacker %s state %d fv10 %.2f; hit %d -> %d: attack %.3f (mul %.3f data %.3f) defence mul %.3f super %.3f fall %.3f data %.3f\n", isPlayerHelper(tOtherPlayer) ? "helper" : "root", getPlayerState(tOtherPlayer), getPlayerFloatVariable(tOtherPlayer, 10), getActiveHitDataDamage(p), damage, getPlayerAttackMultiplier(tOtherPlayer), tOtherPlayer->mAttackMultiplier, getPlayerDataAttackFactor(tOtherPlayer), p->mDefenseMultiplier, p->mSuperDefenseMultiplier, p->mFallDefenseMultiplier, getPlayerDataDefenseFactor(p));
+#endif
 		powerUp1 = getActiveHitDataPlayer2PowerAdded(p);
 		powerUp2 = getActiveHitDataPlayer1PowerAdded(p);
 		hitPauseDuration = getActiveHitDataPlayer1PauseTime(p);

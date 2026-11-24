@@ -636,6 +636,13 @@ static void applyRegisteredStateMachineStateChange(RegisteredMugenStateMachine* 
 	
 	DreamMugenState* newState = &states->mStates[e->mState];
 	resetStateControllers(newState);
+	static int isResettingNegative = -1;
+	if (isResettingNegative < 0) isResettingNegative = getenv("DOLMEXICA_NEG_PERSIST_RESET") ? 1 : 0;
+	if (isResettingNegative) {
+		for (int negative = -3; negative <= -1; negative++) {
+			if (stl_map_contains(e->mStates->mStates, negative)) resetStateControllers(&e->mStates->mStates[negative]);
+		}
+	}
 
 	e->mHasPendingStateInit = 0;
 	if (!e->mPlayer || e->mIsInStoryMode) return;
