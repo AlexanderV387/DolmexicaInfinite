@@ -3999,6 +3999,16 @@ static DreamExplodTransparencyType handleExplodTransparencyTypeGeneral(DreamMuge
 	else if ("addalpha" == text) {
 		type = EXPLOD_TRANSPARENCY_TYPE_ADD_ALPHA;
 	}
+	// MUGEN 1.1's others: add, add1, sub and none.
+	else if ("add" == text || "add1" == text) {
+		type = EXPLOD_TRANSPARENCY_TYPE_ADD;
+	}
+	else if ("sub" == text) {
+		type = EXPLOD_TRANSPARENCY_TYPE_SUB;
+	}
+	else if ("none" == text) {
+		type = EXPLOD_TRANSPARENCY_TYPE_NONE;
+	}
 	else {
 		logWarningFormat("Unable to determine explod transparency type %s. Default to alpha.", text);
 		type = EXPLOD_TRANSPARENCY_TYPE_ALPHA;

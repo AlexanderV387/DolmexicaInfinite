@@ -677,7 +677,14 @@ static int getN3DSPlayerNaturalDownscale(DreamPlayer* tPlayer) {
 // paletted ones (made again when drawn), the effects, the fight's own.
 static const long long N3DS_PLAYER_TEXTURE_HEADROOM = 10 * 1024 * 1024;
 static const int N3DS_PLAYER_MAXIMUM_DOWNSCALE = 8;
+// Its sprites no longer than MUGEN's screen (320) on either side read whole:
+// those drawn at their own size, not at the character's (Art the Clown's
+// blood and hit sparks, 30 to 264 pixels across, read four times smaller as
+// his 1176x764 ones were drawn in big blocks); all read smaller if those do
+// not fit either.
+static const int N3DS_PLAYER_WHOLE_SIDE = 320;
 static int gN3DSPlayerDownscales[2] = { 1, 1 };
+static int gN3DSPlayerWholeSide = N3DS_PLAYER_WHOLE_SIDE;
 static long long gN3DSPlayerTrueColorBytes[2] = { -1, -1 };   // -1: not estimated
 
 static void chooseN3DSPlayerDownscales() {
@@ -687,24 +694,33 @@ static void chooseN3DSPlayerDownscales() {
 		gN3DSPlayerDownscales[i] = natural[i];
 		gN3DSPlayerTrueColorBytes[i] = -1;
 	}
+	gN3DSPlayerWholeSide = N3DS_PLAYER_WHOLE_SIDE;
+#ifndef __3DS__
+	if (getenv("N3DS_SIM_WHOLE_SIDE")) gN3DSPlayerWholeSide = atoi(getenv("N3DS_SIM_WHOLE_SIDE"));
+#endif
 	if (natural[0] == 1 && natural[1] == 1) return;
 	const long long budget = (long long)linearSpaceFree() - N3DS_PLAYER_TEXTURE_HEADROOM;
 	long long total = 0;
-	for (int extra = 0; ; extra++) {
+	for (int wholeSide : { gN3DSPlayerWholeSide, 0 }) {
+		gN3DSPlayerWholeSide = wholeSide;
 		int isAtMost = 1;
-		total = 0;
-		for (int i = 0; i < 2; i++) {
-			// Only the high resolution ones read smaller still.
-			const int factor = natural[i] > 1 ? std::min(natural[i] + extra, N3DS_PLAYER_MAXIMUM_DOWNSCALE) : 1;
-			if (natural[i] > 1 && factor < N3DS_PLAYER_MAXIMUM_DOWNSCALE) isAtMost = 0;
-			gN3DSPlayerDownscales[i] = factor;
-			const long long bytes = estimateMugenSpriteFileTrueColorTextureBytes(gPlayerDefinition.mPlayers[i].mHeader->mFiles.mSpritePath, factor);
-			gN3DSPlayerTrueColorBytes[i] = bytes;
-			if (bytes > 0) total += bytes;
+		for (int extra = 0; ; extra++) {
+			isAtMost = 1;
+			total = 0;
+			for (int i = 0; i < 2; i++) {
+				// Only the high resolution ones read smaller still.
+				const int factor = natural[i] > 1 ? std::min(natural[i] + extra, N3DS_PLAYER_MAXIMUM_DOWNSCALE) : 1;
+				if (natural[i] > 1 && factor < N3DS_PLAYER_MAXIMUM_DOWNSCALE) isAtMost = 0;
+				gN3DSPlayerDownscales[i] = factor;
+				const long long bytes = estimateMugenSpriteFileTrueColorTextureBytes(gPlayerDefinition.mPlayers[i].mHeader->mFiles.mSpritePath, factor, wholeSide);
+				gN3DSPlayerTrueColorBytes[i] = bytes;
+				if (bytes > 0) total += bytes;
+			}
+			if (total <= budget || isAtMost) break;
 		}
-		if (total <= budget || isAtMost) break;
+		if (total <= budget) break;
 	}
-	addLoadProfileLine("  fighters' sprites read %d and %d times smaller: %lld KB of true color textures, %lld KB there", gN3DSPlayerDownscales[0], gN3DSPlayerDownscales[1], total / 1024, budget / 1024);
+	addLoadProfileLine("  fighters' sprites read %d and %d times smaller (up to %d pixels whole): %lld KB of true color textures, %lld KB there", gN3DSPlayerDownscales[0], gN3DSPlayerDownscales[1], gN3DSPlayerWholeSide, total / 1024, budget / 1024);
 #ifndef __3DS__
 	fprintf(stderr, "fighters' sprites read %d and %d times smaller: %lld KB of true color textures, %lld KB there\n", gN3DSPlayerDownscales[0], gN3DSPlayerDownscales[1], total / 1024, budget / 1024);
 #endif
@@ -750,6 +766,7 @@ static void loadSinglePlayerSprites(DreamPlayer* tPlayer) {
 	{
 		const int downscale = gN3DSPlayerDownscales[tPlayer->mRootID];
 		setMugenSpriteFileReaderDownscale(downscale);
+		setMugenSpriteFileReaderKeepingSmallSpritesWhole(gN3DSPlayerWholeSide);
 		if (downscale > 1) logFormat("P%d sprites read %d times smaller (drawn at %.2f of their size)", tPlayer->mRootID + 1, downscale, getN3DSPlayerDrawnScale(tPlayer));
 	}
 #endif
@@ -761,6 +778,7 @@ static void loadSinglePlayerSprites(DreamPlayer* tPlayer) {
 	}
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 	setMugenSpriteFileReaderDownscale(1);
+	setMugenSpriteFileReaderKeepingSmallSpritesWhole(0);
 #endif
 	setMugenSpriteFileReaderToNotUsePalette();
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)

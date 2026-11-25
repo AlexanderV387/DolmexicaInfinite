@@ -271,6 +271,20 @@ void setExplodTransparencyType(int tID, int tHasTransparencyType, DreamExplodTra
 
 static void explodAnimationFinishedCB(void* tCaller);
 
+// Its trans as drawn: add and add1 added, sub taken away (Freddy Krueger's
+// smoke, white on black: drawn as it is, black squares over the fight).
+static BlendType getExplodBlendType(DreamExplodTransparencyType tType) {
+	switch (tType) {
+	case EXPLOD_TRANSPARENCY_TYPE_ADD_ALPHA:
+	case EXPLOD_TRANSPARENCY_TYPE_ADD:
+		return BLEND_TYPE_ADDITION;
+	case EXPLOD_TRANSPARENCY_TYPE_SUB:
+		return BLEND_TYPE_SUBTRACTION;
+	default:
+		return BLEND_TYPE_NORMAL;
+	}
+}
+
 static Position2D getFinalExplodPositionFromPositionType(DreamExplodPositionType tPositionType, Position2D mOffset, DreamPlayer* tPlayer) {
 	if (tPositionType == EXPLOD_POSITION_TYPE_RELATIVE_TO_P1) {
 		DreamPlayer* target = tPlayer;
@@ -485,7 +499,7 @@ void finalizeExplod(int tID)
 	setMugenAnimationBaseDrawScale(e->mAnimationElement, baseScale);
 	setMugenAnimationBaseDrawScale(e->mShadowAnimationElement, baseScale);
 	if (e->mHasTransparencyType) {
-		setMugenAnimationBlendType(e->mAnimationElement, e->mTransparencyType == EXPLOD_TRANSPARENCY_TYPE_ADD_ALPHA ? BLEND_TYPE_ADDITION : BLEND_TYPE_NORMAL);
+		setMugenAnimationBlendType(e->mAnimationElement, getExplodBlendType(e->mTransparencyType));
 	}
 
 	updateExplodShadowColorAndVisibility(e);
@@ -975,7 +989,7 @@ static void updateExplodTransparencyForSingleExplod(IntegerSetterForIDCaller* tC
 
 	e->mHasTransparencyType = 1;
 	e->mTransparencyType = DreamExplodTransparencyType(tCaller->mValue.x);
-	setMugenAnimationBlendType(e->mAnimationElement, e->mTransparencyType == EXPLOD_TRANSPARENCY_TYPE_ADD_ALPHA ? BLEND_TYPE_ADDITION : BLEND_TYPE_NORMAL);
+	setMugenAnimationBlendType(e->mAnimationElement, getExplodBlendType(e->mTransparencyType));
 }
 
 void updateExplodTransparencyType(DreamPlayer* tPlayer, int tID, DreamExplodTransparencyType tTransparencyType)
