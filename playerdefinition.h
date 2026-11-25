@@ -841,3 +841,10 @@ Vector3DI getIsCameraFollowingPlayer(DreamPlayer* p);
 int parsePlayerSoundEffectChannel(int tChannel, DreamPlayer* tPlayer);
 float getPlayerVolumeModifier(DreamPlayer* tPlayer);
 float getPlayerMidiVolumeForPrism(DreamPlayer* tPlayer);
+
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+// [3DS] The fighters' sprite files together (from their .defs), and whether
+// they make a heavy fight (their sprites and the stage's not all fitting).
+size_t getN3DSFightersSpriteFileBytes();
+int isN3DSHeavyFight();
+#endif

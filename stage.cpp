@@ -504,6 +504,15 @@ static void loadBackgroundDefinitionGroup(MugenDefScriptGroup* tGroup, int i) {
 	}
 }
 
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+// A big stage read smaller still against two big fighters (Abyss against
+// Onslaught, 65 MB of sprites, on the MvC2 Circus Carnival: its 2105
+// textures at half size let go and made again with the fighters', 5500
+// in a minute; a third: 2900), when it is already read smaller (a
+// texel no longer than one and a half of the screen's pixels).
+static const size_t N3DS_HEAVY_STAGE_SPRITE_BYTES = 8 * 1024 * 1024;
+#endif
+
 static void loadStageTextures(char* tPath) {
 	char path[1024];
 	getPathToFile(path, tPath);
@@ -518,7 +527,16 @@ static void loadStageTextures(char* tPath) {
 	// [3DS] A high resolution stage's sprites read as small as they are
 	// drawn on the 240 lines of the screen (a 1280x720 one's a third: its
 	// 3072x2100 background took 25 MB, the game closed for want of memory).
-	const int downscale = max(1, gStageData.mStageInfo.mLocalCoordinates.y / 240);
+	int downscale = max(1, gStageData.mStageInfo.mLocalCoordinates.y / 240);
+	if (downscale >= 2 && size_t(getFileSize(sffFile)) >= N3DS_HEAVY_STAGE_SPRITE_BYTES) {
+		if (isN3DSHeavyFight()) {
+			downscale++;
+			logFormat("Stage sprites read %d times smaller: the fighters' sprite files take %u MB", downscale, unsigned(getN3DSFightersSpriteFileBytes() / (1024 * 1024)));
+		}
+	}
+#ifndef __3DS__
+	if (getenv("N3DS_SIM_STAGE_DOWNSCALE")) downscale = atoi(getenv("N3DS_SIM_STAGE_DOWNSCALE"));
+#endif
 	setMugenSpriteFileReaderDownscale(downscale);
 	// The stage's textures made at load: at most what leaves the fighters
 	// and their sounds N3DS_STAGE_LOAD_RESERVE; the rest made when first

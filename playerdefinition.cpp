@@ -687,6 +687,35 @@ static int gN3DSPlayerDownscales[2] = { 1, 1 };
 static int gN3DSPlayerWholeSide = N3DS_PLAYER_WHOLE_SIDE;
 static long long gN3DSPlayerTrueColorBytes[2] = { -1, -1 };   // -1: not estimated
 
+// [3DS] The fighters' sprite files together, in bytes (from their .defs:
+// known before anything of theirs is loaded, the stage first).
+size_t getN3DSFightersSpriteFileBytes() {
+	size_t ret = 0;
+	for (int i = 0; i < 2; i++) {
+		char defPath[1024], folder[1024], sprite[1024];
+		getPlayerDefinitionPath(defPath, i);
+		if (!*defPath || !isFile(defPath)) continue;
+		MugenDefScript script;
+		loadMugenDefScript(&script, defPath);
+		getMugenDefStringOrDefault(sprite, &script, "files", "sprite", "");
+		unloadMugenDefScript(&script);
+		if (!*sprite) continue;
+		getPathToFile(folder, defPath);
+		std::string path = std::string(folder) + sprite;
+		for (auto& c : path) if (c == '\\') c = '/';
+		if (isFile(path)) ret += size_t(getFileSize(path.c_str()));
+	}
+	return ret;
+}
+
+// A fight of two big fighters (65 MB of sprite files for Abyss and
+// Onslaught: their sprites, the stage's and the heap not all fitting).
+static const size_t N3DS_HEAVY_FIGHT_SPRITE_BYTES = 48 * 1024 * 1024;
+
+int isN3DSHeavyFight() {
+	return getN3DSFightersSpriteFileBytes() >= N3DS_HEAVY_FIGHT_SPRITE_BYTES;
+}
+
 static void chooseN3DSPlayerDownscales() {
 	int natural[2];
 	for (int i = 0; i < 2; i++) {

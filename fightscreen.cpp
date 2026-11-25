@@ -16,6 +16,11 @@
 #include <prism/log.h>
 
 #include "stage.h"
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+namespace prism {
+	void setN3DSKeptIndicesSmaller(int tIsSmaller);   // 3ds/texture_3ds.cpp
+}
+#endif
 #include "mugencommandreader.h"
 #include "mugenstatereader.h"
 #include "playerdefinition.h"
@@ -174,6 +179,13 @@ static void loadFightScreen() {
 	}
 	
 	logMemoryState();
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	// [3DS] A heavy fight's sprites kept smaller (zstd): more of them in the heap.
+	setN3DSKeptIndicesSmaller(isN3DSHeavyFight());
+#ifndef __3DS__
+	if (getenv("N3DS_SIM_INDEX_RUNS")) setN3DSKeptIndicesSmaller(0);
+#endif
+#endif
 	logg("init stage");
 
 	instantiateActor(getDreamStageBP());
@@ -270,6 +282,7 @@ static void loadFightScreen() {
 
 static void unloadFightScreen() {
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	setN3DSKeptIndicesSmaller(0);
 	releaseSmoothTextFonts();
 #endif
 	endCompatSection();
