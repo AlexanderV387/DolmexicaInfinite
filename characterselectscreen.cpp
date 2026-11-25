@@ -1621,6 +1621,65 @@ static MugenSpriteFile* getN3DSStandSprites(int i, SelectCharacter* tCharacter, 
 	return &gN3DSStand.mKept.front().second;
 }
 
+// A character's size in a fight against the screen's 320: its [Size]
+// xscale and yscale times 320 / its localcoord's width. Read once (the
+// .def, and the start of its .cns: [Size] comes first).
+static Vector2D getN3DSStandFightScale(SelectCharacter* tCharacter) {
+	static std::map<std::string, Vector2D> known;
+	const std::string name = tCharacter->mCharacterName;
+	const auto at = known.find(name);
+	if (at != known.end()) return at->second;
+	Vector2D ret(1, 1);
+	char defPath[1024], folder[1024], file[300];
+	getCharacterSelectNamePath(tCharacter->mCharacterName, defPath);
+	if (isFile(defPath)) {
+		getPathToFile(folder, defPath);
+		MugenDefScript script;
+		loadMugenDefScript(&script, defPath);
+		const Vector2DI localCoordinates = getMugenDefVector2DIOrDefault(&script, "info", "localcoord", Vector2DI(320, 240));
+		getMugenDefStringOrDefault(file, &script, "files", "cns", "");
+		unloadMugenDefScript(&script);
+		const float coordinateScale = localCoordinates.x > 0 ? 320.0f / localCoordinates.x : 1.0f;
+		ret = Vector2D(coordinateScale, coordinateScale);
+		std::string cnsPath = std::string(folder) + file;
+		for (auto& c : cnsPath) if (c == '\\') c = '/';
+		FileHandler cns = *file ? fileOpen(cnsPath.c_str(), O_RDONLY) : FILEHND_INVALID;
+		if (cns != FILEHND_INVALID) {
+			std::string text(64 * 1024, '\0');
+			text.resize(fileRead(cns, &text[0], text.size()));
+			fileClose(cns);
+			int isInSize = 0;
+			size_t lineStart = 0;
+			while (lineStart < text.size()) {
+				size_t lineEnd = text.find('\n', lineStart);
+				if (lineEnd == std::string::npos) lineEnd = text.size();
+				std::string line = text.substr(lineStart, lineEnd - lineStart);
+				lineStart = lineEnd + 1;
+				const size_t comment = line.find(';');
+				if (comment != std::string::npos) line.resize(comment);
+				for (auto& c : line) c = char(tolower((unsigned char)c));
+				const size_t first = line.find_first_not_of(" \t\r");
+				if (first == std::string::npos) continue;
+				if (line[first] == '[') {
+					if (isInSize) break;
+					isInSize = line.compare(first, 5, "[size") == 0;
+					continue;
+				}
+				if (!isInSize) continue;
+				const size_t equals = line.find('=');
+				if (equals == std::string::npos) continue;
+				const std::string key = line.substr(first, line.find_last_not_of(" \t", equals - 1) + 1 - first);
+				const float value = float(atof(line.c_str() + equals + 1));
+				if (value <= 0) continue;
+				if (key == "xscale") ret.x = coordinateScale * value;
+				else if (key == "yscale") ret.y = coordinateScale * value;
+			}
+		}
+	}
+	known[name] = ret;
+	return ret;
+}
+
 static void showN3DSStand(int i, SelectCharacter* tCharacter) {
 	float boxX, boxY, boxW, boxH;
 	getN3DSPortraitBox(i, &boxX, &boxY, &boxW, &boxH);
@@ -1640,18 +1699,29 @@ static void showN3DSStand(int i, SelectCharacter* tCharacter) {
 		changeMugenAnimation(gN3DSStand.mElements[i], gN3DSStand.mAnimation);
 	}
 	MugenAnimationHandlerElement* element = gN3DSStand.mElements[i];
-	const float w = float(sprite->mOriginalTextureSize.x), h = float(sprite->mOriginalTextureSize.y);
-	const float scale = std::min(1.0f, std::min(boxW * 0.9f / w, boxH / h));
-	// Its axis (its feet's middle) at the box's bottom, the sprite inside it.
+	// Its visible part (not a mostly empty canvas: Art the Clown's is
+	// 1176x764), at its size in a fight (Power Girl's yscale 1.15), smaller
+	// if it does not fit.
+	int x0 = 0, y0 = 0, x1 = sprite->mOriginalTextureSize.x, y1 = sprite->mOriginalTextureSize.y;
+	if (sprite->mVisibleX1 > sprite->mVisibleX0 && sprite->mVisibleY1 > sprite->mVisibleY0) {
+		x0 = sprite->mVisibleX0; y0 = sprite->mVisibleY0; x1 = sprite->mVisibleX1; y1 = sprite->mVisibleY1;
+	}
+	const Vector2D fightScale = getN3DSStandFightScale(tCharacter);
+	const float w = float(x1 - x0) * float(fightScale.x), h = float(y1 - y0) * float(fightScale.y);
+	const float fit = std::min(1.0f, std::min(boxW * 0.9f / w, boxH / h));
+	const float scaleX = float(fightScale.x) * fit, scaleY = float(fightScale.y) * fit;
+	// Its axis (its feet's middle) where its visible part's bottom is at the
+	// box's bottom and its sides inside it (mirrored for the second side).
 	const float axisX = float(sprite->mAxisOffset.x), axisY = float(sprite->mAxisOffset.y);
+	const int isFacingRight = i == 0;
 	float x = boxX + boxW / 2;
-	const float left = x - axisX * scale, right = x + (w - axisX) * scale;
-	if (left < boxX) x += boxX - left;
-	if (right > boxX + boxW) x -= right - (boxX + boxW);
-	const float y = boxY + boxH - (h - axisY) * scale;
-	setMugenAnimationFaceDirection(element, i == 0);
+	const float left = isFacingRight ? x + (x0 - axisX) * scaleX : x - (x1 - axisX) * scaleX;
+	const float right = isFacingRight ? x + (x1 - axisX) * scaleX : x - (x0 - axisX) * scaleX;
+	x += (boxX + boxW / 2) - (left + right) / 2;
+	const float y = boxY + boxH - (y1 - axisY) * scaleY;
+	setMugenAnimationFaceDirection(element, isFacingRight);
 	setMugenAnimationPosition(element, Vector3D(x, y, 35));
-	setMugenAnimationDrawScale(element, Vector2D(scale, scale));
+	setMugenAnimationDrawScale(element, Vector2D(scaleX, scaleY));
 	setMugenAnimationVisibility(element, 1);
 	gN3DSStand.mShown[i] = getN3DSStandKey(i, tCharacter);
 }

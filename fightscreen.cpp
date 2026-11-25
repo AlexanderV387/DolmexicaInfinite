@@ -114,7 +114,32 @@ static void loadFightScreen() {
 
 	logMemoryState();
 	logg("create mem stack");
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	// [3DS] Its 3 MB taken once, in the first fight (the heap still in one
+	// piece), and kept for all the next ones: asked for again each fight,
+	// after many the heap had 47 MB free but not 3 MB in one piece (Freddy
+	// Krueger vs Art the Clown ended the game). Outside the screen's blocks
+	// (freed when it ends), so not given back. What does not fit in it goes
+	// outside it, as before.
+	{
+		static void* block = NULL;
+		static uint32_t size = 1024 * 1024 * 3;
+		while (!block) {
+			block = malloc(size);
+			if (block || size <= 64 * 1024) break;
+			size /= 2;
+		}
+		if (block) {
+			gFightScreenData.mMemoryStack.mAddress = block;
+			gFightScreenData.mMemoryStack.mSize = size;
+			gFightScreenData.mMemoryStack.mOffset = 0;
+			gFightScreenData.mMemoryStack.mAmount = 0;
+		}
+		else gFightScreenData.mMemoryStack = createMemoryStack(1024 * 1024 * 3);
+	}
+#else
 	gFightScreenData.mMemoryStack = createMemoryStack(1024 * 1024 * 3);
+#endif
 	
 	logMemoryState();
 	logg("init evaluators");
