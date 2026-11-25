@@ -1964,8 +1964,11 @@ static void showN3DSSelectStep(int i) {
 	addN3DSStepButton(i, x + pad + buttonW + gap, buttonY, buttonW, buttonH, "LISTO", N3DS_TOUCH_OK, 0, 0);
 }
 
-// Its pal1 to pal12 with a file, and which to start on: the side's default
-// (as the game mode would pick), not one the other side already took.
+// Its colors 1 to 12, as MUGEN 1.1 lets choose (one without its file shown
+// and fought in the first it has, of pal.defaults then of pal1 to pal12, its
+// number kept: PalNo; New Kyouki's 10P to 12P modes), and which to start
+// on: the side's default (as the game mode would pick), not one the other
+// side already took. None if it has no palette file at all.
 static void loadN3DSSelectColors(int i, SelectCharacter* tCharacter) {
 	Selector& selector = gCharacterSelectScreenData.mSelectors[i];
 	selector.mColors.clear();
@@ -1977,14 +1980,27 @@ static void loadN3DSSelectColors(int i, SelectCharacter* tCharacter) {
 	getPathToFile(folder, defPath);
 	MugenDefScript script;
 	loadMugenDefScript(&script, defPath);
+	std::string paths[13];
 	for (int n = 1; n <= 12; n++) {
 		sprintf(key, "pal%d", n);
 		getMugenDefStringOrDefault(file, &script, "files", key, "");
 		if (!*file) continue;
 		const std::string path = std::string(folder) + file;
-		if (!isFile(path.c_str())) continue;
-		selector.mColors.push_back(n);
-		selector.mColorPaths.push_back(path);
+		if (isFile(path.c_str())) paths[n] = path;
+	}
+	// The one shown for a color without its file: the first of pal.defaults
+	// with one, else the first with one.
+	std::string fallback;
+	for (int k = 1; k <= 12 && fallback.empty(); k++) {
+		const int n = getMugenDefDefaultPaletteNumber(&script, k);
+		if (n >= 1 && n <= 12) fallback = paths[n];
+	}
+	for (int n = 1; n <= 12 && fallback.empty(); n++) fallback = paths[n];
+	if (!fallback.empty()) {
+		for (int n = 1; n <= 12; n++) {
+			selector.mColors.push_back(n);
+			selector.mColorPaths.push_back(paths[n].empty() ? fallback : paths[n]);
+		}
 	}
 	const int preferred = getMugenDefDefaultPaletteNumber(&script, i + 1);
 	unloadMugenDefScript(&script);

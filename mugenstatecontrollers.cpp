@@ -1,4 +1,5 @@
 #include "mugenstatecontrollers.h"
+#include "smartai3ds.h"
 
 #include <assert.h>
 #include <string.h>
@@ -2866,6 +2867,9 @@ static int handleStateChange(DreamMugenStateController* tController, DreamPlayer
 	}
 
 	int state = evaluateDreamAssignmentAndReturnAsInteger(&e->mState, tPlayer);
+#if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
+	state = filterN3DSComputerSuperState(tPlayer, state);
+#endif
 	changePlayerStateBeforeImmediatelyEvaluatingIt(tPlayer, state);
 
 	if (e->mIsChangingAnimation) {

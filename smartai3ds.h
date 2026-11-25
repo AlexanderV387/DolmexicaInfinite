@@ -25,3 +25,10 @@ int updateN3DSSmartAI(DreamPlayer* p);
 int isN3DSSmartAIPlaying(int tRootIndex);
 // For tests: only the character tRootIndex plays with it (-1 both).
 void setN3DSSmartAIOnlyForTesting(int tRootIndex);
+
+// [3DS] The computer at level 8 (the highest), whatever plays it (its own AI
+// too): going into one of its supers (a -1 ChangeState asking for 1000
+// power or more) the same as its last one, most times another it has the
+// power for, of the same kind (ground or air), the least used first. The
+// state to go into. Levels 1 to 7 as MUGEN.
+int filterN3DSComputerSuperState(DreamPlayer* p, int tNewState);

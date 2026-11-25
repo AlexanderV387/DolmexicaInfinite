@@ -318,7 +318,9 @@ static void loadPlayerFiles(char* tPath, DreamPlayer* tPlayer, MugenDefScript* t
 			sprintf(palettePath, "%s%s", path, file);
 			if (!isFile(palettePath)) continue;
 			hasPalettePath = 1;
-			tPlayer->mPaletteNumber = candidate;
+			// PalNo the one asked for all the same (1 to 12), as MUGEN 1.1:
+			// New Kyouki, with pal1 and pal2 only, has its 10P to 12P modes.
+			if (preferredPalette < 1 || preferredPalette > 12) tPlayer->mPaletteNumber = candidate;
 			break;
 		}
 	}

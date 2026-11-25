@@ -11,9 +11,11 @@
 #include <prism/log.h>
 #include <prism/math.h>
 #include <prism/mugendefreader.h>
+#include <prism/stlutil.h>
 
 #include "mugencommandhandler.h"
 #include "mugencommandreader.h"
+#include "mugenstatehandler.h"
 #include "specialpanels3ds.h"
 
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
@@ -48,6 +50,13 @@ typedef struct {
 	int mGuardOtherTime;
 	int mComboTried;         // this attack's hit followed (or not) already
 	int mAirAttackDone;      // this jump's attack pressed
+
+	// Its supers as states (whatever plays it): its -1 ChangeStates asking
+	// for 1000 power or more, to a state of its own; at level 8 varied.
+	std::vector<int> mSuperStates;
+	std::vector<int> mSuperPowers;   // the most power asked for each
+	std::vector<int> mSuperUses;     // this fight
+	int mLastSuperState;
 } SmartAI;
 
 static struct {
@@ -194,11 +203,162 @@ static int isForwardMotion(const std::string& tMotion) {
 	return tMotion == "210" || tMotion == "40" || tMotion == "43210";
 }
 
+// --- Its supers as states (level 8's variety) ---
+
+// "value = 8900": the number, -1 if not a number alone (an expression).
+static int getConstantValue(const std::string& tLower) {
+	size_t q = tLower.find('=');
+	if (q == std::string::npos) return -1;
+	q++;
+	while (q < tLower.size() && isspace((unsigned char)tLower[q])) q++;
+	size_t end = q;
+	while (end < tLower.size() && isdigit((unsigned char)tLower[end])) end++;
+	if (end == q) return -1;
+	for (size_t r = end; r < tLower.size(); r++) {
+		if (!isspace((unsigned char)tLower[r])) return -1;
+	}
+	return atoi(tLower.c_str() + q);
+}
+
+// The power a line asks for: power >= N or power > N (0 none).
+static int getLinePower(const std::string& tLower) {
+	int most = 0;
+	size_t at = 0;
+	while ((at = tLower.find("power", at)) != std::string::npos) {
+		const int isWord = (at == 0 || !isalnum((unsigned char)tLower[at - 1])) && (at + 5 >= tLower.size() || !isalnum((unsigned char)tLower[at + 5]));
+		size_t q = at + 5;
+		at += 5;
+		if (!isWord) continue;
+		while (q < tLower.size() && isspace((unsigned char)tLower[q])) q++;
+		if (q >= tLower.size() || tLower[q] != '>') continue;
+		q++;
+		if (q < tLower.size() && tLower[q] == '=') q++;
+		most = std::max(most, atoi(tLower.c_str() + q));
+	}
+	return most;
+}
+
+static void addSuperStatesOfFile(DreamPlayer* p, SmartAI* e, const std::string& tPath) {
+	if (!isFile(tPath.c_str())) return;
+	Buffer buffer = fileToBuffer(tPath.c_str());
+	const std::string text = toLowerText((const char*)buffer.mData, buffer.mLength);
+	freeBuffer(buffer);
+	int isInMinusOne = 0, isChangeState = 0, value = -1, power = 0;
+	auto endBlock = [&]() {
+		if (isInMinusOne && isChangeState && value > 0 && power >= 1000 && stl_map_contains(p->mHeader->mFiles.mConstants.mStates.mStates, value)) {
+			const auto at = std::find(e->mSuperStates.begin(), e->mSuperStates.end(), value);
+			if (at == e->mSuperStates.end()) {
+				e->mSuperStates.push_back(value);
+				e->mSuperPowers.push_back(power);
+				e->mSuperUses.push_back(0);
+			}
+			else {
+				int& most = e->mSuperPowers[at - e->mSuperStates.begin()];
+				most = std::max(most, power);
+			}
+		}
+		isChangeState = 0;
+		value = -1;
+		power = 0;
+	};
+	size_t lineStart = 0;
+	while (lineStart < text.size()) {
+		size_t lineEnd = text.find('\n', lineStart);
+		if (lineEnd == std::string::npos) lineEnd = text.size();
+		std::string line = text.substr(lineStart, lineEnd - lineStart);
+		lineStart = lineEnd + 1;
+		const size_t comment = line.find(';');
+		if (comment != std::string::npos) line.resize(comment);
+		size_t first = 0;
+		while (first < line.size() && isspace((unsigned char)line[first])) first++;
+		if (first >= line.size()) continue;
+		line = line.substr(first);
+		while (!line.empty() && isspace((unsigned char)line.back())) line.pop_back();
+		if (line[0] == '[') {
+			endBlock();
+			if (line.compare(0, 9, "[statedef") == 0) isInMinusOne = line.find("-1") != std::string::npos && atoi(line.c_str() + 9) == -1;
+			continue;
+		}
+		if (!isInMinusOne) continue;
+		if (line.compare(0, 4, "type") == 0) {
+			isChangeState = line.find("changestate") != std::string::npos && line.find("target") == std::string::npos && line.find("self") == std::string::npos;
+		}
+		else if (line.compare(0, 5, "value") == 0) value = getConstantValue(line);
+		else if (line.compare(0, 7, "trigger") == 0) power = std::max(power, getLinePower(line));
+	}
+	endBlock();
+}
+
+static void findSuperStates(DreamPlayer* p, SmartAI* e) {
+	char defPath[1024], folder[1024], file[300];
+	getPlayerDefinitionPath(defPath, p->mRootID);
+	if (!isFile(defPath)) return;
+	getPathToFile(folder, defPath);
+	MugenDefScript script;
+	loadMugenDefScript(&script, defPath);
+	std::vector<std::string> keys = { "cmd", "cns", "st" };
+	for (int i = 0; i <= 12; i++) keys.push_back("st" + std::to_string(i));
+	std::vector<std::string> read;
+	for (const auto& key : keys) {
+		getMugenDefStringOrDefault(file, &script, "files", key.c_str(), "");
+		if (!*file || std::find(read.begin(), read.end(), std::string(file)) != read.end()) continue;
+		read.push_back(file);
+		addSuperStatesOfFile(p, e, std::string(folder) + file);
+	}
+	unloadMugenDefScript(&script);
+}
+
+static int isAirState(DreamPlayer* p, int tState) {
+	auto& states = p->mHeader->mFiles.mConstants.mStates.mStates;
+	const auto at = states.find(tState);
+	return at != states.end() && at->second.mType == MUGEN_STATE_TYPE_AIR;
+}
+
+int filterN3DSComputerSuperState(DreamPlayer* p, int tNewState) {
+	if (isPlayerHelper(p) || getPlayerAILevel(p) < 8 || !isInOwnStateMachine(p->mRegisteredStateMachine)) return tNewState;
+	SmartAI* e = &gSmartAI.mAI[p->mRootID & 1];
+	if (!e->mIsPrepared || e->mSuperStates.size() < 2) return tNewState;
+	const auto& supers = e->mSuperStates;
+	const auto at = std::find(supers.begin(), supers.end(), tNewState);
+	if (at == supers.end()) return tNewState;
+	if (std::find(supers.begin(), supers.end(), getPlayerState(p)) != supers.end()) return tNewState;   // one leading to another
+	int chosen = tNewState;
+	// The same as the last one: another it has the power for, of the same
+	// kind (ground or air), the least used first, most times.
+	if (tNewState == e->mLastSuperState && randfrom(0, 1) < 0.75f) {
+		const int isAir = isAirState(p, tNewState);
+		int fewest = -1;
+		std::vector<int> candidates;
+		for (int i = 0; i < int(supers.size()); i++) {
+			if (supers[i] == tNewState || e->mSuperPowers[i] > getPlayerPower(p) || isAirState(p, supers[i]) != isAir) continue;
+			if (fewest < 0 || e->mSuperUses[i] < fewest) {
+				fewest = e->mSuperUses[i];
+				candidates.clear();
+			}
+			if (e->mSuperUses[i] == fewest) candidates.push_back(supers[i]);
+		}
+		if (!candidates.empty()) chosen = candidates[randfromInteger(0, int(candidates.size()) - 1)];
+	}
+	e->mLastSuperState = chosen;
+	e->mSuperUses[std::find(supers.begin(), supers.end(), chosen) - supers.begin()]++;
+#ifdef N3DS_TEXTURE_SIM
+	if (chosen != tNewState) printf("Improved AI: player %d varies its super: %d instead of %d.\n", p->mRootID, chosen, tNewState);
+#endif
+	return chosen;
+}
+
 void prepareN3DSSmartAI(DreamPlayer* p) {
 	SmartAI* e = &gSmartAI.mAI[p->mRootID & 1];
 	*e = SmartAI();
 	e->mIsPrepared = 1;
 	e->mButton = -1;
+	e->mLastSuperState = -1;
+	findSuperStates(p, e);
+#ifdef N3DS_TEXTURE_SIM
+	printf("Improved AI: player %d has %d supers as states:", p->mRootID, int(e->mSuperStates.size()));
+	for (size_t i = 0; i < e->mSuperStates.size(); i++) printf(" %d (%d)", e->mSuperStates[i], e->mSuperPowers[i]);
+	printf("\n");
+#endif
 	e->mIsPlaying = !hasOwnAI(p);
 	if (!e->mIsPlaying) {
 #ifdef N3DS_TEXTURE_SIM
@@ -437,5 +597,6 @@ void prepareN3DSSmartAI(DreamPlayer*) {}
 int updateN3DSSmartAI(DreamPlayer*) { return 0; }
 int isN3DSSmartAIPlaying(int) { return 0; }
 void setN3DSSmartAIOnlyForTesting(int) {}
+int filterN3DSComputerSuperState(DreamPlayer*, int tNewState) { return tNewState; }
 
 #endif
