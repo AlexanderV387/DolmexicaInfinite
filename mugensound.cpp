@@ -15,12 +15,14 @@
 #include "osuhandler.h"
 #include "gamelogic.h"
 #include "config.h"
+#include "pausecontrollers.h"
 
 using namespace std;
 
 static struct {
 	int mIsPlayingMusic;
-	int mIsPausedFlag;
+	int mIsPausedFlag;      // paused by AssertSpecial NoMusic
+	int mNoMusicTime;       // the game tick it was last asserted on
 } gDolmexicaMugenSoundData;
 
 static void loadDolmexicaSoundHandler(void*) {
@@ -28,18 +30,21 @@ static void loadDolmexicaSoundHandler(void*) {
 
 	gDolmexicaMugenSoundData.mIsPlayingMusic = 0;
 	gDolmexicaMugenSoundData.mIsPausedFlag = 0;
+	gDolmexicaMugenSoundData.mNoMusicTime = 0;
 }
 
+// NoMusic holds while asserted on the game's last tick, through pauses and
+// super pauses (the paused players assert nothing then). It was let go
+// on the first screen frame not asserted (the game's ticks and its screen
+// frames not one to one: Abyss and Onslaught, both asserting it, at half
+// speed on a 3DS, the stage's music cut in and out).
 static void updatePauseFlag() {
 	if (!gDolmexicaMugenSoundData.mIsPausedFlag) return;
-
-	if (gDolmexicaMugenSoundData.mIsPausedFlag == 2) {
-		resumeMusic();
-		gDolmexicaMugenSoundData.mIsPausedFlag = 0;
-	}
-	else {
-		gDolmexicaMugenSoundData.mIsPausedFlag++;
-	}
+	if (isDreamAnyPauseActive()) return;
+	const int since = getDreamGameTime() - gDolmexicaMugenSoundData.mNoMusicTime;
+	if (since >= 0 && since < 2) return;
+	resumeMusic();
+	gDolmexicaMugenSoundData.mIsPausedFlag = 0;
 }
 
 static void updateDolmexicaSoundHandler(void*) {
@@ -65,6 +70,8 @@ void setNoMusicFlag()
 {
 	if (getGameMode() == GAME_MODE_OSU) return;
 
+	gDolmexicaMugenSoundData.mNoMusicTime = getDreamGameTime();
+	if (gDolmexicaMugenSoundData.mIsPausedFlag) return;
 	pauseMusic();
 	gDolmexicaMugenSoundData.mIsPausedFlag = 1;
 }
