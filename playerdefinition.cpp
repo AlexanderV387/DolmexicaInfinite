@@ -754,6 +754,11 @@ static void loadSinglePlayerSprites(DreamPlayer* tPlayer) {
 	}
 #endif
 	tPlayer->mHeader->mFiles.mSprites = loadMugenSpriteFile(tPlayer->mHeader->mFiles.mSpritePath, tPlayer->mHeader->mFiles.mHasPalettePath, tPlayer->mHeader->mFiles.mPalettePath);
+	// Its color with no palette file: an SFF v2's palette 1,palno for 1,1, as
+	// MUGEN 1.1 (Baiken, Mr. Satan); nothing if it has none such.
+	if (!tPlayer->mHeader->mFiles.mHasPalettePath && tPlayer->mPaletteNumber > 1 && tPlayer->mPaletteNumber <= 12) {
+		remapMugenSpriteFilePalette(&tPlayer->mHeader->mFiles.mSprites, Vector2DI(1, 1), Vector2DI(1, tPlayer->mPaletteNumber), tPlayer->mRootID);
+	}
 #if defined(__3DS__) || defined(N3DS_TEXTURE_SIM)
 	setMugenSpriteFileReaderDownscale(1);
 #endif
@@ -1325,6 +1330,10 @@ static int updateSinglePlayerCB(void* tCaller, void* tData) {
 
 static void updateSingleHitAttributeSlot(DreamHitDefAttributeSlot* tSlot) {
 	if (!tSlot->mIsActive) return;
+	// A negative time never runs out, as in MUGEN and Ikemen (Abyss's
+	// "No Push" helper, NotHitBy SCA with time = -1, was thrown by Jason
+	// and then stood up as a copy of Abyss).
+	if (tSlot->mTime < 0) return;
 
 	tSlot->mNow++;
 	if (tSlot->mNow >= tSlot->mTime) {

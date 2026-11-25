@@ -1583,8 +1583,9 @@ static std::string getN3DSStandPalette(int i, SelectCharacter* tCharacter, int* 
 	const Selector& selector = gCharacterSelectScreenData.mSelectors[i];
 	const int isChosen = selector.mStep != SELECT_STEP_CHARACTER || selector.mIsDone;
 	if (isChosen && selector.mStepCharacter == tCharacter && selector.mColorPaths.size() > 1 && selector.mColorIndex < int(selector.mColorPaths.size())) {
-		*oHasPalette = 1;
-		return selector.mColorPaths[selector.mColorIndex];
+		const std::string& path = selector.mColorPaths[selector.mColorIndex];
+		*oHasPalette = path.compare(0, 4, "sff:") != 0;
+		return path;
 	}
 	*oHasPalette = tCharacter->mHasPalettePath;
 	return tCharacter->mHasPalettePath ? std::string(tCharacter->mPalettePath) : std::string();
@@ -1605,7 +1606,11 @@ static MugenSpriteFile* getN3DSStandSprites(int i, SelectCharacter* tCharacter, 
 		return &gN3DSStand.mKept.front().second;
 	}
 	if (!isFile(tCharacter->mSpritePath)) return NULL;
-	gN3DSStand.mKept.push_front(std::make_pair(key, loadMugenSpriteFileSingleSprite(tCharacter->mSpritePath, hasPalette, palette.c_str(), 0, 0, tMaximumHeight)));
+	// A color of its SFF v2 ("sff:n"): its palette 1,n for 1,1.
+	const int isSFFColor = palette.compare(0, 4, "sff:") == 0;
+	if (isSFFColor) setMugenSpriteFileReaderPaletteItem(atoi(palette.c_str() + 4));
+	gN3DSStand.mKept.push_front(std::make_pair(key, loadMugenSpriteFileSingleSprite(tCharacter->mSpritePath, hasPalette, isSFFColor ? "" : palette.c_str(), 0, 0, tMaximumHeight)));
+	if (isSFFColor) setMugenSpriteFileReaderPaletteItem(0);
 	// The oldest let go, but not one shown.
 	while (gN3DSStand.mKept.size() > N3DS_STAND_KEPT) {
 		auto last = std::prev(gN3DSStand.mKept.end());
@@ -1964,6 +1969,35 @@ static void showN3DSSelectStep(int i) {
 	addN3DSStepButton(i, x + pad + buttonW + gap, buttonY, buttonW, buttonH, "LISTO", N3DS_TOUCH_OK, 0, 0);
 }
 
+// The colors kept in an SFF v2 (MUGEN 1.1's, palettes 1,1 to 1,12, for a
+// character with no palette files: Baiken, Mr. Satan): their numbers. Only
+// its header and palettes' table read.
+static std::vector<int> getSFF2Colors(const std::string& tPath) {
+	std::vector<int> ret;
+	FileHandler file = fileOpen(tPath.c_str(), O_RDONLY);
+	if (file == FILEHND_INVALID) return ret;
+	unsigned char header[68];
+	if (fileRead(file, header, sizeof(header)) == sizeof(header) && !memcmp(header, "ElecbyteSpr", 11) && header[15] == 2) {
+		uint32_t paletteOffset, paletteAmount;
+		memcpy(&paletteOffset, header + 44, 4);
+		memcpy(&paletteAmount, header + 48, 4);
+		paletteAmount = std::min(paletteAmount, (uint32_t)1024);
+		std::vector<unsigned char> table(paletteAmount * 16);
+		fileSeek(file, paletteOffset, SEEK_SET);
+		if (!table.empty() && fileRead(file, table.data(), table.size()) == table.size()) {
+			for (uint32_t k = 0; k < paletteAmount; k++) {
+				int16_t group, item;
+				memcpy(&group, &table[k * 16], 2);
+				memcpy(&item, &table[k * 16 + 2], 2);
+				if (group == 1 && item >= 1 && item <= 12 && std::find(ret.begin(), ret.end(), item) == ret.end()) ret.push_back(item);
+			}
+		}
+	}
+	fileClose(file);
+	std::sort(ret.begin(), ret.end());
+	return ret;
+}
+
 // Its colors 1 to 12, as MUGEN 1.1 lets choose (one without its file shown
 // and fought in the first it has, of pal.defaults then of pal1 to pal12, its
 // number kept: PalNo; New Kyouki's 10P to 12P modes), and which to start
@@ -2000,6 +2034,16 @@ static void loadN3DSSelectColors(int i, SelectCharacter* tCharacter) {
 		for (int n = 1; n <= 12; n++) {
 			selector.mColors.push_back(n);
 			selector.mColorPaths.push_back(paths[n].empty() ? fallback : paths[n]);
+		}
+	}
+	else {
+		// No palette file: the colors in its SFF v2, shown as "sff:n".
+		getMugenDefStringOrDefault(file, &script, "files", "sprite", "");
+		if (*file) {
+			for (const int n : getSFF2Colors(std::string(folder) + file)) {
+				selector.mColors.push_back(n);
+				selector.mColorPaths.push_back("sff:" + std::to_string(n));
+			}
 		}
 	}
 	const int preferred = getMugenDefDefaultPaletteNumber(&script, i + 1);
