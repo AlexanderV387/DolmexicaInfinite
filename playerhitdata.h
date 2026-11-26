@@ -256,6 +256,8 @@ typedef struct {
 void updatePlayerHitData(DreamPlayer* tPlayer);
 
 void initPlayerHitData(DreamPlayer* tPlayer);
+// Its HitOverrides let go (a round's start).
+void clearPlayerHitOverrides(DreamPlayer* tPlayer);
 void setPlayerHitDataCoordinateP(DreamPlayer* tPlayer);
 void clearPlayerHitData(DreamPlayer* tPlayer);
 

@@ -1,5 +1,7 @@
 #include "mugenexplod.h"
 
+#include <algorithm>
+
 #include <prism/geometry.h>
 #include <prism/physics.h>
 #include <prism/datastructures.h>
@@ -64,6 +66,8 @@ typedef struct {
 
 	int mHasTransparencyType;
 	DreamExplodTransparencyType mTransparencyType;
+	int mHasAlpha;               // its trans's alpha (addalpha, alpha): source and destination, of 256
+	Vector2DI mAlpha;
 
 	PhysicsHandlerElement* mPhysicsElement;
 	MugenAnimationHandlerElement* mAnimationElement;
@@ -267,6 +271,25 @@ void setExplodTransparencyType(int tID, int tHasTransparencyType, DreamExplodTra
 	Explod* e = &gMugenExplod.mExplods[tID];
 	e->mHasTransparencyType = tHasTransparencyType;
 	e->mTransparencyType = tTransparencyType;
+	e->mHasAlpha = 0;
+}
+
+// Its alpha drawn: with trans addalpha or alpha only, as MUGEN 1.1 (Abyss's
+// flames, addalpha faded in from 0 to 60 of 256: drawn whole, big white
+// and blue flames over him).
+static void applyExplodAlpha(Explod* e) {
+	const int isApplied = e->mHasAlpha && e->mHasTransparencyType && (e->mTransparencyType == EXPLOD_TRANSPARENCY_TYPE_ADD_ALPHA || e->mTransparencyType == EXPLOD_TRANSPARENCY_TYPE_ALPHA);
+	const int source = isApplied ? std::max(0, std::min(256, e->mAlpha.x)) : 256;
+	const int destination = isApplied ? std::max(0, std::min(256, e->mAlpha.y)) : 256;
+	setMugenAnimationTransparency(e->mAnimationElement, source / 256.0f);
+	setMugenAnimationDestinationTransparency(e->mAnimationElement, destination / 256.0f);
+}
+
+void setExplodAlpha(int tID, int tSource, int tDestination)
+{
+	Explod* e = &gMugenExplod.mExplods[tID];
+	e->mHasAlpha = 1;
+	e->mAlpha = Vector2DI(tSource, tDestination);
 }
 
 static void explodAnimationFinishedCB(void* tCaller);
@@ -501,6 +524,7 @@ void finalizeExplod(int tID)
 	if (e->mHasTransparencyType) {
 		setMugenAnimationBlendType(e->mAnimationElement, getExplodBlendType(e->mTransparencyType));
 	}
+	if (e->mHasAlpha) applyExplodAlpha(e);
 
 	updateExplodShadowColorAndVisibility(e);
 	setMugenAnimationTransparency(e->mShadowAnimationElement, getDreamStageShadowTransparency() * isDrawingShadowsConfig());
@@ -990,6 +1014,25 @@ static void updateExplodTransparencyForSingleExplod(IntegerSetterForIDCaller* tC
 	e->mHasTransparencyType = 1;
 	e->mTransparencyType = DreamExplodTransparencyType(tCaller->mValue.x);
 	setMugenAnimationBlendType(e->mAnimationElement, getExplodBlendType(e->mTransparencyType));
+	applyExplodAlpha(e);
+}
+
+static void updateExplodAlphaForSingleExplod(IntegerSetterForIDCaller* tCaller, Explod& tData) {
+	Explod* e = &tData;
+	if (e->mPlayer != tCaller->mPlayer) return;
+	if (tCaller->mID != -1 && e->mExternalID != tCaller->mID) return;
+	e->mHasAlpha = 1;
+	e->mAlpha = Vector2DI(tCaller->mValue.x, tCaller->mValue.y);
+	applyExplodAlpha(e);
+}
+
+void updateExplodAlpha(DreamPlayer* tPlayer, int tID, int tSource, int tDestination)
+{
+	IntegerSetterForIDCaller caller;
+	caller.mPlayer = tPlayer;
+	caller.mID = tID;
+	caller.mValue = Vector3DI(tSource, tDestination, 0);
+	stl_int_map_map(gMugenExplod.mExplods, updateExplodAlphaForSingleExplod, &caller);
 }
 
 void updateExplodTransparencyType(DreamPlayer* tPlayer, int tID, DreamExplodTransparencyType tTransparencyType)

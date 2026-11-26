@@ -55,6 +55,7 @@ void setExplodOwnPalette(int tID, int tUsesOwnPalette);
 void setExplodRemoveOnGetHit(int tID, int tIsRemovedOnGetHit);
 void setExplodIgnoreHitPause(int tID, int tIgnoreHitPause);
 void setExplodTransparencyType(int tID, int tHasTransparencyType, DreamExplodTransparencyType tTransparencyType);
+void setExplodAlpha(int tID, int tSource, int tDestination);
 void finalizeExplod(int tID);
 
 void updateExplodAnimation(DreamPlayer* tPlayer, int tID, int tIsInFightDefFile, int tAnimationNumber);
@@ -79,6 +80,7 @@ void updateExplodOwnPalette(DreamPlayer* tPlayer, int tID, int tUsesOwnPalette);
 void updateExplodRemoveOnGetHit(DreamPlayer* tPlayer, int tID, int tIsRemovedOnGetHit);
 void updateExplodIgnoreHitPause(DreamPlayer* tPlayer, int tID, int tIgnoreHitPause);
 void updateExplodTransparencyType(DreamPlayer* tPlayer, int tID, DreamExplodTransparencyType tTransparencyType);
+void updateExplodAlpha(DreamPlayer* tPlayer, int tID, int tSource, int tDestination);
 
 void removeExplodsWithID(DreamPlayer* tPlayer, int tExplodID);
 void removeAllExplodsForPlayer(DreamPlayer* tPlayer);

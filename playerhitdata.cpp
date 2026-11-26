@@ -48,6 +48,14 @@ void initPlayerHitData(DreamPlayer* tPlayer)
 	}
 }
 
+void clearPlayerHitOverrides(DreamPlayer* tPlayer)
+{
+	for (int i = 0; i < 8; i++) {
+		tPlayer->mHitOverrides.mHitOverrides[i].mAttackClassTypePairs.clear();
+		tPlayer->mHitOverrides.mHitOverrides[i].mIsActive = 0;
+	}
+}
+
 void setPlayerHitDataCoordinateP(DreamPlayer* tPlayer)
 {
 	tPlayer->mPassiveHitData.mCoordinateP = getPlayerCoordinateP(tPlayer);

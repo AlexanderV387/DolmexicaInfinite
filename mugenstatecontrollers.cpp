@@ -1084,8 +1084,10 @@ typedef struct {
 	DreamMugenAssignment* mIsRemovedOnGetHit;
 	DreamMugenAssignment* mIgnoreHitPause;
 	DreamMugenAssignment* mTransparencyType;
+	DreamMugenAssignment* mAlpha;
 
 	uint8_t mHasTransparencyType;
+	uint8_t mHasAlpha;
 } ExplodController;
 
 static void parseExplodController(DreamMugenStateController* tController, MugenDefScriptGroup* tGroup) {
@@ -1121,6 +1123,7 @@ static void parseExplodController(DreamMugenStateController* tController, MugenD
 	fetchAssignmentFromGroupAndReturnWhetherItExistsDefaultString("removeongethit", tGroup, &e->mIsRemovedOnGetHit);
 	fetchAssignmentFromGroupAndReturnWhetherItExistsDefaultString("ignorehitpause", tGroup, &e->mIgnoreHitPause);
 	e->mHasTransparencyType = fetchDreamAssignmentFromGroupAndReturnWhetherItExists("trans", tGroup, &e->mTransparencyType);
+	e->mHasAlpha = fetchDreamAssignmentFromGroupAndReturnWhetherItExists("alpha", tGroup, &e->mAlpha);
 
 	tController->mType = MUGEN_STATE_CONTROLLER_TYPE_EXPLOD;
 	tController->mData = e;
@@ -1155,6 +1158,9 @@ static void unloadExplodController(DreamMugenStateController* tController) {
 	if (e->mHasTransparencyType) {
 		destroyDreamMugenAssignment(e->mTransparencyType);
 	}
+	if (e->mHasAlpha) {
+		destroyDreamMugenAssignment(e->mAlpha);
+	}
 
 	freeMemory(e);
 }
@@ -1184,6 +1190,7 @@ typedef struct {
 	DreamMugenAssignment* mIsRemovedOnGetHit;
 	DreamMugenAssignment* mIgnoreHitPause;
 	DreamMugenAssignment* mTransparencyType;
+	DreamMugenAssignment* mAlpha;
 
 	uint8_t mHasAnim;
 	uint8_t mHasSpace;
@@ -1207,6 +1214,7 @@ typedef struct {
 	uint8_t mHasIsRemovedOnGetHit;
 	uint8_t mHasIgnoreHitPause;
 	uint8_t mHasTransparencyType;
+	uint8_t mHasAlpha;
 } ModifyExplodController;
 
 static void parseModifyExplodController(DreamMugenStateController* tController, MugenDefScriptGroup* tGroup) {
@@ -1235,6 +1243,7 @@ static void parseModifyExplodController(DreamMugenStateController* tController, 
 	e->mHasIsRemovedOnGetHit = fetchDreamAssignmentFromGroupAndReturnWhetherItExists("removeongethit", tGroup, &e->mIsRemovedOnGetHit);
 	e->mHasIgnoreHitPause = fetchDreamAssignmentFromGroupAndReturnWhetherItExists("ignorehitpause", tGroup, &e->mIgnoreHitPause);
 	e->mHasTransparencyType = fetchDreamAssignmentFromGroupAndReturnWhetherItExists("trans", tGroup, &e->mTransparencyType);
+	e->mHasAlpha = fetchDreamAssignmentFromGroupAndReturnWhetherItExists("alpha", tGroup, &e->mAlpha);
 
 	tController->mType = MUGEN_STATE_CONTROLLER_TYPE_MODIFY_EXPLOD;
 	tController->mData = e;
@@ -1309,6 +1318,9 @@ static void unloadModifyExplodController(DreamMugenStateController* tController)
 	}
 	if (e->mHasTransparencyType) {
 		destroyDreamMugenAssignment(e->mTransparencyType);
+	}
+	if (e->mHasAlpha) {
+		destroyDreamMugenAssignment(e->mAlpha);
 	}
 
 	freeMemory(e);
@@ -4080,6 +4092,11 @@ static int handleExplod(DreamMugenStateController* tController, DreamPlayer* tPl
 	handleIDSetOneIntegerElement(&e->mIsRemovedOnGetHit, tPlayer, id, setExplodRemoveOnGetHit, 0);
 	handleIDSetOneIntegerElement(&e->mIgnoreHitPause, tPlayer, id, setExplodIgnoreHitPause, 1);
 	handleExplodTransparencyTypeSet(&e->mTransparencyType, e->mHasTransparencyType, tPlayer, id);
+	if (e->mHasAlpha) {
+		int source, destination;
+		evaluateDreamAssignmentAndReturnAsTwoIntegersWithDefaultValues(&e->mAlpha, tPlayer, &source, &destination, 256, 256);
+		setExplodAlpha(id, source, destination);
+	}
 
 	finalizeExplod(id);
 
@@ -4156,6 +4173,11 @@ static int handleModifyExplod(DreamMugenStateController* tController, DreamPlaye
 	}
 	if (e->mHasTransparencyType) {
 		handleExplodTransparencyTypeUpdate(&e->mTransparencyType, tPlayer, id);
+	}
+	if (e->mHasAlpha) {
+		int source, destination;
+		evaluateDreamAssignmentAndReturnAsTwoIntegersWithDefaultValues(&e->mAlpha, tPlayer, &source, &destination, 256, 256);
+		updateExplodAlpha(tPlayer, id, source, destination);
 	}
 
 	return 0;

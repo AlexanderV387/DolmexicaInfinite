@@ -946,6 +946,12 @@ static void resetSinglePlayer(DreamPlayer* p) {
 	removePlayerHelpers(p);
 	removePlayerProjectiles(p);
 	resetPlayerVariables(p);
+	// Its NotHitBy, HitBy and HitOverride let go, as MUGEN (Ikemen's
+	// clearState at each round's start): Abyss's win pose (180) sets
+	// NotHitBy SCA for good (time -1); kept, nothing hit him in the next
+	// round (Onslaught's second form's attacks all went through him).
+	for (int i = 0; i < 2; i++) initHitDefAttributeSlot(&p->mNotHitBy[i]);
+	clearPlayerHitOverrides(p);
 	p->mCornerPushOffset = 0;
 	resetDreamRegisteredStateMachineControllerPersistence(p->mRegisteredStateMachine);
 }
@@ -3056,6 +3062,25 @@ void playerHitCB(void* tData, void* tHitData, int /*tOtherCollisionList*/)
 
 	if (!isValidPlayerOrProjectile(otherPlayer)) return;
 	if (!isValidAffectTeam(p, otherPlayer)) return;
+#ifndef __3DS__
+	static int traceRejects = -1;
+	if (traceRejects < 0) traceRejects = getenv("DOLMEXICA_TRACE_REJECTS") ? 1 : 0;
+	const char* rejected = NULL;
+	if (traceRejects) {
+		if (isPlayerProjectile(otherPlayer) && (!canProjectileHit(otherPlayer) || !isPlayerStateMachineValid(otherPlayer))) rejected = "projectile";
+		else if (!isInOwnStateMachine(getPlayerRoot(otherPlayer)->mRegisteredStateMachine)) rejected = "custom state";
+		else if (isDreamAnyPauseActive()) rejected = "pause";
+		else if (!isReceivedHitDataActive(receivedHitData)) rejected = "hitdata inactive";
+		else if (!checkActiveHitDefAttributeSlots(p, otherPlayer)) rejected = "nothitby/hitby";
+		else if (isIgnoredBecauseOfHitOverride(p, otherPlayer)) rejected = "hitoverride";
+		else if (isIgnoredBecauseOfJuggle(p, otherPlayer, receivedHitData)) rejected = "juggle";
+		else if (getDreamTimeSinceKO() > getOverHitTime()) rejected = "ko";
+		if (rejected) printf("REJECT %s: p root %d id %d state %d <- attacker root %d id %d state %d (slots: %d %s %s %d %d | %d %s %s %d %d)\n", rejected, p->mRootID, p->mID, getPlayerState(p), otherPlayer->mRootID, otherPlayer->mID, getPlayerState(otherPlayer),
+			p->mNotHitBy[0].mIsActive, p->mNotHitBy[0].mIsHitBy ? "hitby" : "nothitby", p->mNotHitBy[0].mFlag1.c_str(), p->mNotHitBy[0].mTime, p->mNotHitBy[0].mNow,
+			p->mNotHitBy[1].mIsActive, p->mNotHitBy[1].mIsHitBy ? "hitby" : "nothitby", p->mNotHitBy[1].mFlag1.c_str(), p->mNotHitBy[1].mTime, p->mNotHitBy[1].mNow);
+		else printf("ACCEPT: p root %d id %d state %d <- attacker root %d id %d state %d\n", p->mRootID, p->mID, getPlayerState(p), otherPlayer->mRootID, otherPlayer->mID, getPlayerState(otherPlayer));
+	}
+#endif
 	if (isPlayerProjectile(p) && (!isPlayerProjectile(otherPlayer) || !isPlayerStateMachineValid(p))) return;
 	if (isPlayerProjectile(otherPlayer) && (!canProjectileHit(otherPlayer) || !isPlayerStateMachineValid(otherPlayer))) return;
 	if (!isInOwnStateMachine(getPlayerRoot(otherPlayer)->mRegisteredStateMachine)) return;
